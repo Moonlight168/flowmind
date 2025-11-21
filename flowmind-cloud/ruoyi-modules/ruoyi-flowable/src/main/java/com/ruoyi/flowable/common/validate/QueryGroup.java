@@ -1,0 +1,9 @@
+package com.ruoyi.flowable.common.validate;
+
+/**
+ * 校验分组 query
+ *
+ * @author Lion Li
+ */
+public interface QueryGroup {
+}

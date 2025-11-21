@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds" debug="false">
+    <!-- 日志存放路径 -->
+	<property name="log.path" value="logs/ruoyi-flowable" />
+   <!-- 日志输出格式 -->
+	<property name="log.pattern" value="%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />
+
+    <!-- 控制台输出 -->
+	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>${log.pattern}</pattern>
+		</encoder>
+	</appender>
+
+    <!-- 系统日志输出 -->
+	<appender name="file_info" class="ch.qos.logback.core.rolling.RollingFileAppender">
+	    <file>${log.path}/info.log</file>
+        <!-- 循环政策：基于时间创建日志文件 -->
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 日志文件名格式 -->
+			<fileNamePattern>${log.path}/info.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<!-- 日志最大的历史 60天 -->
+			<maxHistory>60</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>${log.pattern}</pattern>
+		</encoder>
+		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <!-- 过滤的级别 -->
+            <level>INFO</level>
+            <!-- 匹配时的操作：接收（记录） -->
+            <onMatch>ACCEPT</onMatch>
+            <!-- 不匹配时的操作：拒绝（不记录） -->
+            <onMismatch>DENY</onMismatch>
+        </filter>
+	</appender>
+
+    <appender name="file_error" class="ch.qos.logback.core.rolling.RollingFileAppender">
+	    <file>${log.path}/error.log</file>
+        <!-- 循环政策：基于时间创建日志文件 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 日志文件名格式 -->
+            <fileNamePattern>${log.path}/error.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<!-- 日志最大的历史 60天 -->
+			<maxHistory>60</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${log.pattern}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <!-- 过滤的级别 -->
+            <level>ERROR</level>
+			<!-- 匹配时的操作：接收（记录） -->
+            <onMatch>ACCEPT</onMatch>
+			<!-- 不匹配时的操作：拒绝（不记录） -->
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- Console Appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- MyBatis-Plus Logger Configuration -->
+    <logger name="com.baomidou.mybatisplus" level="DEBUG"/>
+
+    <!-- 系统模块日志级别控制  -->
+	<logger name="com.ruoyi" level="info" />
+	<!-- Spring日志级别控制  -->
+	<logger name="org.springframework" level="warn" />
+
+	<root level="info">
+		<appender-ref ref="console" />
+	</root>
+	
+	<!--系统操作日志-->
+    <!-- ########## 修改：合并 root 节点（避免日志过滤）########## -->
+    <root level="info">
+        <appender-ref ref="console" /> <!-- 控制台输出（含 Flowable DEBUG 日志） -->
+        <appender-ref ref="file_info" /> <!-- 系统 info 日志写入文件 -->
+        <appender-ref ref="file_error" /> <!-- 系统 error 日志写入文件 -->
+    </root>
+
+   <!-- &lt;!&ndash; ########## 新增：Flowable 日志配置（关键）########## &ndash;&gt;
+    &lt;!&ndash; Flowable 核心引擎日志（引擎初始化、数据源关联） &ndash;&gt;
+    <logger name="org.flowable" level="DEBUG" additivity="false">
+        <appender-ref ref="console" /> &lt;!&ndash; 输出到控制台 &ndash;&gt;
+    </logger>
+    &lt;!&ndash; Flowable 建表 SQL 执行日志（打印 create table 语句和执行结果） &ndash;&gt;
+    <logger name="org.flowable.engine.impl.db" level="DEBUG" additivity="false">
+        <appender-ref ref="console" />
+    </logger>
+    &lt;!&ndash; 动态数据源日志（验证数据源是否初始化成功） &ndash;&gt;
+    <logger name="com.baomidou.dynamic.datasource" level="DEBUG" additivity="false">
+        <appender-ref ref="console" />
+    </logger>
+    &lt;!&ndash; Druid 连接池日志（验证数据库连接是否正常） &ndash;&gt;
+    <logger name="com.alibaba.druid" level="DEBUG" additivity="false">
+        <appender-ref ref="console" />
+    </logger>
+    &lt;!&ndash; JDBC 日志（打印所有数据库交互，含建表 SQL 底层执行） &ndash;&gt;
+    <logger name="java.sql" level="DEBUG" additivity="false">
+        <appender-ref ref="console" />
+    </logger>
+    <logger name="javax.sql" level="DEBUG" additivity="false">
+        <appender-ref ref="console" />
+    </logger>-->
+</configuration>

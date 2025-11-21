@@ -1,0 +1,5 @@
+#debug: true
+#logging:
+#  level:
+#    org.flowable: debug
+#    org.springframework.boot.autoconfigure: debug

@@ -1,0 +1,9 @@
+# 根目录全局忽略：仅忽略跨子项目的文件
+# IDEA全局配置（子项目的.idea会被自身.gitignore忽略）
+.idea/ 
+# VSCode全局配置    
+.vscode/
+# 全局日志文件
+*.log           
+# 临时文件
+*.tmp           
