@@ -5,6 +5,10 @@
 @use './btn.scss';
 @use './ruoyi.scss';
 
+@tailwind base;    /* 基础样式（如默认字体、margin/padding 重置） */
+@tailwind components; /* 组件样式（可自定义复用组件类） */
+@tailwind utilities; /* 工具类（核心，如 w-10、bg-red-500 等） */
+
 body {
   height: 100%;
   margin: 0;
