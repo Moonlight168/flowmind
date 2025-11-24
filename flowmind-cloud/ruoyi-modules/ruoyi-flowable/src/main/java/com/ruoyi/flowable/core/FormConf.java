@@ -61,7 +61,7 @@ public class FormConf {
     /**
      * 表单项
      */
-    private List<Map<String, Object>> fields;
+    private List<Map<String, Object>> fields = new ArrayList<>();
     /**
      * 表单数据
      */

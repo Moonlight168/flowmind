@@ -1,4 +1,4 @@
-import router from './router'
+import router, { oaRoutes } from './router'
 import { ElMessage } from 'element-plus'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
@@ -11,7 +11,7 @@ import usePermissionStore from '@/store/modules/permission'
 
 NProgress.configure({ showSpinner: false })
 
-const whiteList = ['/login', '/register', '/oa']
+const whiteList = ['/login', '/register','/oa/todo']
 
 const isWhiteList = (path) => {
   return whiteList.some(pattern => isPathMatch(pattern, path))
@@ -40,6 +40,12 @@ router.beforeEach((to, from, next) => {
                 router.addRoute(route) // 动态添加可访问路由表
               }
             })
+            // 确保oa路由已经加载
+            if (!router.hasRoute('oa')) {
+              oaRoutes.forEach(route => {
+                router.addRoute(route)
+              })
+            }
             next({ ...to, replace: true }) // hack方法 确保addRoutes已完成
           })
         }).catch(err => {

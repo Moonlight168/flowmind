@@ -11,7 +11,7 @@ import '@/assets/styles/index.scss' // global css
 
 import App from './App'
 import store from './store'
-import router from './router'
+import router, { oaRoutes } from './router'
 import directive from './directive' // directive
 
 // 注册指令
@@ -48,6 +48,11 @@ import VForm3 from 'vform3-builds'  //引入VForm 3库
 import 'vform3-builds/dist/designer.style.css'  //引入VForm3样式
 
 const app = createApp(App)
+
+// 确保oa路由在应用启动时就被加载
+oaRoutes.forEach(route => {
+  router.addRoute(route)
+})
 
 // 全局方法挂载
 app.config.globalProperties.useDict = useDict

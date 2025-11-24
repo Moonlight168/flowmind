@@ -9,6 +9,9 @@ export function complete(data) {
   });
 }
 
+// 别名，保持兼容性
+export const completeTask = complete;
+
 // 委派任务
 export function delegate(data) {
   return request({
@@ -18,6 +21,9 @@ export function delegate(data) {
   });
 }
 
+// 别名，保持兼容性
+export const delegateTask = delegate;
+
 // 转办任务
 export function transfer(data) {
   return request({
@@ -26,6 +32,9 @@ export function transfer(data) {
     data: data
   });
 }
+
+// 别名，保持兼容性
+export const transferTask = transfer;
 
 // 退回任务
 export function returnTask(data) {
@@ -54,6 +63,15 @@ export function claimTask(data) {
   });
 }
 
+// 批量签收任务
+export function batchClaimTask(data) {
+  return request({
+    url: '/flowable/task/batchClaim',
+    method: 'post',
+    data: data
+  });
+}
+
 // 可退回任务列表
 export function returnList(data) {
   return request({
@@ -67,6 +85,15 @@ export function returnList(data) {
 export function revokeProcess(data) {
   return request({
     url: '/flowable/task/revokeProcess',
+    method: 'post',
+    data: data
+  });
+}
+
+// 标记已读
+export function markAsRead(data) {
+  return request({
+    url: '/flowable/task/markAsRead',
     method: 'post',
     data: data
   });

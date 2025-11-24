@@ -19,20 +19,22 @@
         </router-link>
 
         <router-link
-            to="/oa/todo"
+            to="/oa/task"
             class="flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 group text-gray-600 hover:bg-gray-100 relative"
             active-class="bg-green-50 !text-green-600 font-medium"
         >
-          <div v-if="todoCount > 0" class="absolute top-1 right-3 w-2 h-2 bg-red-500 rounded-full border border-white"></div>
+          <div v-if="todoCount > 0" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center border border-white">
+            {{ todoCount > 99 ? '99+' : todoCount }}
+          </div>
           <el-icon :size="20" class="mb-0.5 group-hover:scale-105 transition-transform"><Finished /></el-icon>
-          <span class="text-[11px]">審批</span>
+          <span class="text-[11px]">审批</span>
         </router-link>
 
       </div>
 
       <div class="mt-auto flex flex-col gap-3 items-center">
 
-        <el-tooltip v-if="isAdmin" content="切換至管理後台" placement="right">
+        <el-tooltip v-if="isAdmin" content="切换至管理后台" placement="right">
           <div
               @click="goToAdmin"
               class="w-10 h-10 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-green-600 cursor-pointer transition-all"
@@ -43,11 +45,16 @@
 
         <el-dropdown trigger="click">
           <div class="w-10 h-10 rounded-full bg-gray-200 overflow-hidden cursor-pointer border-2 border-transparent hover:border-green-500 transition">
-            <img :src="userAvatar" class="w-full h-full object-cover" alt="User Avatar" />
+            <img :src="userAvatar" class="w-full h-full object-cover" alt="用户头像" />
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="handleLogout">退出登錄</el-dropdown-item>
+              <el-dropdown-item @click="goToProfile">
+                <el-icon><User /></el-icon>个人信息
+              </el-dropdown-item>
+              <el-dropdown-item divided @click="handleLogout">
+                <el-icon><SwitchButton /></el-icon>退出登录
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -57,10 +64,7 @@
     <div class="flex-1 flex flex-col h-full overflow-hidden">
 
       <header class="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
-        <h2 class="text-base font-semibold text-gray-800">{{ route.meta.title || '工作區' }}</h2>
-        <div class="text-sm text-gray-500">
-          Admin User
-        </div>
+        <h2 class="text-base font-semibold text-gray-800">{{ route.meta.title || '工作区' }}</h2>
       </header>
 
       <main class="flex-1 overflow-y-auto">
@@ -77,49 +81,89 @@
 </template>
 
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, ref, onMounted} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-// 請確保你的路徑正確：'useUserStore' 是一個假設的 Store 模塊
 import useUserStore from '@/store/modules/user'
-import {Grid, Finished, Monitor} from '@element-plus/icons-vue'
+import usePermissionStore from '@/store/modules/permission'
+import {isHttp} from '@/utils/validate'
+import {Grid, Finished, Monitor, User, SwitchButton} from '@element-plus/icons-vue'
+import {listTodoProcess} from '@/api/workflow/work/process'
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore() // 假設已初始化並可用
+const userStore = useUserStore()
 
-const todoCount = ref(12) // 模擬數據
-// 飛書風格通常使用簡潔的圓形頭像
+const todoCount = ref(0) // 待办任务数量
 const userAvatar = computed(() => userStore.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png')
 
-// 判斷是否為管理員
+// 判断是否为管理员
 const isAdmin = computed(() => {
   const roles = userStore.roles || []
   return roles.includes('admin')
 })
 
-// -------------------
-// 邏輯處理函數
-// -------------------
-
-// 導航到管理後台
-const goToAdmin = () => {
-  // 導航到管理後台路徑
-  router.push('/admin/index')
-}
-
-// 處理登出
-const handleLogout = async () => {
+// 获取待办任务数量
+const getTodoCount = async () => {
   try {
-    await userStore.logOut() // 執行登出操作
-    router.push('/login') // 重定向到登錄頁面
+    const res = await listTodoProcess({ pageNum: 1, pageSize: 1 })
+    todoCount.value = res.total || 0
   } catch (error) {
-    console.error("Logout failed:", error)
+    console.error('获取待办任务数量失败:', error)
+    todoCount.value = 0
   }
 }
+
+// 导航到管理后台
+const goToAdmin = async () => {
+  // 确保用户信息和权限路由已加载
+  if (userStore.roles.length === 0) {
+    await userStore.getInfo()
+  }
+  
+  // 确保菜单已加载
+  const permissionStore = usePermissionStore()
+  if (permissionStore.sidebarRouters.length === 0) {
+    const accessRoutes = await permissionStore.generateRoutes()
+    accessRoutes.forEach(route => { 
+      if (!isHttp(route.path)) {
+        router.addRoute(route)
+      }
+    })
+  }
+  
+  await router.push('/admin/index')
+}
+
+// 导航到个人信息页面
+const goToProfile = () => {
+  router.push('/oa/profile')
+}
+
+// 处理登出
+const handleLogout = async () => {
+  try {
+    await userStore.logOut()
+    router.push('/login')
+  } catch (error) {
+    console.error("退出登录失败:", error)
+  }
+}
+
+// 组件挂载时获取待办任务数量
+onMounted(() => {
+  // 确保用户信息已加载
+  if (!userStore.name) {
+    userStore.getInfo().then(() => {
+      getTodoCount()
+    })
+  } else {
+    getTodoCount()
+  }
+})
 </script>
 
 <style scoped>
-/* 如果你在 Tailwind 配置中沒有設置飛書綠色，
-可以考慮在 <style> 標籤中定義一個 CSS 變量，但使用 Tailwind 類名更推薦。
+/* 如果你在 Tailwind 配置中没有设置飞书绿色，
+可以考虑在 <style> 标签中定义一个 CSS 变量，但使用 Tailwind 类名更推荐。
 */
 </style>

@@ -113,7 +113,7 @@ const resetQuery = () => {
 const handleClaim = async (row) => {
   const res = await claimTask({ taskId: row.taskId })
   proxy.$modal.msgSuccess(res.msg);
-  router.push({ path: '/work/todo' })
+  router.push({ path: '/oa/todo' })
 }
 
 const categoryFormat = (row) => {

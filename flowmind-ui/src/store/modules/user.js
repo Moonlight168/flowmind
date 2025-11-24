@@ -1,5 +1,6 @@
 import router from '@/router'
 import { ElMessageBox, } from 'element-plus'
+import { defineStore } from 'pinia'
 import { login, logout, getInfo } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
 import { isEmpty } from "@/utils/validate"

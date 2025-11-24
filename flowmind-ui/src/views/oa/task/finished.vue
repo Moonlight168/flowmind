@@ -4,8 +4,8 @@
     <div class="p-6 border-b border-gray-100">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-2">
-          <h2 class="text-xl font-bold text-gray-800">待办事项</h2>
-          <span class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">{{ total }}</span>
+          <h2 class="text-xl font-bold text-gray-800">已办事项</h2>
+          <span class="px-2 py-1 text-xs bg-green-100 text-green-600 rounded-full">{{ total }}</span>
         </div>
         
         <div class="flex flex-wrap items-center gap-3">
@@ -37,6 +37,17 @@
             />
           </el-select>
           
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            class="w-56"
+          />
+          
           <el-button type="primary" @click="handleQuery">
             <el-icon><Search /></el-icon>
             搜索
@@ -50,34 +61,31 @@
       </div>
     </div>
 
-    <!-- 待办事项列表 - 飞书审批卡片样式 -->
+    <!-- 已办事项列表 - 飞书审批卡片样式 -->
     <div class="p-6">
       <div v-if="loading" class="py-10 text-center text-gray-400">
         <el-icon class="is-loading"><Loading /></el-icon>
         <span class="ml-2">加载中...</span>
       </div>
       
-      <div v-else-if="todoList.length === 0" class="py-16 text-center">
-        <el-empty description="暂无待办事项" />
+      <div v-else-if="finishedList.length === 0" class="py-16 text-center">
+        <el-empty description="暂无已办事项" />
       </div>
       
       <div v-else class="grid grid-cols-1 gap-4">
-        <!-- 待办事项卡片 -->
+        <!-- 已办事项卡片 -->
         <div
-          v-for="(item, index) in todoList"
+          v-for="(item, index) in finishedList"
           :key="item.taskId"
-          class="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-blue-200 transition-all duration-300 cursor-pointer"
+          class="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-green-200 transition-all duration-300 cursor-pointer"
           @click="handleDetail(item)"
         >
           <div class="flex items-start justify-between">
             <!-- 左侧内容 -->
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-2">
-                <div 
-                  class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-medium"
-                  :class="getPriorityColor(item.priority)"
-                >
-                  {{ getPriorityIcon(item.priority) }}
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
+                  <el-icon><CircleCheck /></el-icon>
                 </div>
                 <div>
                   <h3 class="text-base font-semibold text-gray-800 hover:text-blue-600 transition-colors">
@@ -86,7 +94,7 @@
                   <div class="flex items-center gap-3 mt-1">
                     <span class="text-xs text-gray-500">任务节点: {{ item.taskName }}</span>
                     <span class="text-xs text-gray-500">版本: v{{ item.procDefVersion }}</span>
-                    <el-tag v-if="item.categoryName" size="small" type="info">{{ item.categoryName }}</el-tag>
+                    <el-tag v-if="item.categoryName" size="small" type="success">{{ item.categoryName }}</el-tag>
                   </div>
                 </div>
               </div>
@@ -98,20 +106,34 @@
                 </div>
                 <div class="flex items-center gap-1">
                   <el-icon><Clock /></el-icon>
-                  <span>接收时间: {{ parseTime(item.createTime) }}</span>
+                  <span>完成时间: {{ parseTime(item.finishTime) }}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <el-icon><Timer /></el-icon>
+                  <span>耗时: {{ calculateDuration(item.createTime, item.finishTime) }}</span>
                 </div>
               </div>
             </div>
             
             <!-- 右侧操作按钮 -->
             <div class="flex items-center gap-2 ml-4">
-              <el-tooltip content="办理" placement="top">
+              <el-tooltip content="查看详情" placement="top">
                 <el-button 
-                  type="primary" 
+                  type="success" 
                   size="small" 
                   @click.stop="handleDetail(item)"
                 >
-                  办理
+                  详情
+                </el-button>
+              </el-tooltip>
+              
+              <el-tooltip content="撤回" placement="top" v-if="canRevoke(item)">
+                <el-button 
+                  type="warning" 
+                  size="small" 
+                  @click.stop="handleRevoke(item)"
+                >
+                  撤回
                 </el-button>
               </el-tooltip>
             </div>
@@ -135,18 +157,20 @@
   </div>
 </template>
 
-<script setup name="Todo" lang="js">
-import { listTodoProcess } from "@/api/workflow/work/process";
+<script setup name="Finished" lang="js">
+import { listFinishedProcess } from "@/api/workflow/work/process";
+import { revokeProcess } from "@/api/workflow/work/task";
 import { listAllCategory } from "@/api/workflow/category";
 import { parseTime } from "@/utils/ruoyi";
 
 const router = useRouter();
 const { proxy } = getCurrentInstance();
 
-const todoList = ref([]);
+const finishedList = ref([]);
 const loading = ref(true);
 const total = ref(0);
 const categoryOptions = ref([]);
+const dateRange = ref([]);
 
 const queryParams = ref({
   pageNum: 1,
@@ -154,26 +178,6 @@ const queryParams = ref({
   processName: '',
   category: ''
 });
-
-// 根据优先级获取颜色类
-const getPriorityColor = (priority) => {
-  const colors = {
-    high: 'bg-gradient-to-br from-red-500 to-red-600',
-    medium: 'bg-gradient-to-br from-blue-500 to-blue-600',
-    low: 'bg-gradient-to-br from-gray-500 to-gray-600'
-  };
-  return colors[priority] || colors.medium;
-};
-
-// 根据优先级获取图标
-const getPriorityIcon = (priority) => {
-  const icons = {
-    high: '急',
-    medium: '中',
-    low: '低'
-  };
-  return icons[priority] || '中';
-};
 
 // 查询流程分类列表
 const getCategoryList = async () => {
@@ -184,25 +188,24 @@ const getCategoryList = async () => {
   }));
 };
 
-// 查询待办列表
+// 查询已办列表
 const getList = async () => {
   loading.value = true;
   try {
-    const res = await listTodoProcess(queryParams.value);
-    todoList.value = res.rows.map(item => {
+    const params = proxy.addDateRange(queryParams.value, dateRange.value);
+    const res = await listFinishedProcess(params);
+    finishedList.value = res.rows.map(item => {
       // 添加分类名称
       const category = categoryOptions.value.find(cat => cat.code === item.category);
       return {
         ...item,
-        categoryName: category ? category.categoryName : '',
-        // 随机设置优先级，实际应用中应该从后端获取
-        priority: ['high', 'medium', 'low'][Math.floor(Math.random() * 3)]
+        categoryName: category ? category.categoryName : ''
       };
     });
     total.value = res.total;
   } catch (error) {
-    console.error('获取待办列表失败:', error);
-    proxy.$modal.msgError('获取待办列表失败');
+    console.error('获取已办列表失败:', error);
+    proxy.$modal.msgError('获取已办列表失败');
   } finally {
     loading.value = false;
   }
@@ -216,6 +219,7 @@ const handleQuery = () => {
 
 // 重置按钮操作
 const resetQuery = () => {
+  dateRange.value = [];
   queryParams.value = {
     pageNum: 1,
     pageSize: 10,
@@ -231,9 +235,60 @@ const handleDetail = (row) => {
     path: '/oa/process/detail/' + row.instanceId,
     query: {
       taskId: row.taskId,
-      processed: false
+      processed: true
     }
   });
+};
+
+// 撤回任务
+const handleRevoke = async (row) => {
+  try {
+    await proxy.$modal.confirm('确认要撤回该任务吗？');
+    const params = {
+      procInsId: row.procInsId,
+      taskId: row.taskId
+    };
+    const res = await revokeProcess(params);
+    proxy.$modal.msgSuccess(res.msg || "撤回成功");
+    getList();
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error("撤回任务失败", error);
+      proxy.$modal.msgError('撤回失败');
+    }
+  }
+};
+
+// 判断是否可以撤回
+const canRevoke = (item) => {
+  // 这里可以根据业务规则判断是否可以撤回
+  // 例如：只有最近24小时内处理的任务可以撤回
+  if (!item.finishTime) return false;
+  
+  const finishTime = new Date(item.finishTime);
+  const now = new Date();
+  const hoursDiff = (now - finishTime) / (1000 * 60 * 60);
+  
+  return hoursDiff <= 24; // 24小时内可以撤回
+};
+
+// 计算处理耗时
+const calculateDuration = (startTime, endTime) => {
+  if (!startTime || !endTime) return '未知';
+  
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const diff = end - start;
+  
+  if (diff < 60 * 1000) {
+    return Math.floor(diff / 1000) + '秒';
+  } else if (diff < 60 * 60 * 1000) {
+    return Math.floor(diff / (60 * 1000)) + '分钟';
+  } else if (diff < 24 * 60 * 60 * 1000) {
+    return Math.floor(diff / (60 * 60 * 1000)) + '小时';
+  } else {
+    return Math.floor(diff / (24 * 60 * 60 * 1000)) + '天';
+  }
 };
 
 onMounted(() => {

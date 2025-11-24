@@ -1,4 +1,4 @@
-import {createWebHistory, createRouter} from 'vue-router'
+import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
 import UserLayout from '@/layout/portal/index.vue'
@@ -49,26 +49,21 @@ export const constantRoutes = [
         hidden: true
     },
     {
-        path: "/:pathMatch(.*)*",
-        component: () => import('@/views/error/404'),
-        hidden: true
-    },
-    {
         path: '/401',
         component: () => import('@/views/error/401'),
         hidden: true
     },
     {
         path: '',
-        component: Layout,
-        redirect: '/index',
+        component: UserLayout,
+        redirect: '/oa/workplace',
         children: [
             {
-                path: '/index',
-                component: () => import('@/views/index'),
-                name: 'Index',
-                meta: {title: '首页', icon: 'dashboard', affix: true}
-            }
+                path: '/oa/workplace',
+                component: () => import('@/views/oa/workplace/index.vue'),
+                name: 'Workplace',
+                meta: { title: '工作台', icon: 'dashboard', affix: true }
+            },
         ]
     },
     {
@@ -81,14 +76,34 @@ export const constantRoutes = [
                 path: 'profile/:activeTab?',
                 component: () => import('@/views/system/user/profile/index'),
                 name: 'Profile',
-                meta: {title: '个人中心', icon: 'user'}
+                meta: { title: '个人中心', icon: 'user' }
             }
         ]
     },
 ]
 
+// 404路由，放在最后以确保其他路由优先匹配
+export const notFoundRoute = {
+    path: "/:pathMatch(.*)*",
+    component: () => import('@/views/error/404'),
+    hidden: true
+}
+
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
+        {
+        path: '/admin',
+        component: Layout,
+        redirect: '/admin/index',
+        children: [
+            {
+                path: 'index',
+                component: () => import('@/views/index'),
+                name: 'Index',
+                meta: {title: '首页', icon: 'dashboard', affix: true}
+            }
+        ]
+    },
     {
         path: '/system/user-auth',
         component: Layout,
@@ -99,7 +114,7 @@ export const dynamicRoutes = [
                 path: 'role/:userId(\\d+)',
                 component: () => import('@/views/system/user/authRole'),
                 name: 'AuthRole',
-                meta: {title: '分配角色', activeMenu: '/system/user'}
+                meta: { title: '分配角色', activeMenu: '/system/user' }
             }
         ]
     },
@@ -113,7 +128,7 @@ export const dynamicRoutes = [
                 path: 'user/:roleId(\\d+)',
                 component: () => import('@/views/system/role/authUser'),
                 name: 'AuthUser',
-                meta: {title: '分配用户', activeMenu: '/system/role'}
+                meta: { title: '分配用户', activeMenu: '/system/role' }
             }
         ]
     },
@@ -127,7 +142,7 @@ export const dynamicRoutes = [
                 path: 'index/:dictId(\\d+)',
                 component: () => import('@/views/system/dict/data'),
                 name: 'Data',
-                meta: {title: '字典数据', activeMenu: '/system/dict'}
+                meta: { title: '字典数据', activeMenu: '/system/dict' }
             }
         ]
     },
@@ -141,7 +156,7 @@ export const dynamicRoutes = [
                 path: 'index/:jobId(\\d+)',
                 component: () => import('@/views/monitor/job/log'),
                 name: 'JobLog',
-                meta: {title: '调度日志', activeMenu: '/monitor/job'}
+                meta: { title: '调度日志', activeMenu: '/monitor/job' }
             }
         ]
     },
@@ -155,7 +170,7 @@ export const dynamicRoutes = [
                 path: 'index/:tableId(\\d+)',
                 component: () => import('@/views/tool/gen/editTable'),
                 name: 'GenEdit',
-                meta: {title: '修改生成配置', activeMenu: '/tool/gen'}
+                meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
             }
         ]
     },
@@ -169,13 +184,13 @@ export const dynamicRoutes = [
                 path: 'start/:deployId([\\w|\\-]+)',
                 component: () => import('@/views/workflow/work/start.vue'),
                 name: 'WorkStart',
-                meta: {title: '发起流程', activeMenu: '/workflow/process', icon: ''}
+                meta: { title: '发起流程', activeMenu: '/workflow/process', icon: '' }
             },
             {
                 path: 'detail/:procInsId([\\w|\\-]+)',
                 component: () => import('@/views/workflow/work/detail.vue'),
                 name: 'WorkDetail',
-                meta: {title: '流程详情', activeMenu: '/work/own', icon: ''}
+                meta: { title: '流程详情', activeMenu: '/work/own', icon: '' }
             }
         ]
     },
@@ -193,19 +208,55 @@ export const oaRoutes = [
                 path: 'workplace',
                 component: () => import('@/views/oa/workplace/index.vue'),
                 name: 'Workplace',
-                meta: {title: '工作台', icon: 'dashboard', affix: true}
+                meta: { title: '工作台', icon: 'dashboard', affix: true }
+            },
+            {
+                path: 'task',
+                component: () => import('@/views/oa/task/index.vue'),
+                name: 'Task',
+                meta: { title: '任务中心', icon: 'todo' }
             },
             {
                 path: 'todo',
                 component: () => import('@/views/oa/task/todo.vue'),
                 name: 'Todo',
-                meta: {title: '待办事项', icon: 'todo'}
+                meta: { title: '待办事项', icon: 'todo' }
+            },
+            {
+                path: 'finished',
+                component: () => import('@/views/oa/task/finished.vue'),
+                name: 'Finished',
+                meta: { title: '已办事项', icon: 'finished' }
+            },
+            {
+                path: 'own',
+                component: () => import('@/views/oa/task/own.vue'),
+                name: 'Own',
+                meta: { title: '我的流程', icon: 'own' }
+            },
+            {
+                path: 'copy',
+                component: () => import('@/views/oa/task/copy.vue'),
+                name: 'Copy',
+                meta: { title: '抄送', icon: 'copy' }
+            },
+            {
+                path: 'claim',
+                component: () => import('@/views/oa/task/claim.vue'),
+                name: 'Claim',
+                meta: { title: '待签收', icon: 'claim' }
+            },
+            {
+                path: 'profile',
+                component: () => import('@/views/system/user/profile/index'),
+                name: 'OAProfile',
+                meta: { title: '个人信息', icon: 'user' }
             },
             {
                 path: 'process/detail/:procInsId',
                 component: () => import('@/views/oa/task/detail.vue'),
                 name: 'ProcessDetail',
-                meta: {title: '流程详情', icon: 'process'}
+                meta: { title: '流程详情', icon: 'process' }
             }
         ]
     },
@@ -213,12 +264,12 @@ export const oaRoutes = [
 
 const router = createRouter({
     history: createWebHistory(),
-    routes: [...constantRoutes, ...oaRoutes],
+    routes: [...constantRoutes, ...oaRoutes, ...dynamicRoutes, notFoundRoute], // 初始路由，确保oaRoutes在应用启动时就被添加
     scrollBehavior(to, from, savedPosition) {
         if (savedPosition) {
             return savedPosition
         }
-        return {top: 0}
+        return { top: 0 }
     },
 })
 
