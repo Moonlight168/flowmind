@@ -128,4 +128,15 @@ public class WfCopyServiceImpl implements IWfCopyService {
         }
         return baseMapper.insertBatch(copyList);
     }
+    
+    /**
+     * 统计用户抄送数量
+     *
+     * @param userId 用户ID
+     * @return 抄送数量
+     */
+    @Override
+    public Long countByUserId(Long userId) {
+        return baseMapper.countByUserId(userId);
+    }
 }

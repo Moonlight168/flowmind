@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.flowable.workflow.mapper.WfCopyMapper">
+
+    <resultMap type="WfCopy" id="WfCopyResult">
+        <result property="copyId"       column="copy_id"       />
+        <result property="title"        column="title"         />
+        <result property="processId"    column="process_id"    />
+        <result property="processName"  column="process_name"  />
+        <result property="categoryId"   column="category_id"   />
+        <result property="deploymentId" column="deployment_id" />
+        <result property="instanceId"   column="instance_id"   />
+        <result property="taskId"       column="task_id"       />
+        <result property="userId"       column="user_id"       />
+        <result property="originatorId" column="originator_id" />
+        <result property="originatorName" column="originator_name" />
+        <result property="delFlag"      column="del_flag"      />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <result property="remark"       column="remark"        />
+    </resultMap>
+
+    <sql id="selectWfCopyVo">
+        select copy_id, title, process_id, process_name, category_id, deployment_id, instance_id, task_id, user_id, originator_id, originator_name, del_flag, create_by, create_time, update_by, update_time, remark from wf_copy
+    </sql>
+
+    <select id="countByUserId" parameterType="Long" resultType="Long">
+        select count(*) from wf_copy where user_id = #{userId} and del_flag = '0'
+    </select>
+
+</mapper>

@@ -1,383 +1,193 @@
 <template>
-  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 min-h-[80vh]">
-    <!-- 顶部搜索和筛选区域 -->
-    <div class="p-6 border-b border-gray-100">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="flex items-center gap-2">
-          <h2 class="text-xl font-bold text-gray-800">我的流程</h2>
-          <span class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded-full">{{ total }}</span>
-        </div>
-        
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="relative">
-            <el-input
-              v-model="queryParams.processName"
-              placeholder="搜索流程名称"
-              clearable
-              class="w-64"
-              @keyup.enter="handleQuery"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-          </div>
-          
-          <el-select
-            v-model="queryParams.category"
-            placeholder="流程分类"
-            clearable
-            class="w-40"
-          >
-            <el-option
-              v-for="item in categoryOptions"
-              :key="item.categoryId"
-              :label="item.categoryName"
-              :value="item.code"
-            />
-          </el-select>
-          
-          <el-select
-            v-model="queryParams.state"
-            placeholder="流程状态"
-            clearable
-            class="w-40"
-          >
-            <el-option label="进行中" value="running" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="已终止" value="terminated" />
-          </el-select>
-          
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            class="w-56"
-          />
-          
-          <el-button type="primary" @click="handleQuery">
-            <el-icon><Search /></el-icon>
-            搜索
-          </el-button>
-          
-          <el-button @click="resetQuery">
-            <el-icon><Refresh /></el-icon>
-            重置
-          </el-button>
-        </div>
+ <div class="app-container">
+      <div class="search" v-show="showSearch">
+        <el-form :model="queryParams" ref="queryFormRef" :inline="true" label-width="70">
+          <el-form-item label="流程标识" prop="processKey">
+            <el-input v-model="queryParams.processKey" placeholder="请输入流程标识" clearable style="width: 200px" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item label="流程名称" prop="processName">
+            <el-input v-model="queryParams.processName" placeholder="请输入流程名称" clearable style="width: 200px" @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item label="流程分类" prop="category">
+            <el-select v-model="queryParams.category" clearable placeholder="流程分类"  style="width: 240px">
+              <el-option v-for="item in categoryOptions" :key="item.categoryId" :label="item.categoryName" :value="item.code" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="提交时间" style="width: 308px;">
+            <el-date-picker
+              v-model="dateRange"
+              value-format="YYYY-MM-DD"
+              type="daterange"
+              range-separator="-"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+            ></el-date-picker>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
+            <el-button icon="Refresh" @click="resetQuery">刷新</el-button>
+          </el-form-item>
+        </el-form>
       </div>
-    </div>
+    <el-card shadow="never">
+      <template #header>
+        <el-row :gutter="10" class="mb8">
+          <el-col :span="1.5">
+            <el-button type="danger" plain icon="Delete" :disabled="multiple" @click="handleDelete()" v-hasPermi="['workflow:process:remove']">
+              删除
+            </el-button>
+          </el-col>
+          <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
+        </el-row>
+      </template>
 
-    <!-- 我的流程列表 - 飞书审批卡片样式 -->
-    <div class="p-6">
-      <div v-if="loading" class="py-10 text-center text-gray-400">
-        <el-icon class="is-loading"><Loading /></el-icon>
-        <span class="ml-2">加载中...</span>
-      </div>
-      
-      <div v-else-if="processList.length === 0" class="py-16 text-center">
-        <el-empty description="暂无流程数据" />
-      </div>
-      
-      <div v-else class="grid grid-cols-1 gap-4">
-        <!-- 流程卡片 -->
-        <div
-          v-for="(item, index) in processList"
-          :key="item.instanceId"
-          class="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md hover:border-blue-200 transition-all duration-300 cursor-pointer"
-          @click="handleDetail(item)"
-        >
-          <div class="flex items-start justify-between">
-            <!-- 左侧内容 -->
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-2">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center"
-                     :class="getStateClass(item.state)">
-                  <el-icon><component :is="getStateIcon(item.state)" /></el-icon>
-                </div>
-                <div>
-                  <h3 class="text-base font-semibold text-gray-800 hover:text-blue-600 transition-colors">
-                    {{ item.procDefName }}
-                  </h3>
-                  <div class="flex items-center gap-3 mt-1">
-                    <span class="text-xs text-gray-500">版本: v{{ item.procDefVersion }}</span>
-                    <el-tag v-if="item.categoryName" size="small" type="info">{{ item.categoryName }}</el-tag>
-                    <el-tag :type="getStateTagType(item.state)" size="small">
-                      {{ getStateText(item.state) }}
-                    </el-tag>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                <div class="flex items-center gap-1">
-                  <el-icon><Clock /></el-icon>
-                  <span>发起时间: {{ parseTime(item.createTime) }}</span>
-                </div>
-                <div class="flex items-center gap-1" v-if="item.duration">
-                  <el-icon><Timer /></el-icon>
-                  <span>总耗时: {{ item.duration }}</span>
-                </div>
-                <div class="flex items-center gap-1" v-if="item.currentTask">
-                  <el-icon><User /></el-icon>
-                  <span>当前处理人: {{ item.currentTask }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 右侧操作按钮 -->
-            <div class="flex items-center gap-2 ml-4">
-              <el-tooltip content="查看详情" placement="top">
-                <el-button 
-                  type="primary" 
-                  size="small" 
-                  @click.stop="handleDetail(item)"
-                >
-                  详情
-                </el-button>
-              </el-tooltip>
-              
-              <el-tooltip content="取消流程" placement="top" v-if="item.state === 'running'">
-                <el-button 
-                  type="danger" 
-                  size="small" 
-                  @click.stop="handleCancel(item)"
-                >
-                  取消
-                </el-button>
-              </el-tooltip>
-              
-              <el-tooltip content="删除流程" placement="top" v-if="item.state === 'completed' || item.state === 'terminated'">
-                <el-button 
-                  type="danger" 
-                  size="small" 
-                  @click.stop="handleDelete(item)"
-                >
-                  删除
-                </el-button>
-              </el-tooltip>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 分页 -->
-      <div v-if="total > 0" class="mt-6 flex justify-center">
-        <el-pagination
-          v-model:current-page="queryParams.pageNum"
-          v-model:page-size="queryParams.pageSize"
-          :page-sizes="[10, 20, 30, 50]"
-          :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="getList"
-          @current-change="getList"
-        />
-      </div>
-    </div>
+      <el-table v-loading="loading" :data="ownProcessList" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" align="center" />
+        <el-table-column label="流程编号" align="center" prop="procInsId" :show-overflow-tooltip="true" />
+        <el-table-column label="流程名称" align="center" prop="procDefName" :show-overflow-tooltip="true" />
+        <el-table-column label="流程类别" align="center" prop="category" :formatter="categoryFormat" />
+        <el-table-column label="流程版本" align="center" width="80px">
+          <template #default="scope">
+            <el-tag>v{{ scope.row.procDefVersion }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="当前节点" align="center" prop="taskName" />
+        <el-table-column label="提交时间" align="center" prop="createTime" width="180" />
+        <el-table-column label="流程状态" align="center" width="100">
+          <template #default="scope">
+            <dict-tag :options="wf_process_status" :value="scope.row.processStatus" />
+          </template>
+        </el-table-column>
+        <el-table-column label="耗时" align="center" prop="duration" width="180" />
+        <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width">
+          <template #default="scope">
+            <el-tooltip content="详情" placement="top">
+              <el-button link type="primary" icon="View" @click="handleDetails(scope.row)" v-hasPermi="['workflow:process:query']"></el-button>
+            </el-tooltip>
+            <el-tooltip content="取消" placement="top">
+              <el-button link type="primary" icon="CircleClose" @click="handleStop(scope.row)" v-hasPermi="['workflow:process:cancel']"></el-button>
+            </el-tooltip>
+            <el-tooltip content="删除" placement="top">
+              <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['workflow:process:remove']"></el-button>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+    </el-card>
   </div>
 </template>
 
 <script setup name="Own" lang="js">
-import { listOwnProcess } from "@/api/workflow/work/process";
-import { revokeProcess } from "@/api/workflow/work/task";
-import { delProcess } from "@/api/workflow/work/process";
+import { listOwnProcess, stopProcess, delProcess } from "@/api/workflow/work/process";
 import { listAllCategory } from "@/api/workflow/category";
-import { parseTime } from "@/utils/ruoyi";
+
 
 const router = useRouter();
-const { proxy } = getCurrentInstance();
+const { proxy } = getCurrentInstance() ;
+const { wf_process_status } = proxy.useDict("wf_process_status");
 
-const processList = ref([]);
-const loading = ref(true);
-const total = ref(0);
+
+
+
 const categoryOptions = ref([]);
-const dateRange = ref([]);
+
+const ownProcessList = ref([]);
+const loading = ref(true);
+const showSearch = ref(true);
+const ids = ref([]);
+const single = ref(true);
+const multiple = ref(true);
+const total = ref(0);
+const dateRange = ref(['','']);
+
+const queryFormRef = ref();
 
 const queryParams = ref({
   pageNum: 1,
   pageSize: 10,
+  processKey: '',
   processName: '',
-  category: '',
-  state: ''
+  category: ''
 });
 
-// 查询流程分类列表
+/** 查询流程分类列表 */
 const getCategoryList = async () => {
   const res = await listAllCategory();
-  categoryOptions.value = res.data.map(item => ({
-    ...item,
-    categoryName: item.categoryName || item.name
-  }));
+  categoryOptions.value = res.data;
 };
-
-// 查询我的流程列表
+/** 查询我的流程列表 */
 const getList = async () => {
   loading.value = true;
-  try {
-    const params = proxy.addDateRange(queryParams.value, dateRange.value);
-    const res = await listOwnProcess(params);
-    processList.value = res.rows.map(item => {
-      // 添加分类名称和状态文本
-      const category = categoryOptions.value.find(cat => cat.code === item.category);
-      return {
-        ...item,
-        categoryName: category ? category.categoryName : '',
-        stateText: getStateText(item.state),
-        duration: calculateDuration(item.createTime, item.endTime)
-      };
-    });
-    total.value = res.total;
-  } catch (error) {
-    console.error('获取我的流程列表失败:', error);
-    proxy.$modal.msgError('获取我的流程列表失败');
-  } finally {
-    loading.value = false;
-  }
-};
-
-// 搜索按钮操作
+  const res = await listOwnProcess(proxy.addDateRange(queryParams.value, dateRange.value));
+  ownProcessList.value = res.rows;
+  total.value = res.total;
+  loading.value = false;
+}
+/** 搜索按钮操作 */
 const handleQuery = () => {
   queryParams.value.pageNum = 1;
   getList();
-};
-
-// 重置按钮操作
+}
+/** 重置按钮操作 */
 const resetQuery = () => {
-  dateRange.value = [];
-  queryParams.value = {
-    pageNum: 1,
-    pageSize: 10,
-    processName: '',
-    category: '',
-    state: ''
-  };
-  getList();
-};
-
-// 查看详情
-const handleDetail = (row) => {
+  queryFormRef.value.resetFields();
+  handleQuery();
+}
+/** 多选框选中数据 */
+const handleSelectionChange = (selection) => {
+  ids.value = selection.map(item => item.procInsId);
+  single.value = selection.length != 1;
+  multiple.value = !selection.length;
+}
+/** 流程详情 */
+const handleDetails = (row) => {
   router.push({
-    path: '/oa/process/detail/' + row.instanceId,
+    path: '/oa/task/process/detail/' + row.procInsId,
     query: {
-      own: true
+      processed: false
     }
-  });
-};
-
-// 取消流程
-const handleCancel = async (row) => {
-  try {
-    await proxy.$modal.confirm('确认要取消该流程吗？取消后将无法恢复。');
-    const params = {
-      instanceId: row.instanceId
-    };
-    const res = await revokeProcess(params);
-    proxy.$modal.msgSuccess(res.msg || "取消成功");
-    getList();
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error("取消流程失败", error);
-      proxy.$modal.msgError('取消失败');
-    }
-  }
-};
-
-// 删除流程
+  })
+}
+/** 取消流程申请 */
+const handleStop = async (row) => {
+  await stopProcess( { procInsId: row.procInsId });
+  proxy?.$modal.msgSuccess("操作成功");
+  getList();
+}
+/** 再次发起流程 */
+const handleAgain = (row) => {
+  // router.push({
+  //   path: '/workflow/process/start/' + row.deployId,
+  //   query: {
+  //     definitionId: row.procDefId,
+  //     procInsId: row.procInsId
+  //   }
+  // })
+}
+/** 删除按钮操作 */
 const handleDelete = async (row) => {
-  try {
-    await proxy.$modal.confirm('确认要删除该流程吗？删除后将无法恢复。');
-    const params = row.instanceId;
-    const res = await delProcess(params);
-    proxy.$modal.msgSuccess(res.msg || "删除成功");
-    getList();
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error("删除流程失败", error);
-      proxy.$modal.msgError('删除失败');
-    }
-  }
-};
+  const procInsIds = row.procInsId || ids.value;
+  await proxy.$modal.confirm('是否确认删除流程定义编号为"' + procInsIds + '"的数据项?');
+  await delProcess(procInsIds);
+  getList();
+  proxy.$modal.msgSuccess("删除成功");
+}
 
-// 获取状态文本
-const getStateText = (state) => {
-  const stateMap = {
-    'running': '进行中',
-    'completed': '已完成',
-    'terminated': '已终止',
-    'suspended': '已挂起'
-  };
-  return stateMap[state] || '未知';
-};
+/** 导出按钮操作 */
+const handleExport = () => {
+  proxy.download("workflow/process/ownExport", {
+    ...queryParams.value
+  }, `own_process_${new Date().getTime()}.xlsx`);
+}
 
-// 获取状态标签类型
-const getStateTagType = (state) => {
-  const typeMap = {
-    'running': 'primary',
-    'completed': 'success',
-    'terminated': 'danger',
-    'suspended': 'warning'
-  };
-  return typeMap[state] || 'info';
-};
-
-// 获取状态图标
-const getStateIcon = (state) => {
-  const iconMap = {
-    'running': 'Loading',
-    'completed': 'CircleCheck',
-    'terminated': 'CircleClose',
-    'suspended': 'VideoPause'
-  };
-  return iconMap[state] || 'QuestionFilled';
-};
-
-// 获取状态样式类
-const getStateClass = (state) => {
-  const classMap = {
-    'running': 'bg-blue-100 text-blue-600',
-    'completed': 'bg-green-100 text-green-600',
-    'terminated': 'bg-red-100 text-red-600',
-    'suspended': 'bg-yellow-100 text-yellow-600'
-  };
-  return classMap[state] || 'bg-gray-100 text-gray-600';
-};
-
-// 计算流程持续时间
-const calculateDuration = (startTime, endTime) => {
-  if (!startTime) return '未知';
-  
-  const start = new Date(startTime);
-  const end = endTime ? new Date(endTime) : new Date();
-  const diff = end - start;
-  
-  if (diff < 60 * 1000) {
-    return Math.floor(diff / 1000) + '秒';
-  } else if (diff < 60 * 60 * 1000) {
-    return Math.floor(diff / (60 * 1000)) + '分钟';
-  } else if (diff < 24 * 60 * 60 * 1000) {
-    return Math.floor(diff / (60 * 60 * 1000)) + '小时';
-  } else {
-    return Math.floor(diff / (24 * 60 * 60 * 1000)) + '天';
-  }
-};
+const categoryFormat = (row) => {
+  return categoryOptions.value.find(k => k.code === row.category).categoryName ?categoryOptions.value.find(k => k.code === row.category).categoryName: '';
+}
 
 onMounted(() => {
   getCategoryList();
   getList();
 });
 </script>
-
-<style lang="scss" scoped>
-// 飞书审批卡片样式
-.approve-card {
-  transition: all 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-2px);
-  }
-}
-</style>

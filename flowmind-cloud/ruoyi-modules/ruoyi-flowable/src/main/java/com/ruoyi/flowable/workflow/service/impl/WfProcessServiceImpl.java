@@ -15,6 +15,7 @@ import com.ruoyi.common.core.domain.R;
 import com.ruoyi.common.core.exception.ServiceException;
 import com.ruoyi.common.core.utils.DateUtils;
 import com.ruoyi.common.core.utils.StringUtils;
+import com.ruoyi.common.security.utils.SecurityUtils;
 import com.ruoyi.flowable.common.constant.ProcessConstants;
 import com.ruoyi.flowable.common.constant.TaskConstants;
 import com.ruoyi.flowable.common.enums.ProcessStatus;
@@ -30,6 +31,7 @@ import com.ruoyi.flowable.workflow.domain.vo.*;
 import com.ruoyi.flowable.workflow.mapper.WfDeployFormMapper;
 import com.ruoyi.flowable.workflow.service.IWfProcessService;
 import com.ruoyi.flowable.workflow.service.IWfTaskService;
+import com.ruoyi.flowable.workflow.service.IWfCopyService;
 import com.ruoyi.system.api.RemoteUserService;
 import com.ruoyi.system.api.domain.SysDept;
 import com.ruoyi.system.api.domain.SysRole;
@@ -72,6 +74,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
     private final IWfTaskService wfTaskService;
     private final RemoteUserService userService;
     private final WfDeployFormMapper deployFormMapper;
+    private final IWfCopyService wfCopyService;
     @Autowired
     private RemoteUserService remoteUserService;
     /**
@@ -1027,5 +1030,49 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         // DFS 查询未通过的元素集合
         Set<String> rejectedSet = FlowableUtils.dfsFindRejects(bpmnModel, unfinishedTaskSet, finishedSequenceFlowSet, finishedTaskSet);
         return new WfViewerVo(finishedTaskSet, finishedSequenceFlowSet, unfinishedTaskSet, rejectedSet);
+    }
+    
+    /**
+     * 获取各类型任务数量统计
+     */
+    @Override
+    public Map<String, Long> getTaskCounts() {
+        Map<String, Long> counts = new HashMap<>();
+        
+        // 获取当前用户ID
+        Long userId = SecurityUtils.getUserId();
+        
+        // 待办数量
+        long todoCount = taskService.createTaskQuery()
+            .active()
+            .taskAssignee(String.valueOf(userId))
+            .count();
+        counts.put("todoCount", todoCount);
+        
+        // 待签数量
+        long claimCount = taskService.createTaskQuery()
+            .active()
+            .taskCandidateUser(String.valueOf(userId))
+            .count();
+        counts.put("claimCount", claimCount);
+        
+        // 已办数量
+        long finishedCount = historyService.createHistoricTaskInstanceQuery()
+            .finished()
+            .taskAssignee(String.valueOf(userId))
+            .count();
+        counts.put("finishedCount", finishedCount);
+        
+        // 我的流程数量
+        long ownCount = historyService.createHistoricProcessInstanceQuery()
+            .startedBy(String.valueOf(userId))
+            .count();
+        counts.put("ownCount", ownCount);
+        
+        // 抄送数量
+        Long copyCount = wfCopyService.countByUserId(userId);
+        counts.put("copyCount", copyCount);
+        
+        return counts;
     }
 }

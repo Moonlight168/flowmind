@@ -87,7 +87,7 @@ import useUserStore from '@/store/modules/user'
 import usePermissionStore from '@/store/modules/permission'
 import {isHttp} from '@/utils/validate'
 import {Grid, Finished, Monitor, User, SwitchButton} from '@element-plus/icons-vue'
-import {listTodoProcess} from '@/api/workflow/work/process'
+import {getTaskCounts} from '@/api/workflow/work/process'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,8 +105,8 @@ const isAdmin = computed(() => {
 // 获取待办任务数量
 const getTodoCount = async () => {
   try {
-    const res = await listTodoProcess({ pageNum: 1, pageSize: 1 })
-    todoCount.value = res.total || 0
+    const res = await getTaskCounts()
+    todoCount.value = res.data?.todoCount || 0
   } catch (error) {
     console.error('获取待办任务数量失败:', error)
     todoCount.value = 0

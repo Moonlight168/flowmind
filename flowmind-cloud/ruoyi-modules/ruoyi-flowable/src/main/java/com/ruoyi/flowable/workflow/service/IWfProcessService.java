@@ -114,4 +114,11 @@ public interface IWfProcessService {
      * @param taskId 任务ID
      */
     WfDetailVo queryProcessDetail(String procInsId, String taskId);
+
+        /**
+     * 获取各类型任务数量统计
+     *
+     * @return 各类型任务数量统计
+     */
+    Map<String, Long> getTaskCounts();
 }

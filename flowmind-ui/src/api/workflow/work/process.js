@@ -105,42 +105,10 @@ export function stopProcess(data) {
   });
 }
 
-// 获取待办事项数量
-export function getTodoCount() {
+// 获取各类型任务数量统计
+export function getTaskCounts() {
   return request({
-    url: '/flowable/process/todoCount',
-    method: 'get'
-  });
-}
-
-// 获取已办事项数量
-export function getFinishedCount() {
-  return request({
-    url: '/flowable/process/finishedCount',
-    method: 'get'
-  });
-}
-
-// 获取我的流程数量
-export function getOwnCount() {
-  return request({
-    url: '/flowable/process/ownCount',
-    method: 'get'
-  });
-}
-
-// 获取抄送数量
-export function getCopyCount() {
-  return request({
-    url: '/flowable/process/copyCount',
-    method: 'get'
-  });
-}
-
-// 获取待签收数量
-export function getClaimCount() {
-  return request({
-    url: '/flowable/process/claimCount',
+    url: '/flowable/process/count',
     method: 'get'
   });
 }

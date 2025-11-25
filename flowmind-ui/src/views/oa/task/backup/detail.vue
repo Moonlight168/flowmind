@@ -210,7 +210,7 @@
           <div class="bg-white rounded-xl border border-gray-100 p-5">
             <el-timeline>
               <el-timeline-item
-                v-for="(record, index) in historyList"
+                v-for="(record, index) in historyProcNodeList"
                 :key="index"
                 :timestamp="parseTime(record.createTime)"
                 placement="top"
@@ -236,13 +236,13 @@
         <!-- 流程跟踪标签页 -->
         <el-tab-pane label="流程跟踪" name="track">
           <div class="bg-white rounded-xl border border-gray-100 p-5">
-            <div v-if="trackLoading" class="py-4 text-center">
-              <el-icon class="is-loading"><Loading /></el-icon>
-              <span class="ml-2">加载流程图中...</span>
-            </div>
-            <div v-else class="text-center">
-              <img :src="trackImage" alt="流程图" class="mx-auto max-w-full" />
-            </div>
+            <ProcessViewer
+              :key="`designer-${loadIndex}`"
+              :style="'height:' + height"
+              :xml="processXml"
+              :finishedInfo="finishedInfo"
+              :allCommentList="historyProcNodeList"
+            />
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -251,9 +251,10 @@
 </template>
 
 <script setup name="ProcessDetail" lang="js">
-import { getProcessDetail, getProcessHistory, getProcessTrack } from "@/api/workflow/work/process";
+import { detailProcess } from "@/api/workflow/work/process";
 import { completeTask, returnTask, delegateTask, transferTask, rejectTask, claimTask, revokeProcess } from "@/api/workflow/work/task";
 import { parseTime } from "@/utils/ruoyi";
+import ProcessViewer from "@/components/ProcessViewer";
 
 const route = useRoute();
 const router = useRouter();
@@ -271,12 +272,15 @@ const processInfo = ref({});
 const taskInfo = ref({});
 const formData = ref([]);
 const formModel = ref({});
-const historyList = ref([]);
-const trackImage = ref('');
 const comment = ref('');
 const loading = ref(false);
 const formLoading = ref(false);
 const trackLoading = ref(false);
+const processXml = ref('');
+const historyProcNodeList = ref();
+const finishedInfo = ref({});
+const loadIndex = ref(0);
+const height = ref(document.documentElement.clientHeight - 205 + 'px;');
 
 // 是否显示任务办理标签页
 const showTaskTab = computed(() => {
@@ -302,7 +306,7 @@ const canClaim = computed(() => {
 const getProcessInfo = async () => {
   loading.value = true;
   try {
-    const res = await getProcessDetail(instanceId);
+    const res = await detailProcess({ procInsId: instanceId });
     processInfo.value = res.data.process;
     taskInfo.value = res.data.task || {};
     
@@ -352,26 +356,18 @@ const getFormData = async () => {
   }
 };
 
-// 获取流转记录
-const getHistoryData = async () => {
-  try {
-    const res = await getProcessHistory(instanceId);
-    historyList.value = res.data;
-  } catch (error) {
-    console.error('获取流转记录失败:', error);
-    proxy.$modal.msgError('获取流转记录失败');
-  }
-};
-
-// 获取流程跟踪图
+// 获取流程图数据
 const getTrackData = async () => {
   trackLoading.value = true;
   try {
-    const res = await getProcessTrack(instanceId);
-    trackImage.value = res.data;
+    // 使用detailProcess获取流程详情，其中包含bpmnXml数据
+    const res = await detailProcess({ procInsId: instanceId });
+    processXml.value = res.data.bpmnXml;
+    historyProcNodeList.value = res.data.historyProcNodeList;
+    finishedInfo.value = res.data.flowViewer;
   } catch (error) {
-    console.error('获取流程跟踪图失败:', error);
-    proxy.$modal.msgError('获取流程跟踪图失败');
+    console.error('获取流程图数据失败:', error);
+    proxy.$modal.msgError('获取流程图数据失败');
   } finally {
     trackLoading.value = false;
   }
@@ -641,7 +637,6 @@ const calculateDuration = (startTime, endTime) => {
 onMounted(() => {
   getProcessInfo();
   getFormData();
-  getHistoryData();
   getTrackData();
 });
 </script>

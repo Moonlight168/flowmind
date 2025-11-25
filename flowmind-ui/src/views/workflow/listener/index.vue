@@ -45,7 +45,7 @@
           </el-form-item>
           <el-form-item>
             <el-button icon="Search" type="primary" @click="handleQuery">搜索</el-button>
-            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+            <el-button icon="Refresh" @click="resetQuery">刷新</el-button>
           </el-form-item>
         </el-form>
       </div>

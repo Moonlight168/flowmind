@@ -237,4 +237,12 @@ public class WfProcessController extends BaseController {
     public R detail(String procInsId, String taskId) {
         return R.ok(processService.queryProcessDetail(procInsId, taskId));
     }
+     
+    /**
+     * 获取各类型任务数量统计
+     */
+    @GetMapping("/count")
+    public R<Map<String, Long>> getTaskCounts() {
+        return R.ok(processService.getTaskCounts());
+    }
 }

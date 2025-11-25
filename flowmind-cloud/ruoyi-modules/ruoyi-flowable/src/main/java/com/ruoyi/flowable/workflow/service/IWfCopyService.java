@@ -46,4 +46,11 @@ public interface IWfCopyService {
      * @return
      */
     Boolean makeCopy(WfTaskBo taskBo);
+    
+    /**
+     * 统计用户抄送数量
+     * @param userId 用户ID
+     * @return 抄送数量
+     */
+    Long countByUserId(Long userId);
 }

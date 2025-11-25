@@ -91,7 +91,7 @@ export const notFoundRoute = {
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
-        {
+    {
         path: '/admin',
         component: Layout,
         redirect: '/admin/index',
@@ -100,7 +100,7 @@ export const dynamicRoutes = [
                 path: 'index',
                 component: () => import('@/views/index'),
                 name: 'Index',
-                meta: {title: '首页', icon: 'dashboard', affix: true}
+                meta: { title: '首页', icon: 'dashboard', affix: true }
             }
         ]
     },
@@ -181,6 +181,12 @@ export const dynamicRoutes = [
         permissions: ['workflow:process:query'],
         children: [
             {
+                path: 'index',
+                component: () => import('@/views/workflow/work/index.vue'),
+                name: 'WorkProcessIndex',
+                meta: { title: '流程列表', activeMenu: '/workflow/process', icon: '' }
+            },
+            {
                 path: 'start/:deployId([\\w|\\-]+)',
                 component: () => import('@/views/workflow/work/start.vue'),
                 name: 'WorkStart',
@@ -191,6 +197,44 @@ export const dynamicRoutes = [
                 component: () => import('@/views/workflow/work/detail.vue'),
                 name: 'WorkDetail',
                 meta: { title: '流程详情', activeMenu: '/work/own', icon: '' }
+            }
+        ]
+    },
+    {
+        path: '/work',
+        component: Layout,
+        hidden: true,
+        permissions: ['workflow:process:query'],
+        children: [
+            {
+                path: 'todo',
+                component: () => import('@/views/workflow/work/todo.vue'),
+                name: 'WorkTodo',
+                meta: { title: '待办任务', activeMenu: '/work/todo', icon: '' }
+            },
+            {
+                path: 'finished',
+                component: () => import('@/views/workflow/work/finished.vue'),
+                name: 'WorkFinished',
+                meta: { title: '已办任务', activeMenu: '/work/finished', icon: '' }
+            },
+            {
+                path: 'own',
+                component: () => import('@/views/workflow/work/own.vue'),
+                name: 'WorkOwn',
+                meta: { title: '我的流程', activeMenu: '/work/own', icon: '' }
+            },
+            {
+                path: 'claim',
+                component: () => import('@/views/workflow/work/claim.vue'),
+                name: 'WorkClaim',
+                meta: { title: '待签收任务', activeMenu: '/work/claim', icon: '' }
+            },
+            {
+                path: 'copy',
+                component: () => import('@/views/workflow/work/copy.vue'),
+                name: 'WorkCopy',
+                meta: { title: '抄送任务', activeMenu: '/work/copy', icon: '' }
             }
         ]
     },
@@ -208,43 +252,67 @@ export const oaRoutes = [
                 path: 'workplace',
                 component: () => import('@/views/oa/workplace/index.vue'),
                 name: 'Workplace',
-                meta: { title: '工作台', icon: 'dashboard', affix: true }
+                meta: { title: '工作台', icon: 'dashboard', affix: true },
+                children: [
+                    {
+                        path: 'start/:deployId([\\w|\\-]+)',
+                        component: () => import('@/views/oa/workplace/start.vue'),
+                        name: 'WorkStart',
+                        meta: { title: '发起流程', activeMenu: '/oa/workplace', icon: '' }
+                    },
+                ]
             },
             {
                 path: 'task',
                 component: () => import('@/views/oa/task/index.vue'),
                 name: 'Task',
-                meta: { title: '任务中心', icon: 'todo' }
-            },
-            {
-                path: 'todo',
-                component: () => import('@/views/oa/task/todo.vue'),
-                name: 'Todo',
-                meta: { title: '待办事项', icon: 'todo' }
-            },
-            {
-                path: 'finished',
-                component: () => import('@/views/oa/task/finished.vue'),
-                name: 'Finished',
-                meta: { title: '已办事项', icon: 'finished' }
-            },
-            {
-                path: 'own',
-                component: () => import('@/views/oa/task/own.vue'),
-                name: 'Own',
-                meta: { title: '我的流程', icon: 'own' }
-            },
-            {
-                path: 'copy',
-                component: () => import('@/views/oa/task/copy.vue'),
-                name: 'Copy',
-                meta: { title: '抄送', icon: 'copy' }
-            },
-            {
-                path: 'claim',
-                component: () => import('@/views/oa/task/claim.vue'),
-                name: 'Claim',
-                meta: { title: '待签收', icon: 'claim' }
+                meta: { title: '任务中心', icon: 'todo' },
+                redirect: '/oa/task/todo',
+                children: [
+                    {
+                        path: 'todo',
+                        component: () => import('@/views/oa/task/todo.vue'),
+                        //component: () => import('@/views/workflow/work/todo.vue'),
+                        name: 'Todo',
+                        meta: { title: '待办事项', icon: 'todo', activeMenu: '/oa/todo' }
+                    },
+                    {
+                        path: 'finished',
+                        component: () => import('@/views/oa/task/finished.vue'),
+                        //component: () => import('@/views/workflow/work/finished.vue'),
+                        name: 'Finished',
+                        meta: { title: '已办事项', icon: 'finished', activeMenu: '/oa/finished' }
+                    },
+                    {
+                        path: 'own',
+                        component: () => import('@/views/oa/task/own.vue'),
+                        //component: () => import('@/views/workflow/work/own.vue'),
+                        name: 'Own',
+                        meta: { title: '我的流程', icon: 'own', activeMenu: '/oa/own' }
+                    },
+                    {
+                        path: 'copy',
+                        component: () => import('@/views/oa/task/copy.vue'),
+                        //component: () => import('@/views/workflow/work/copy.vue'),
+                        name: 'Copy',
+                        meta: { title: '抄送', icon: 'copy', activeMenu: '/oa/copy' }
+                    },
+                    {
+                        path: 'claim',
+                        component: () => import('@/views/oa/task/claim.vue'),
+                        //component: () => import('@/views/workflow/work/claim.vue'),
+                        name: 'Claim',
+                        meta: { title: '待签收', icon: 'claim', activeMenu: '/oa/claim' }
+                    },
+                    {
+                        path: 'process/detail/:procInsId',
+                        //component: () => import('@/views/oa/task/detail.vue'),
+                        component: () => import('@/views/workflow/work/detail.vue'),
+                        //component: () => import('@/views/workflow/work/detail.vue'),
+                        name: 'ProcessDetail',
+                        meta: { title: '流程详情', icon: 'process' }
+                    }
+                ]
             },
             {
                 path: 'profile',
@@ -252,12 +320,7 @@ export const oaRoutes = [
                 name: 'OAProfile',
                 meta: { title: '个人信息', icon: 'user' }
             },
-            {
-                path: 'process/detail/:procInsId',
-                component: () => import('@/views/oa/task/detail.vue'),
-                name: 'ProcessDetail',
-                meta: { title: '流程详情', icon: 'process' }
-            }
+
         ]
     },
 ]
