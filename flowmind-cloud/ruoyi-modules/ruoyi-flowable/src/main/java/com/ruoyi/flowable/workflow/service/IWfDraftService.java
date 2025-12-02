@@ -2,7 +2,6 @@ package com.ruoyi.flowable.workflow.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.flowable.core.domain.model.PageQuery;
-import com.ruoyi.flowable.core.page.TableDataInfo;
 import com.ruoyi.flowable.workflow.domain.bo.WfDraftBo;
 import com.ruoyi.flowable.workflow.domain.vo.WfDraftVo;
 
@@ -49,21 +48,7 @@ public interface IWfDraftService {
      */
     List<WfDraftVo> queryList(WfDraftBo bo);
 
-    /**
-     * 新增流程草稿
-     *
-     * @param bo 流程草稿
-     * @return 结果
-     */
-    int insertDraft(WfDraftBo bo);
 
-    /**
-     * 修改流程草稿
-     *
-     * @param bo 流程草稿
-     * @return 结果
-     */
-    int updateDraft(WfDraftBo bo);
 
     /**
      * 批量删除流程草稿
@@ -79,5 +64,13 @@ public interface IWfDraftService {
      * @param bo 流程草稿
      * @return 结果
      */
-    int saveOrUpdateDraft(WfDraftBo bo);
+    Boolean saveOrUpdateDraft(WfDraftBo bo);
+
+    /**
+     * 根据流程定义ID逻辑删除草稿
+     *
+     * @param dartId 流程定义ID
+     * @return 结果
+     */
+    int deleteByDefinitionId(String dartId);
 }

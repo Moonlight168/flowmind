@@ -82,52 +82,42 @@ public class WfDraftController extends BaseController {
         return AjaxResult.success(draft);
     }
 
-    /**
-     * 新增流程草稿
-     */
-    @Log(title = "流程草稿", businessType = BusinessType.INSERT)
-    @PostMapping
-    public AjaxResult add(@RequestBody WfDraftBo bo) {
-        // 设置当前用户ID
-        bo.setUserId(SecurityUtils.getUserId());
-        return toAjax(draftService.insertDraft(bo));
-    }
 
     /**
      * 保存草稿（确保同一流程只能存在一个草稿）
      */
     @Log(title = "流程草稿", businessType = BusinessType.INSERT)
     @PostMapping("/saveDraft")
-    public AjaxResult saveDraft( @RequestBody WfDraftBo bo) {
+    public AjaxResult saveDraft(@RequestBody WfDraftBo bo) {
         // 设置当前用户ID
         bo.setUserId(SecurityUtils.getUserId());
-        int result = draftService.saveOrUpdateDraft(bo);
+        boolean result = draftService.saveOrUpdateDraft(bo);
         
         // 如果是新建草稿，返回草稿ID
-        if (result > 0 && bo.getDraftId() != null) {
+        if (result) {
             return AjaxResult.success("保存成功", bo.getDraftId());
         }
-        
+
         return toAjax(result);
     }
 
     /**
-     * 修改流程草稿
+     * 逻辑删除流程草稿
      */
-    @Log(title = "流程草稿", businessType = BusinessType.UPDATE)
-    @PutMapping
-    public AjaxResult edit(@RequestBody WfDraftBo bo) {
-        return toAjax(draftService.updateDraft(bo));
+    @Log(title = "流程草稿", businessType = BusinessType.DELETE)
+    @DeleteMapping("/definition/{definitionId}")
+    public AjaxResult removeByDefinitionId(@NotNull(message = "流程id不能为空") @PathVariable String definitionId) {
+        return toAjax(draftService.deleteByDefinitionId(definitionId)>0);
     }
 
     /**
-     * 删除流程草稿
+     * 批量删除流程草稿
      *
      * @param draftIds 主键串
      */
     @Log(title = "流程草稿", businessType = BusinessType.DELETE)
-    @DeleteMapping("/{draftIds}")
-    public AjaxResult remove(@NotEmpty(message = "主键不能为空") @PathVariable Long[] draftIds) {
+    @DeleteMapping("/batch/{draftIds}")
+    public AjaxResult removeBatch(@NotEmpty(message = "主键不能为空") @PathVariable Long[] draftIds) {
         return toAjax(draftService.deleteWithValidByIds(Arrays.asList(draftIds)) ? 1 : 0);
     }
 }

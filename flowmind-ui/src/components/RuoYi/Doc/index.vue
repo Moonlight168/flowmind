@@ -5,7 +5,8 @@
 </template>
 
 <script setup>
-const url = ref('http://doc.ruoyi.vip/ruoyi-cloud')
+import { ref } from 'vue'
+const url = ref('https://codebyggbond.dpdns.org/series/myprojects/FlowMind/')
 
 function goto() {
   window.open(url.value)

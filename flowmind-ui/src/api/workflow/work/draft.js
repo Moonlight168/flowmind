@@ -9,15 +9,6 @@ export function saveDraft(data) {
   });
 }
 
-// 更新草稿
-export function updateDraft(data) {
-  return request({
-    url: '/flowable/draft/updateDraft',
-    method: 'put',
-    data: data
-  });
-}
-
 // 获取草稿列表
 export function listDraft(query) {
   return request({
@@ -36,9 +27,17 @@ export function getDraft(draftId) {
 }
 
 // 删除草稿
-export function delDraft(draftId) {
+export function delDraft(definitionId) {
   return request({
-    url: '/flowable/draft/' + draftId,
+    url: '/flowable/draft/definition/' + definitionId,
+    method: 'delete'
+  });
+}
+
+// 批量删除草稿
+export function delDrafts(draftIds) {
+  return request({
+    url: '/flowable/draft/batch/' + draftIds.join(','),
     method: 'delete'
   });
 }

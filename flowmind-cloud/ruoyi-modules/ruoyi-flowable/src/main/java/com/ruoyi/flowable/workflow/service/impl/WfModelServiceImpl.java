@@ -18,6 +18,7 @@ import com.ruoyi.flowable.workflow.domain.dto.WfMetaInfoDto;
 import com.ruoyi.flowable.workflow.domain.vo.WfFormVo;
 import com.ruoyi.flowable.workflow.domain.vo.WfModelVo;
 import com.ruoyi.flowable.workflow.service.IWfDeployFormService;
+import com.ruoyi.flowable.workflow.service.IWfDraftService;
 import com.ruoyi.flowable.workflow.service.IWfFormService;
 import com.ruoyi.flowable.workflow.service.IWfModelService;
 import com.ruoyi.system.api.model.LoginUser;
@@ -48,6 +49,7 @@ public class WfModelServiceImpl extends FlowServiceFactory implements IWfModelSe
 
     private final IWfFormService formService;
     private final IWfDeployFormService deployFormService;
+    private final IWfDraftService draftService;
 
     @Override
     public TableDataInfo<WfModelVo> list(WfModelBo modelBo, PageQuery pageQuery) {
@@ -307,6 +309,19 @@ public class WfModelServiceImpl extends FlowServiceFactory implements IWfModelSe
             if (ObjectUtil.isNull(model)) {
                 throw new RuntimeException("流程模型不存在！");
             }
+            
+            // 查询该模型对应的流程定义
+            ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionKey(model.getKey())
+                .latestVersion()
+                .singleResult();
+                
+            // 如果存在流程定义，删除相关的草稿
+            if (processDefinition != null) {
+                draftService.deleteByDefinitionId(processDefinition.getId());
+            }
+            
+            // 删除模型
             repositoryService.deleteModel(id);
         });
     }

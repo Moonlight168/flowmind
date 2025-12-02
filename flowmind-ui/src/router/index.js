@@ -252,15 +252,13 @@ export const oaRoutes = [
                 path: 'workplace',
                 component: () => import('@/views/oa/workplace/index.vue'),
                 name: 'Workplace',
-                meta: { title: '工作台', icon: 'dashboard', affix: true },
-                children: [
-                    {
-                        path: 'start/:deployId([\\w|\\-]+)',
-                        component: () => import('@/views/oa/workplace/start.vue'),
-                        name: 'WorkStart',
-                        meta: { title: '发起流程', activeMenu: '/oa/workplace', icon: '' }
-                    },
-                ]
+                meta: { title: '工作台', icon: 'dashboard', affix: true }
+            },
+            {
+                path: 'workplace/start/:deployId([\\w|\\-]+)',
+                component: () => import('@/views/oa/workplace/start.vue'),
+                name: 'WorkStart',
+                meta: { title: '发起流程', activeMenu: '/oa/workplace', icon: '' }
             },
             {
                 path: 'task',
@@ -272,7 +270,6 @@ export const oaRoutes = [
                     {
                         path: 'todo',
                         component: () => import('@/views/oa/task/todo.vue'),
-                        //component: () => import('@/views/workflow/work/todo.vue'),
                         name: 'Todo',
                         meta: { title: '待办事项', icon: 'todo', activeMenu: '/oa/todo' }
                     },

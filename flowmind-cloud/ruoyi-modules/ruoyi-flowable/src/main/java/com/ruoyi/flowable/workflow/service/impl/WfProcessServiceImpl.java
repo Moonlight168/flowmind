@@ -27,8 +27,10 @@ import com.ruoyi.flowable.factory.FlowServiceFactory;
 import com.ruoyi.flowable.flow.FlowableUtils;
 import com.ruoyi.flowable.utils.*;
 import com.ruoyi.flowable.workflow.domain.WfDeployForm;
+import com.ruoyi.flowable.workflow.domain.WfForm;
 import com.ruoyi.flowable.workflow.domain.vo.*;
 import com.ruoyi.flowable.workflow.mapper.WfDeployFormMapper;
+import com.ruoyi.flowable.workflow.mapper.WfFormMapper;
 import com.ruoyi.flowable.workflow.service.IWfProcessService;
 import com.ruoyi.flowable.workflow.service.IWfTaskService;
 import com.ruoyi.flowable.workflow.service.IWfCopyService;
@@ -74,6 +76,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
     private final IWfTaskService wfTaskService;
     private final RemoteUserService userService;
     private final WfDeployFormMapper deployFormMapper;
+    private final WfFormMapper formMapper;
     private final IWfCopyService wfCopyService;
     @Autowired
     private RemoteUserService remoteUserService;
@@ -115,6 +118,33 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
             // 流程定义时间
             vo.setCategory(deployment.getCategory());
             vo.setDeploymentTime(deployment.getDeploymentTime());
+            
+           /*  // 查询表单信息，设置formId
+            LambdaQueryWrapper<WfDeployForm> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(WfDeployForm::getDeployId, deploymentId);
+            WfDeployForm deployForm = deployFormMapper.selectOne(wrapper);
+            if (deployForm != null && StrUtil.isNotBlank(deployForm.getFormKey())) {
+                // 尝试从formKey中解析formId
+                try {
+                    String formKey = deployForm.getFormKey();
+                    if (StrUtil.isNotBlank(formKey)) {
+                        // 处理formKey格式为"key_5"的情况
+                        if (formKey.contains("_")) {
+                            // 从"key_5"格式中提取数字部分
+                            String[] parts = formKey.split("_");
+                            if (parts.length > 1 && StrUtil.isNumeric(parts[1])) {
+                                vo.setFormId(Long.parseLong(parts[1]));
+                            } 
+                        } else if (StrUtil.isNumeric(formKey)) {
+                            // 如果formKey是纯数字，直接作为formId
+                            vo.setFormId(Long.parseLong(formKey));
+                        }
+                    }
+                } catch (Exception e) {
+                    // 异常处理，不设置formId
+                }
+            } */
+            
             definitionVoList.add(vo);
         }
         page.setRecords(definitionVoList);
@@ -569,6 +599,14 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         return hisTaskList;
     }
 
+    /**
+     * 查询流程表单
+     *
+     * @param definitionId 流程定义ID
+     * @param deployId     流程部署ID
+     * @param procInsId    流程实例ID
+     * @return
+     */
     @Override
     public FormConf selectFormContent(String definitionId, String deployId, String procInsId) {
         BpmnModel bpmnModel = repositoryService.getBpmnModel(definitionId);
@@ -1076,3 +1114,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         return counts;
     }
 }
+
+
+
+

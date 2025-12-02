@@ -5,7 +5,8 @@
 </template>
 
 <script setup>
-const url = ref('https://gitee.com/y_project/RuoYi-Cloud')
+import { ref } from 'vue'
+const url = ref('https://github.com/Moonlight168/flowmind')
 
 function goto() {
   window.open(url.value)

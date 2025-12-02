@@ -22,11 +22,44 @@ public interface WfDraftMapper extends BaseMapperPlus<WfDraftMapper, WfDraft, Wf
     List<WfDraftVo> selectDraftVoList(@Param(Constants.WRAPPER) Wrapper<WfDraft> queryWrapper);
 
     /**
-     * 根据用户ID和流程定义ID查询草稿
+     * 根据用户ID和流程定义ID查询草稿（不含逻辑删除）
      *
      * @param userId 用户ID
      * @param definitionId 流程定义ID
      * @return 草稿
      */
     WfDraftVo selectByUserIdAndDefId(@Param("userId") Long userId, @Param("definitionId") String definitionId);
+
+    /**
+     * 根据用户ID和流程定义ID查询草稿（包含逻辑删除）
+     *
+     * @param userId 用户ID
+     * @param definitionId 流程定义ID
+     * @return 草稿
+     */
+    WfDraftVo selectByUserIdAndDefIdWithDelFlag(@Param("userId") Long userId, @Param("definitionId") String definitionId);
+
+    /**
+     * 根据流程定义ID删除草稿
+     *
+     * @param definitionId 流程定义ID
+     * @return 删除数量
+     */
+    int deleteByDefinitionId(@Param("definitionId") String definitionId);
+
+    /**
+     * 根据草稿ID查询草稿
+     *
+     * @param draftId 草稿ID
+     * @return 草稿
+     */
+    WfDraft selectByDraftId(Long draftId);
+
+    /**
+     * 根据流程定义ID还原草稿
+     *
+     * @param definitionId 流程定义ID
+     * @return 删除数量
+     */
+    int restoreByDefinitionId(String definitionId);
 }

@@ -13,6 +13,7 @@ import com.ruoyi.flowable.workflow.domain.WfDeployForm;
 import com.ruoyi.flowable.workflow.domain.vo.WfDeployVo;
 import com.ruoyi.flowable.workflow.mapper.WfDeployFormMapper;
 import com.ruoyi.flowable.workflow.service.IWfDeployService;
+import com.ruoyi.flowable.workflow.service.IWfDraftService;
 import lombok.RequiredArgsConstructor;
 import org.flowable.common.engine.impl.db.SuspensionState;
 import org.flowable.engine.RepositoryService;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
 public class WfDeployServiceImpl extends FlowServiceFactory implements IWfDeployService {
 
     private final WfDeployFormMapper deployFormMapper;
+    private final IWfDraftService draftService;
 
     @Override
     public TableDataInfo<WfDeployVo> queryPageList(ProcessQuery processQuery, PageQuery pageQuery) {
@@ -116,13 +118,24 @@ public class WfDeployServiceImpl extends FlowServiceFactory implements IWfDeploy
      * @param definitionId 流程定义ID
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateState(String definitionId, String state) {
+        ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+            .processDefinitionId(definitionId)
+            .singleResult();
+        if (processDefinition == null) {
+            throw new RuntimeException("流程定义不存在");
+        }
+        
         if (SuspensionState.ACTIVE.toString().equals(state)) {
             // 激活
             repositoryService.activateProcessDefinitionById(definitionId, true, null);
         } else if (SuspensionState.SUSPENDED.toString().equals(state)) {
             // 挂起
             repositoryService.suspendProcessDefinitionById(definitionId, true, null);
+            
+            // 挂起时删除相关草稿
+            draftService.deleteByDefinitionId(definitionId);
         }
     }
 
@@ -140,6 +153,17 @@ public class WfDeployServiceImpl extends FlowServiceFactory implements IWfDeploy
     @Transactional(rollbackFor = Exception.class)
     public void deleteByIds(List<String> deployIds) {
         for (String deployId : deployIds) {
+            // 查询该部署对应的流程定义
+            List<ProcessDefinition> processDefinitions = repositoryService.createProcessDefinitionQuery()
+                .deploymentId(deployId)
+                .list();
+                
+            // 删除相关的草稿
+            for (ProcessDefinition processDefinition : processDefinitions) {
+                draftService.deleteByDefinitionId(processDefinition.getId());
+            }
+            
+            // 删除部署
             repositoryService.deleteDeployment(deployId, true);
             deployFormMapper.delete(new LambdaQueryWrapper<WfDeployForm>().eq(WfDeployForm::getDeployId, deployId));
         }

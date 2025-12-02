@@ -4,7 +4,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.ruoyi.flowable.workflow.mapper.WfDraftMapper">
 
-    <resultMap type="WfDraft" id="WfDraftResult">
+    <resultMap type="com.ruoyi.flowable.workflow.domain.WfDraft" id="WfDraftResult">
         <result property="draftId"      column="draft_id"      />
         <result property="userId"       column="user_id"       />
         <result property="definitionId" column="definition_id" />
@@ -24,6 +24,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select draft_id, user_id, definition_id, deploy_id, process_name, form_data, form_model, del_flag, create_by, create_time, update_by, update_time, remark from wf_draft
     </sql>
 
+
     <select id="selectDraftVoList" parameterType="com.baomidou.mybatisplus.core.conditions.Wrapper" resultType="com.ruoyi.flowable.workflow.domain.vo.WfDraftVo">
         <include refid="selectWfDraftVo"/>
         ${ew.customSqlSegment}
@@ -31,8 +32,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectByUserIdAndDefId" resultType="com.ruoyi.flowable.workflow.domain.vo.WfDraftVo">
         <include refid="selectWfDraftVo"/>
-        where user_id = #{userId} and definition_id = #{definitionId} and del_flag = '0'
+        where user_id = #{userId} and definition_id = #{definitionId}
+        and del_flag = '0'
         limit 1
     </select>
 
+    <select id="selectByUserIdAndDefIdWithDelFlag" resultType="com.ruoyi.flowable.workflow.domain.vo.WfDraftVo">
+        <include refid="selectWfDraftVo"/>
+        where user_id = #{userId} and definition_id = #{definitionId}
+        limit 1
+    </select>
+
+    <select id="selectByDraftId" resultType="com.ruoyi.flowable.workflow.domain.WfDraft">
+        select draft_id, user_id, definition_id, deploy_id, process_name, form_data, form_model, del_flag, create_by, create_time, update_by, update_time, remark from wf_draft where  draft_id = #{draftId}
+    </select>
+
+    <delete id="deleteByDefinitionId">
+        update wf_draft set del_flag = '2' where definition_id = #{definitionId}
+    </delete>
+
+    <update id="restoreByDefinitionId">
+        update wf_draft set del_flag = '0' where definition_id = #{definitionId}
+    </update>
 </mapper>

@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -159,6 +160,10 @@ public class WfModelController extends BaseController {
             exportVo.setCategoryName(categoryMap.get(exportVo.getCategory()));
         }
         ExcelUtil<WfModelExportVo> util = new ExcelUtil<WfModelExportVo>(WfModelExportVo.class);
+        // 确保列表不为null，避免Excel导出时出现"Invalid cell range"错误
+        if (listVo == null) {
+            listVo = new ArrayList<>();
+        }
         util.exportExcel(response, listVo, "流程模型数据","流程模型数据");
     }
 }

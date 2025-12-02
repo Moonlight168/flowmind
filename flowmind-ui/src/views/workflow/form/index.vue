@@ -7,7 +7,7 @@
           </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-            <el-button icon="Refresh" @click="resetQuery">刷新</el-button>
+            <el-button icon="Refresh" @click="resetQuery">重置</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -50,9 +50,21 @@
     </el-card>
 
     <!-- 流程表单设计器对话框 -->
-    <el-dialog :title="designer.title" v-model="designer.visible" fullscreen>
+    <el-dialog 
+      :title="designer.title" 
+      v-model="designer.visible" 
+      fullscreen 
+      @opened="handleDesignerOpened"
+      @closed="handleDesignerClosed"
+    >
       <div id="form-designer">
-        <v-form-designer ref="vfDesignerRef" :resetFormJson="true" :designer-config="designerConfig">
+        <v-form-designer 
+          ref="vfDesignerRef" 
+          :resetFormJson="true" 
+          :designer-config="designerConfig" 
+          v-if="designer.visible"
+          :global-dsv="{}"
+        >
           <!-- 自定义按钮插槽 -->
           <template #customToolButtons>
             <el-button link type="primary" icon="Finished" @click="dialog.visible = true">保存</el-button>
@@ -105,11 +117,11 @@ const formFormRef = ref();
 const queryFormRef = ref();
 
 const designerConfig = reactive({
-  externalLink: true,
+  externalLink: false,
   toolbarMaxWidth: 510,
   // languageMenu: true,
   //externalLink: false,
-  //formTemplates: false,
+  formTemplates: false,
   //eventCollapse: false,
   //clearDesignerButton: false,
   //previewFormButton: false,
@@ -170,7 +182,9 @@ const handleQuery = () => {
 }
 /** 重置按钮操作 */
 const resetQuery = () => {
-  queryFormRef.value.resetFields();
+  if (queryFormRef.value) {
+    queryFormRef.value.resetFields();
+  }
   handleQuery();
 }
 /** 多选框选中数据 */
@@ -184,17 +198,44 @@ const handleAdd = () => {
   designer.visible = true;
   nextTick(() => {
     reset();
-    vfDesignerRef.value.clearDesigner();
+    // Check if the designer ref is available before calling methods on it
+    if (vfDesignerRef.value && vfDesignerRef.value.clearDesigner) {
+      vfDesignerRef.value.clearDesigner();
+    } else {
+      console.warn('v-form-designer component is not ready yet');
+      // Try again after a short delay
+      setTimeout(() => {
+        if (vfDesignerRef.value && vfDesignerRef.value.clearDesigner) {
+          vfDesignerRef.value.clearDesigner();
+        }
+      }, 500);
+    }
   })
 }
 /** 修改表单操作 */
 const handleUpdate = (row) => {
   designer.visible = true;
   nextTick(async () => {
-    const formId = row?.formId || ids.value[0];
-    const res = await getForm(formId);
-    form.value = res.data;
-    vfDesignerRef.value.setFormJson(form.value.content);
+    try {
+      const formId = row?.formId || ids.value[0];
+      const res = await getForm(formId);
+      form.value = res.data;
+      
+      // Check if the designer ref is available before calling methods on it
+      if (vfDesignerRef.value && vfDesignerRef.value.setFormJson) {
+        vfDesignerRef.value.setFormJson(form.value.content);
+      } else {
+        console.warn('v-form-designer component is not ready yet');
+        // Try again after a short delay
+        setTimeout(() => {
+          if (vfDesignerRef.value && vfDesignerRef.value.setFormJson) {
+            vfDesignerRef.value.setFormJson(form.value.content);
+          }
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Failed to update form:', error);
+    }
   })
 }
 /** 查看表单操作 */
@@ -202,11 +243,28 @@ const handleDetail = (row) => {
   render.visible = true;
   render.title = '查看表单详情';
   nextTick(async () => {
-    vfRenderRef.value.setFormJson(row.content || {formConfig: {}, widgetList: []});
+    // Check if the render ref is available before calling methods on it
+    if (vfRenderRef.value && vfRenderRef.value.setFormJson) {
+      vfRenderRef.value.setFormJson(row.content || {formConfig: {}, widgetList: []});
+    } else {
+      console.warn('v-form-render component is not ready yet');
+      // Try again after a short delay
+      setTimeout(() => {
+        if (vfRenderRef.value && vfRenderRef.value.setFormJson) {
+          vfRenderRef.value.setFormJson(row.content || {formConfig: {}, widgetList: []});
+        }
+      }, 500);
+    }
   });
 }
 /** 提交表单操作 */
 const submitForm = () => {
+  // Check if the designer ref is available before calling methods on it
+  if (!vfDesignerRef.value || !vfDesignerRef.value.getFormJson) {
+    console.error('v-form-designer component is not available');
+    return;
+  }
+  
   const formJson = vfDesignerRef.value.getFormJson();
   form.value.content = JSON.stringify(formJson);
   nextTick(async () => {
@@ -246,6 +304,51 @@ getList();
   :deep(.external-link) {
     display: flex;
     align-items: center;
+  }
+  
+  /* 覆盖VForm 3组件库中的高度样式 */
+  :deep(.widget-collapse .el-collapse-item__content ul .container-widget-item),
+  :deep(.widget-collapse .el-collapse-item__content ul .field-widget-item) {
+    height: auto !important;
+  }
+  
+  /* 修复字段操作按钮显示问题 */
+  :deep(.field-action), :deep(.container-action) {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    opacity: 1 !important;
+    visibility: visible !important;
+    
+    i {
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      margin: 0 2px;
+      cursor: pointer;
+      border-radius: 2px;
+      
+      &:hover {
+        background-color: rgba(64, 158, 255, 0.1);
+        color: #409eff;
+      }
+    }
+  }
+  
+  /* 确保拖拽手柄正确显示 */
+  :deep(.drag-handler) {
+    display: flex !important;
+    align-items: center;
+    opacity: 1 !important;
+    visibility: visible !important;
+    
+    i {
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+    }
   }
 }
 </style>

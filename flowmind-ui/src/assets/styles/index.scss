@@ -124,6 +124,11 @@ aside {
   }
 }
 
+/* 覆盖Element Plus的tabs样式，删除height属性 */
+.el-tabs__item {
+  height: auto !important;
+}
+
 //main-container全局样式
 .app-container {
   padding: 20px;

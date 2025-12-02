@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ruoyi.common.core.utils.StringUtils;
+import com.ruoyi.common.security.utils.SecurityUtils;
 import com.ruoyi.flowable.core.domain.model.PageQuery;
 import com.ruoyi.flowable.core.page.TableDataInfo;
 import com.ruoyi.flowable.workflow.domain.WfForm;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -80,6 +82,15 @@ public class WfFormServiceImpl implements IWfFormService {
         wfForm.setFormName(bo.getFormName());
         wfForm.setContent(bo.getContent());
         wfForm.setRemark(bo.getRemark());
+
+        // 设置审计字段
+        String username = SecurityUtils.getUsername();
+        Date now = new Date();
+        wfForm.setCreateBy(username);
+        wfForm.setCreateTime(now);
+        wfForm.setUpdateBy(username);
+        wfForm.setUpdateTime(now);
+
         return baseMapper.insert(wfForm);
     }
 
@@ -91,11 +102,17 @@ public class WfFormServiceImpl implements IWfFormService {
      */
     @Override
     public int updateForm(WfFormBo bo) {
+        // 设置审计字段
+        String username = SecurityUtils.getUsername();
+        Date now = new Date();
+
         return baseMapper.update(new WfForm(), new LambdaUpdateWrapper<WfForm>()
-            .set(StrUtil.isNotBlank(bo.getFormName()), WfForm::getFormName, bo.getFormName())
-            .set(StrUtil.isNotBlank(bo.getContent()), WfForm::getContent, bo.getContent())
-            .set(StrUtil.isNotBlank(bo.getRemark()), WfForm::getRemark, bo.getRemark())
-            .eq(WfForm::getFormId, bo.getFormId()));
+                .set(StrUtil.isNotBlank(bo.getFormName()), WfForm::getFormName, bo.getFormName())
+                .set(StrUtil.isNotBlank(bo.getContent()), WfForm::getContent, bo.getContent())
+                .set(StrUtil.isNotBlank(bo.getRemark()), WfForm::getRemark, bo.getRemark())
+                .set(WfForm::getUpdateBy, username)
+                .set(WfForm::getUpdateTime, now)
+                .eq(WfForm::getFormId, bo.getFormId()));
     }
 
     /**

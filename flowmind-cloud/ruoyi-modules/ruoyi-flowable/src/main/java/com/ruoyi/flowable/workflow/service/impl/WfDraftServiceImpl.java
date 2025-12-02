@@ -1,24 +1,28 @@
 package com.ruoyi.flowable.workflow.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ruoyi.common.core.exception.ServiceException;
+import com.ruoyi.common.core.utils.DateUtils;
 import com.ruoyi.common.core.utils.StringUtils;
-import com.ruoyi.common.core.utils.bean.BeanUtils;
+import com.ruoyi.common.security.utils.SecurityUtils;
 import com.ruoyi.flowable.core.domain.model.PageQuery;
-import com.ruoyi.flowable.core.page.TableDataInfo;
+import com.ruoyi.flowable.factory.FlowServiceFactory;
 import com.ruoyi.flowable.workflow.domain.WfDraft;
 import com.ruoyi.flowable.workflow.domain.bo.WfDraftBo;
 import com.ruoyi.flowable.workflow.domain.vo.WfDraftVo;
 import com.ruoyi.flowable.workflow.mapper.WfDraftMapper;
 import com.ruoyi.flowable.workflow.service.IWfDraftService;
 import lombok.RequiredArgsConstructor;
+import org.flowable.engine.repository.ProcessDefinition;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -30,9 +34,9 @@ import java.util.Map;
  */
 @RequiredArgsConstructor
 @Service
-public class WfDraftServiceImpl implements IWfDraftService {
+public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftService {
 
-    private final WfDraftMapper baseMapper;
+    private final WfDraftMapper draftMapper;
 
     /**
      * 查询流程草稿
@@ -42,7 +46,7 @@ public class WfDraftServiceImpl implements IWfDraftService {
      */
     @Override
     public WfDraftVo queryById(Long draftId) {
-        return baseMapper.selectVoById(draftId);
+        return draftMapper.selectVoById(draftId);
     }
 
     /**
@@ -54,7 +58,7 @@ public class WfDraftServiceImpl implements IWfDraftService {
      */
     @Override
     public WfDraftVo queryByUserIdAndDefId(Long userId, String definitionId) {
-        return baseMapper.selectByUserIdAndDefId(userId, definitionId);
+        return draftMapper.selectByUserIdAndDefId(userId, definitionId);
     }
 
     /**
@@ -66,7 +70,7 @@ public class WfDraftServiceImpl implements IWfDraftService {
     @Override
     public Page<WfDraftVo> queryPageList(WfDraftBo bo, PageQuery pageQuery) {
         LambdaQueryWrapper<WfDraft> lqw = buildQueryWrapper(bo);
-        Page<WfDraftVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+        Page<WfDraftVo> result = draftMapper.selectVoPage(pageQuery.build(), lqw);
         return result;
     }
 
@@ -79,32 +83,9 @@ public class WfDraftServiceImpl implements IWfDraftService {
     @Override
     public List<WfDraftVo> queryList(WfDraftBo bo) {
         LambdaQueryWrapper<WfDraft> lqw = buildQueryWrapper(bo);
-        return baseMapper.selectVoList(lqw);
+        return draftMapper.selectVoList(lqw);
     }
 
-    /**
-     * 新增流程草稿
-     *
-     * @param bo 流程草稿
-     * @return 结果
-     */
-    @Override
-    public int insertDraft(WfDraftBo bo) {
-        WfDraft wfDraft = BeanUtil.toBean(bo, WfDraft.class);
-        return baseMapper.insert(wfDraft);
-    }
-
-    /**
-     * 修改流程草稿
-     *
-     * @param bo 流程草稿
-     * @return 结果
-     */
-    @Override
-    public int updateDraft(WfDraftBo bo) {
-        WfDraft wfDraft = BeanUtil.toBean(bo, WfDraft.class);
-        return baseMapper.updateById(wfDraft);
-    }
 
     /**
      * 批量删除流程草稿
@@ -114,47 +95,81 @@ public class WfDraftServiceImpl implements IWfDraftService {
      */
     @Override
     public Boolean deleteWithValidByIds(Collection<Long> ids) {
-        return baseMapper.deleteBatchIds(ids) > 0;
+        return draftMapper.deleteBatchIds(ids) > 0;
     }
 
     /**
-     * 保存或更新草稿（确保同一流程只能存在一个草稿）
+     * 新增或更新流程草稿
      *
-     * @param bo 流程草稿
+     * @param bo 草稿业务对象
      * @return 结果
      */
     @Override
-    public int saveOrUpdateDraft(WfDraftBo bo) {
-        // 先查询是否已存在该用户和流程定义的草稿
-        WfDraftVo existingDraft = queryByUserIdAndDefId(bo.getUserId(), bo.getDefinitionId());
-        
-        // 流程名称是必填字段，不需要设置默认值
-        
-        if (existingDraft != null) {
-            // 如果存在，更新现有草稿
+    public Boolean saveOrUpdateDraft(WfDraftBo bo) {
+        // 根据流程定义ID获取流程名称
+        if (StringUtils.isNotBlank(bo.getDefinitionId()) && StringUtils.isBlank(bo.getProcessName())) {
+            ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(bo.getDefinitionId())
+                .singleResult();
+            if (processDefinition != null) {
+                bo.setProcessName(processDefinition.getName());
+            }
+        }
+
+        //由于是逻辑删除，应该先搜索现有草稿是否存在，避免唯一索引冲突
+        //根据用户id跟流程id,查询是否已存在草稿(因为是保存，所以如果逻辑删除的话直接恢复delflag字段为0即可)
+        WfDraftVo existingDraft = draftMapper.selectByUserIdAndDefIdWithDelFlag(bo.getUserId(), bo.getDefinitionId());
+        if (ObjectUtil.isNotNull(existingDraft)) {
+            // 如果存在，插入草稿id
             bo.setDraftId(existingDraft.getDraftId());
-            // 保留原有的部署ID（如果新的为空）
-            if (bo.getDeployId() == null && existingDraft.getDeployId() != null) {
-                bo.setDeployId(existingDraft.getDeployId());
-            }
-            return updateDraft(bo);
+        }
+
+        WfDraft draft = BeanUtil.toBean(bo, WfDraft.class);
+
+        // 判断是新增还是修改
+        if (ObjectUtil.isNotNull(draft.getDraftId())) {
+            // 修改，先恢复草稿
+            restoreByDefinitionId(bo.getDefinitionId());
+            draft.setUpdateBy(SecurityUtils.getUsername());
+            draft.setUpdateTime(DateUtils.getNowDate());
+            return draftMapper.updateById(draft) > 0;
         } else {
-            // 如果不存在，创建新草稿
-            int result = insertDraft(bo);
-            // 如果插入成功，获取生成的ID
-            if (result > 0) {
-                // 这里假设insertDraft方法会设置生成的ID到bo对象中
-                // 如果没有，需要查询获取ID
-                if (bo.getDraftId() == null) {
-                    WfDraftVo newDraft = queryByUserIdAndDefId(bo.getUserId(), bo.getDefinitionId());
-                    if (newDraft != null) {
-                        bo.setDraftId(newDraft.getDraftId());
-                    }
-                }
-            }
-            return result;
+            // 新增
+            draft.setCreateBy(SecurityUtils.getUsername());
+            draft.setCreateTime(DateUtils.getNowDate());
+            draft.setDelFlag("0");
+            return draftMapper.insert(draft) > 0;
         }
     }
+
+    /**
+     * 根据流程定义ID逻辑删除草稿
+     *
+     * @param definitionId 流程定义ID
+     * @return 结果
+     */
+    @Override
+    public int deleteByDefinitionId(String definitionId) {
+        if (StrUtil.isBlank(definitionId)) {
+            return 0;
+        }
+        return draftMapper.deleteByDefinitionId(definitionId);
+    }
+
+    /**
+     * 根据流程定义ID逻辑恢复草稿
+     *
+     * @param definitionId 流程定义ID
+     * @return 结果
+     */
+    public int restoreByDefinitionId(String definitionId) {
+        if (StrUtil.isBlank(definitionId)) {
+            return 0;
+        }
+        return draftMapper.restoreByDefinitionId(definitionId);
+    }
+
+
 
     private LambdaQueryWrapper<WfDraft> buildQueryWrapper(WfDraftBo bo) {
         Map<String, Object> params = bo.getParams();

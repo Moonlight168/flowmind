@@ -80,4 +80,5 @@ public class WfDraftVo {
      */
     @ExcelProperty(value = "删除标志")
     private String delFlag;
+
 }

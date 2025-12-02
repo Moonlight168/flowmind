@@ -150,18 +150,20 @@ function toggleTheme() {
     height: 100%;
     line-height: 50px;
     display: flex;
+    align-items: center; // 添加这行，使所有子元素垂直居中
 
     &:focus {
       outline: none;
     }
 
     .right-menu-item {
-      display: inline-block;
+      display: inline-flex; // 修改为 inline-flex
+      align-items: center; // 添加这行，使内部元素垂直居中
       padding: 0 8px;
       height: 100%;
       font-size: 18px;
       color: #5a5e66;
-      vertical-align: text-bottom;
+      // 移除 vertical-align: text-bottom; 因为在 flex 容器中不生效
 
       &.hover-effect {
         cursor: pointer;
@@ -191,9 +193,11 @@ function toggleTheme() {
       padding-right: 0px;
 
       .avatar-wrapper {
-        margin-top: 10px;
+        display: flex;
+        align-items: center;
         right: 8px;
         position: relative;
+        margin-top: 0; // 移除 margin-top，使用 align-items: center 居中
 
         .user-avatar {
           cursor: pointer;
@@ -205,17 +209,17 @@ function toggleTheme() {
 
         .user-nickname{
           position: relative;
-          left: 0px;
-          bottom: 10px;
           font-size: 14px;
           font-weight: bold;
+          bottom: 0; // 移除 bottom，使用 align-items: center 居中
         }
 
         i {
           cursor: pointer;
           position: absolute;
           right: -20px;
-          top: 25px;
+          top: 50%; // 修改为 50%，使用 transform 居中
+          transform: translateY(-50%); // 添加这行，垂直居中
           font-size: 12px;
         }
       }

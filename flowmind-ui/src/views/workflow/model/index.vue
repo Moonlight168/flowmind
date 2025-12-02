@@ -309,7 +309,7 @@ const handleDelete = async (row) => {
 }
 /** 导出按钮操作 */
 const handleExport = () => {
-  proxy?.download("workflow/model/export", {
+  proxy?.download("flowable/model/export", {
     ...queryParams.value
   }, `model_${new Date().getTime()}.xlsx`);
 };
@@ -400,11 +400,16 @@ const onSaveDesigner = async (str) => {
 const confirmSave = async (body, newVersion) => {
   designerLoading.value = true;
   console.log(body,"body");
-  await saveModel(Object.assign(body, { newVersion: newVersion }));
-  getList();
-  proxy.$modal.msgSuccess("保存成功");
-  designerLoading.value = false;
-  designer.visible = false;
+  try {
+    await saveModel(Object.assign(body, { newVersion: newVersion }));
+    getList();
+    proxy.$modal.msgSuccess("保存成功");
+    designerLoading.value = false;
+    designer.visible = false;
+  } catch (error) {
+    designerLoading.value = false;
+    // 保存失败时不关闭设计器，不刷新页面
+  }
 }
 
 const categoryFormat = (row) => {
