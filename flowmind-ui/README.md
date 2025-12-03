@@ -2,7 +2,7 @@
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-b99b286755aef70355a7084753f89cdb7c9.png">
 </p>
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind v1.0.0</h1>
-<h4 align="center">基于 RuoYi-Cloud 的企业级工作流管理系统，新增审批中心和草稿箱功能</h4>
+<h4 align="center">基于 RuoYi-Cloud 的工作流管理系统，新增审批中心、用户审批页面和草稿箱功能</h4>
 <p align="center">
 	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v1.0.0-brightgreen.svg"></a>
 	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
@@ -16,6 +16,7 @@
 版本。
 * 在RuoYi-Cloud原有功能基础上，新增了以下核心功能：
     * **审批中心**：提供统一的流程审批管理界面，支持待办任务、已办任务、待签任务、我的流程等全方位流程管理
+    * **用户审批页面**：新建专门的用户审批界面，提供更直观、高效的审批操作体验
     * **草稿箱**：支持流程草稿的保存、编辑和管理，用户可以随时保存未完成的流程申请，稍后继续编辑
 * 配套后端代码仓库地址[FlowMind-Cloud](https://github.com/Moonlight168/flowmind) 版本。
 
@@ -102,7 +103,13 @@ com.flowmind
     * 我的流程：显示当前用户发起的流程实例列表
     * 流程详情：查看流程实例的详细信息、流程图和审批记录
 
-19. **草稿箱**：
+19. **用户审批页面**：
+    * 专门设计的审批操作界面，优化用户审批体验
+    * 支持批量审批、快速决策和一键通过/驳回功能
+    * 提供审批历史查看和审批意见模板功能
+    * 集成智能推荐功能，辅助审批决策
+
+20. **草稿箱**：
     * 草稿列表：显示用户保存的流程草稿列表
     * 草稿编辑：支持编辑已保存的草稿，继续完善流程申请
     * 草稿删除：支持删除不需要的草稿
@@ -120,6 +127,13 @@ com.flowmind
 * 统一的流程审批管理界面，支持多种流程类型的审批
 * 直观的任务列表展示，清晰区分待办、已办、待签等不同状态
 * 详细的流程跟踪功能，实时查看流程进度和审批记录
+
+### 用户审批页面
+
+* 专门设计的用户友好审批界面，提供流畅的审批操作体验
+* 支持批量审批功能，提高审批效率
+* 智能审批辅助功能，提供决策参考和审批建议
+* 个性化审批设置，支持自定义审批快捷操作
 
 ### 草稿箱
 
