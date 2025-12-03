@@ -93,7 +93,7 @@ com.flowmind
 ## 在线体验
 
 演示地址：https://codebyggbond.dpdns.org/series/myprojects/FlowMind/  
-文档地址：https://codebyggbond.dpdns.org/
+文档地址：https://codebyggbond.dpdns.org/series/myprojects/FlowMind/
 
 测试账号：admin/123456
 
