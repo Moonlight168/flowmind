@@ -50,3 +50,4 @@ nbdist/
 # 自定义
 bin/
 docker/
+logs/

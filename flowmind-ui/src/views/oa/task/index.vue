@@ -71,20 +71,17 @@ const navigateToTab = (tabKey) => {
   router.push(`/oa/task/${tabKey}`)
 }
 
-// 获取各个tab的数量
+// 获取各tab数量
 const getTabsCount = async () => {
-  try {
-    // 使用统一的接口获取所有数量
-    const res = await getTaskCounts()
-    if (res.code === 200 && res.data) {
-      tabs.value[0].count = res.data.todoCount || 0  // 待办事项
-      tabs.value[1].count = res.data.finishedCount || 0  // 已办事项
-      tabs.value[2].count = res.data.ownCount || 0  // 我的流程
-      tabs.value[3].count = res.data.copyCount || 0  // 抄送
-      tabs.value[4].count = res.data.claimCount || 0  // 待签收
-    }
-  } catch (error) {
-    console.error('获取tab数量失败:', error)
+  const res = await getTaskCounts()
+  if (res.code === 200) {
+    // 确保tabs数组与后端返回字段正确对应
+    tabs.value[0].count = res.data.ownCount    // 我的流程
+    tabs.value[1].count = res.data.todoCount   // 待办事项
+    tabs.value[2].count = res.data.claimCount  // 待签收
+    //tabs.value[3].count = res.data.finishedCount // 已办事项 不显示
+    tabs.value[3].count = 0
+    tabs.value[4].count = res.data.copyCount   // 抄送
   }
 }
 

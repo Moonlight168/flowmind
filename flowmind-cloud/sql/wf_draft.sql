@@ -21,3 +21,10 @@ CREATE TABLE `wf_draft` (
   KEY `idx_user_id` (`user_id`) USING BTREE,
   KEY `idx_definition_id` (`definition_id`) USING BTREE
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COMMENT='流程草稿表';
+
+-- ----------------------------
+-- 删除办公管理菜单（已迁移到用户界面）
+-- ----------------------------
+-- 删除办公管理菜单相关数据
+-- 原因：这些功能已经从管理员界面迁移到用户界面，避免功能重复和权限混乱
+DELETE FROM sys_menu WHERE menu_id IN ('2355','2356', '2357', '2358', '2359', '2362', '2361');

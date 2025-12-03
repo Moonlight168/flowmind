@@ -89,38 +89,10 @@
             </div>
           </template>
           <el-collapse accordion>
-            <el-collapse-item title="v1.0.0 - 2025-06-30">
+            <el-collapse-item title="v1.0.0 - 2025-12-01">
               <ol>
-                <li>新增FlowMind 企业级应用平台正式版</li>
-                <li>基于Flowable引擎的工作流设计器</li>
-                <li>支持BPMN 2.0标准流程建模</li>
-                <li>可视化流程设计界面</li>
-                <li>流程实例监控与管理</li>
-                <li>任务分配与处理功能</li>
-                <li>表单设计与自定义</li>
-                <li>用户权限管理系统</li>
-                <li>组织架构管理</li>
-                <li>系统集成接口</li>
-              </ol>
-            </el-collapse-item>
-            <el-collapse-item title="v0.9.0 - 2025-03-15">
-              <ol>
-                <li>新增流程设计器Beta版</li>
-                <li>支持基本流程元素绘制</li>
-                <li>基础表单设计器</li>
-                <li>表单组件库</li>
-                <li>流程模拟运行</li>
-                <li>UI界面优化</li>
-              </ol>
-            </el-collapse-item>
-            <el-collapse-item title="v0.5.0 - 2024-12-01">
-              <ol>
-                <li>项目初始化</li>
-                <li>基础架构搭建</li>
-                <li>核心模块设计</li>
-                <li>数据库设计</li>
-                <li>用户管理模块</li>
-                <li>权限控制模块</li>
+                <li>集成Flowable引擎</li>
+                <li>实现草稿箱功能</li>
               </ol>
             </el-collapse-item>
           </el-collapse>
@@ -142,7 +114,6 @@
               <li>流程实例监控与管理</li>
               <li>任务分配与处理</li>
               <li>系统集成接口</li>
-              <li>移动端适配</li>
             </ul>
           </div>
         </el-card>

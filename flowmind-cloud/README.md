@@ -1,52 +1,51 @@
 <p align="center">
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-b99b286755aef70355a7084753f89cdb7c9.png">
 </p>
-<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">RuoYi v3.6.6</h1>
-<h4 align="center">基于 Vue/Element UI 和 Spring Boot/Spring Cloud & Alibaba 前后端分离的分布式微服务架构</h4>
+<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind v1.0.0</h1>
+<h4 align="center">基于 RuoYi-Cloud 的企业级工作流管理系统，新增审批中心和草稿箱功能</h4>
 <p align="center">
-	<a href="https://gitee.com/y_project/RuoYi-Cloud/stargazers"><img src="https://gitee.com/y_project/RuoYi-Cloud/badge/star.svg?theme=dark"></a>
-	<a href="https://gitee.com/y_project/RuoYi-Cloud"><img src="https://img.shields.io/badge/RuoYi-v3.6.6-brightgreen.svg"></a>
-	<a href="https://gitee.com/y_project/RuoYi-Cloud/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v1.0.0-brightgreen.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
 </p>
 
 ## 平台简介
 
-若依是一套全部开源的快速开发平台，毫无保留给个人及企业免费使用。
+FlowMind是基于RuoYi-Cloud的企业级工作流管理系统，在保留RuoYi-Cloud原有功能的基础上，新增了审批中心和草稿箱功能，为企业提供更完善的流程管理解决方案。
 
-* 采用前后端分离的模式，微服务版本前端(基于 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue))。
-* 后端采用Spring Boot、Spring Cloud & Alibaba。
+* 本仓库为FlowMind后端项目，基于[RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud)框架进行扩展开发。
+* 后端采用Spring Boot、Spring Cloud & Alibaba微服务架构。
 * 注册中心、配置中心选型Nacos，权限认证使用Redis。
 * 流量控制框架选型Sentinel，分布式事务选型Seata。
-* 提供了技术栈（[Vue3](https://v3.cn.vuejs.org) [Element Plus](https://element-plus.org/zh-CN) [Vite](https://cn.vitejs.dev)）版本[RuoYi-Cloud-Vue3](https://gitcode.com/yangzongzhuan/RuoYi-Cloud-Vue3)，保持同步更新。
-* 如需不分离应用，请移步 [RuoYi](https://gitee.com/y_project/RuoYi)，如需分离应用，请移步 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue)
-* 阿里云优惠券：[点我进入](http://aly.ruoyi.vip)，腾讯云优惠券：[点我进入](http://txy.ruoyi.vip)&nbsp;&nbsp;
+* 在RuoYi-Cloud原有功能基础上，新增了以下核心功能：
+    * **审批中心**：提供统一的流程审批管理界面，支持待办任务、已办任务、待签任务、我的流程等全方位流程管理
+    * **草稿箱**：支持流程草稿的保存、编辑和管理，用户可以随时保存未完成的流程申请，稍后继续编辑
+* 配套前端代码仓库地址[FlowMind-UI](https://github.com/Moonlight168/flowmind) 版本。
 
 ## 系统模块
 
 ~~~
-com.ruoyi     
-├── ruoyi-ui              // 前端框架 [80]
-├── ruoyi-gateway         // 网关模块 [8080]
-├── ruoyi-auth            // 认证中心 [9200]
-├── ruoyi-api             // 接口模块
-│       └── ruoyi-api-system                          // 系统接口
-├── ruoyi-common          // 通用模块
-│       └── ruoyi-common-core                         // 核心模块
-│       └── ruoyi-common-datascope                    // 权限范围
-│       └── ruoyi-common-datasource                   // 多数据源
-│       └── ruoyi-common-log                          // 日志记录
-│       └── ruoyi-common-redis                        // 缓存服务
-│       └── ruoyi-common-seata                        // 分布式事务
-│       └── ruoyi-common-security                     // 安全模块
-│       └── ruoyi-common-sensitive                    // 数据脱敏
-│       └── ruoyi-common-swagger                      // 系统接口
-├── ruoyi-modules         // 业务模块
-│       └── ruoyi-system                              // 系统模块 [9201]
-│       └── ruoyi-gen                                 // 代码生成 [9202]
-│       └── ruoyi-job                                 // 定时任务 [9203]
-│       └── ruoyi-file                                // 文件服务 [9300]
-├── ruoyi-visual          // 图形化管理模块
-│       └── ruoyi-visual-monitor                      // 监控中心 [9100]
+com.flowmind     
+├── flowmind-ui           // 前端框架 [80]
+├── flowmind-gateway      // 网关模块 [8080]
+├── flowmind-auth         // 认证中心 [9200]
+├── flowmind-api          // 接口模块
+│       └── flowmind-api-system                  // 系统接口
+├── flowmind-common       // 通用模块
+│       └── flowmind-common-core                  // 核心模块
+│       └── flowmind-common-datascope             // 权限范围
+│       └── flowmind-common-datasource            // 多数据源
+│       └── flowmind-common-log                   // 日志记录
+│       └── flowmind-common-redis                 // 缓存服务
+│       └── flowmind-common-security              // 安全模块
+│       └── flowmind-common-swagger               // 系统接口
+├── flowmind-modules      // 业务模块
+│       └── flowmind-system                       // 系统模块 
+│       └── flowmind-gen                          // 代码生成 
+│       └── flowmind-job                          // 定时任务 
+│       └── flowmind-file                         // 文件服务 
+│       └── flowmind-flowable                     // 工作流模块
+├── flowmind-visual       // 图形化管理模块
+│       └── flowmind-visual-monitor               // 监控中心 
 ├──pom.xml                // 公共依赖
 ~~~
 
@@ -55,6 +54,8 @@ com.ruoyi
 <img src="https://oscimg.oschina.net/oscnet/up-82e9722ecb846786405a904bafcf19f73f3.png"/>
 
 ## 内置功能
+
+### RuoYi-Cloud原有功能
 
 1.  用户管理：用户是系统操作者，该功能主要完成系统用户配置。
 2.  部门管理：配置系统组织机构（公司、部门、小组），树结构展现支持数据权限。
@@ -74,56 +75,104 @@ com.ruoyi
 16. 在线构建器：拖动表单元素生成相应的HTML代码。
 17. 连接池监视：监视当前系统数据库连接池状态，可进行分析SQL找出系统性能瓶颈。
 
+### FlowMind新增功能
+
+18. **审批中心**：
+    * 待办任务：显示当前用户需要处理的任务列表
+    * 已办任务：显示当前用户已经处理完成的任务列表
+    * 待签任务：显示当前用户可以签收的任务列表
+    * 我的流程：显示当前用户发起的流程实例列表
+    * 流程详情：查看流程实例的详细信息、流程图和审批记录
+
+19. **草稿箱**：
+    * 草稿列表：显示用户保存的流程草稿列表
+    * 草稿编辑：支持编辑已保存的草稿，继续完善流程申请
+    * 草稿删除：支持删除不需要的草稿
+    * 草稿转正：支持将草稿直接转换为正式流程申请
+
 ## 在线体验
 
-- admin/admin123  
-- 陆陆续续收到一些打赏，为了更好的体验已用于演示服务器升级。谢谢各位小伙伴。
+演示地址：https://codebyggbond.dpdns.org/series/myprojects/FlowMind/  
+文档地址：https://codebyggbond.dpdns.org/
 
-演示地址：http://ruoyi.vip  
-文档地址：http://doc.ruoyi.vip
+测试账号：admin/123456
+
+## FlowMind特色功能演示
+
+### 审批中心
+
+* 统一的流程审批管理界面，支持多种流程类型的审批
+* 直观的任务列表展示，清晰区分待办、已办、待签等不同状态
+* 详细的流程跟踪功能，实时查看流程进度和审批记录
+
+### 草稿箱
+
+* 支持流程草稿的随时保存，避免数据丢失
+* 灵活的草稿管理功能，支持编辑、删除和提交
+* 与审批中心无缝集成，草稿可直接转换为正式流程申请
 
 ## 演示图
 
+### 用户界面
+
+#### FlowMind特色功能界面
+
 <table>
     <tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/cd1f90be5f2684f4560c9519c0f2a232ee8.jpg"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/1cbcf0e6f257c7d3a063c0e3f2ff989e4b3.jpg"/></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/流程发起.png" alt="流程发起" width="100%"/><br/><div style="text-align: center;">流程发起</div></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/草稿箱.png" alt="草稿箱" width="100%"/><br/><div style="text-align: center;">草稿箱</div></td>
     </tr>
     <tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-8074972883b5ba0622e13246738ebba237a.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-9f88719cdfca9af2e58b352a20e23d43b12.png"/></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/工作台.png" alt="工作台" width="100%"/><br/><div style="text-align: center;">工作台</div></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/审批中心待办事项.png" alt="审批中心待办事项" width="100%"/><br/><div style="text-align: center;">审批中心待办事项</div></td>
     </tr>
     <tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-39bf2584ec3a529b0d5a3b70d15c9b37646.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-4148b24f58660a9dc347761e4cf6162f28f.png"/></td>
-    </tr>
-	<tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-b2d62ceb95d2dd9b3fbe157bb70d26001e9.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-d67451d308b7a79ad6819723396f7c3d77a.png"/></td>
-    </tr>	 
-    <tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/5e8c387724954459291aafd5eb52b456f53.jpg"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/644e78da53c2e92a95dfda4f76e6d117c4b.jpg"/></td>
-    </tr>
-	<tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-8370a0d02977eebf6dbf854c8450293c937.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-49003ed83f60f633e7153609a53a2b644f7.png"/></td>
-    </tr>
-	<tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-d4fe726319ece268d4746602c39cffc0621.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-c195234bbcd30be6927f037a6755e6ab69c.png"/></td>
-    </tr>
-	<tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-ece3fd37a3d4bb75a3926e905a3c5629055.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-92ffb7f3835855cff100fa0f754a6be0d99.png"/></td>
-    </tr>
-    <tr>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-ff9e3066561574aca73005c5730c6a41f15.png"/></td>
-        <td><img src="https://oscimg.oschina.net/oscnet/up-5e4daac0bb59612c5038448acbcef235e3a.png"/></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/我的流程.png" alt="我的流程" width="100%"/><br/><div style="text-align: center;">我的流程</div></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/个人信息.png" alt="个人信息" width="100%"/><br/><div style="text-align: center;">个人信息</div></td>
     </tr>
 </table>
 
+### 管理员界面
 
-## 若依微服务交流群
+<table>
+    <tr>
+        <td><img src="https://oscimg.oschina.net/oscnet/cd1f90be5f2684f4560c9519c0f2a232ee8.jpg" alt="系统管理" width="100%"/><br/><div style="text-align: center;">系统管理</div></td>
+        <td><img src="https://oscimg.oschina.net/oscnet/1cbcf0e6f257c7d3a063c0e3f2ff989e4b3.jpg" alt="用户管理" width="100%"/><br/><div style="text-align: center;">用户管理</div></td>
+    </tr>
+    <tr>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-8074972883b5ba0622e13246738ebba237a.png" alt="角色管理" width="100%"/><br/><div style="text-align: center;">角色管理</div></td>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-9f88719cdfca9af2e58b352a20e23d43b12.png" alt="菜单管理" width="100%"/><br/><div style="text-align: center;">菜单管理</div></td>
+    </tr>
+    <tr>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-39bf2584ec3a529b0d5a3b70d15c9b37646.png" alt="部门管理" width="100%"/><br/><div style="text-align: center;">部门管理</div></td>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-4148b24f58660a9dc347761e4cf6162f28f.png" alt="岗位管理" width="100%"/><br/><div style="text-align: center;">岗位管理</div></td>
+    </tr>
+    <tr>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-b2d62ceb95d2dd9b3fbe157bb70d26001e9.png" alt="字典管理" width="100%"/><br/><div style="text-align: center;">字典管理</div></td>
+        <td><img src="https://oscimg.oschina.net/oscnet/up-d67451d308b7a79ad6819723396f7c3d77a.png" alt="参数设置" width="100%"/><br/><div style="text-align: center;">参数设置</div></td>
+    </tr>
+    <tr>
+        <td><img src="https://oscimg.oschina.net/oscnet/5e8c387724954459291aafd5eb52b456f53.jpg" alt="通知公告" width="100%"/><br/><div style="text-align: center;">通知公告</div></td>
+        <td><img src="https://oscimg.oschina.net/oscnet/644e78da53c2e92a95dfda4f76e6d117c4b.jpg" alt="日志管理" width="100%"/><br/><div style="text-align: center;">日志管理</div></td>
+    </tr>
+</table>
 
-QQ群： [![加入QQ群](https://img.shields.io/badge/已满-42799195-blue.svg)](https://jq.qq.com/?_wv=1027&k=yqInfq0S) [![加入QQ群](https://img.shields.io/badge/已满-170157040-blue.svg)](https://jq.qq.com/?_wv=1027&k=Oy1mb3p8) [![加入QQ群](https://img.shields.io/badge/已满-130643120-blue.svg)](https://jq.qq.com/?_wv=1027&k=rvxkJtXK) [![加入QQ群](https://img.shields.io/badge/已满-225920371-blue.svg)](https://jq.qq.com/?_wv=1027&k=0Ck3PvTe) [![加入QQ群](https://img.shields.io/badge/已满-201705537-blue.svg)](https://jq.qq.com/?_wv=1027&k=FnHHP4TT) [![加入QQ群](https://img.shields.io/badge/已满-236543183-blue.svg)](https://jq.qq.com/?_wv=1027&k=qdT1Ojpz) [![加入QQ群](https://img.shields.io/badge/已满-213618602-blue.svg)](https://jq.qq.com/?_wv=1027&k=nw3OiyXs) [![加入QQ群](https://img.shields.io/badge/已满-148794840-blue.svg)](https://jq.qq.com/?_wv=1027&k=kiU5WDls) [![加入QQ群](https://img.shields.io/badge/已满-118752664-blue.svg)](https://jq.qq.com/?_wv=1027&k=MtBy6YfT) [![加入QQ群](https://img.shields.io/badge/已满-101038945-blue.svg)](https://jq.qq.com/?_wv=1027&k=FqImHgH2) [![加入QQ群](https://img.shields.io/badge/已满-128355254-blue.svg)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=G4jZ4EtdT50PhnMBudTnEwgonxkXOscJ&authKey=FkGHYfoTKlGE6wHdKdjH9bVoOgQjtLP9WM%2Fj7pqGY1msoqw9uxDiBo39E2mLgzYg&noverify=0&group_code=128355254) [![加入QQ群](https://img.shields.io/badge/已满-179219821-blue.svg)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=irnwcXhbLOQEv1g-TwGifjNTA_f4wZiA&authKey=4bpzEwhcUY%2FvsPDHvzYn6xfoS%2FtOArvZ%2BGXzfr7O0%2FEqLfkKA%2BuCDXlzHIFg8t93&noverify=0&group_code=179219821) [![加入QQ群](https://img.shields.io/badge/已满-158753145-blue.svg)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=lx1uEdEDuxeM7rUvF3qmlFdqKqdJ5Z-R&authKey=rgyPW9yhhh4IIURKVFa6NgP3qiqH04WAzrJ0trsgkr3pjzm6sKIOGyA58oOjoj%2FJ&noverify=0&group_code=158753145) [![加入QQ群](https://img.shields.io/badge/112869560-blue.svg)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=Kuaw0Xdlw2Nlgn6s8h9elzuquHGxGObD&authKey=cSrQcWQ%2BzQZAFFrwxaR%2BbzcumX4WRduZnd1O6JO1dlclQMiu%2BKwxAy8t2JfNp67V&noverify=0&group_code=112869560) 点击按钮入群。
+### 流程管理
+
+<table> 
+    <tr>
+        <td><img src="../flowmind-ui/src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/流程部署.png" alt="流程部署" width="100%"/><br/><div style="text-align: center;">流程部署</div></td>
+    </tr>
+    <tr>
+        <td><img src="../flowmind-ui/src/assets/images/README/流程设计.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">流程设计</div></td>
+        <td><img src="../flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
+    </tr> 
+</table>
+
+
+## 项目结构
+
+FlowMind采用前后端分离架构：
+- 前端项目：[FlowMind-UI](https://github.com/Moonlight168/flowmind) - 基于Vue3 + Element Plus + Vite
+- 后端项目：[FlowMind-Cloud](https://github.com/Moonlight168/flowmind) - 基于Spring Boot 3 + Spring Cloud Alibaba

@@ -154,22 +154,29 @@ const saveDraft = async () => {
     }
   } catch (error) {
     console.error('保存草稿失败:', error);
-    // 如果有必填字段未填写，显示提示信息
+    // 如果有必填字段未填写，显示提示信息并抛出错误
     if (error && error.includes('表单数据校验失败')) {
       ElMessage.warning('请填写所有必填字段后再保存草稿');
+      throw error; // 抛出错误，让调用方知道保存失败
     }
+    // 其他错误也抛出，让调用方知道保存失败
+    throw error;
   }
 };
 
 // 保存草稿并退出
 const saveDraftAndExit = async () => {
-  // 先保存草稿
-  await saveDraft();
-  
-  // 保存成功后退出
-  setTimeout(() => {
-    proxy.$router.push('/oa/workplace');
-  }, 100);
+  try {
+    // 先保存草稿
+    await saveDraft();
+    
+    // 保存成功后退出
+    setTimeout(() => {
+      proxy.$router.push('/oa/workplace');
+    }, 100);
+  } catch (error) {
+    // 保存草稿失败时，不执行跳转，让用户继续编写
+  }
 }
 
 // 确认提交

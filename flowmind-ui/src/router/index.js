@@ -174,7 +174,7 @@ export const dynamicRoutes = [
             }
         ]
     },
-    {
+    /*{
         path: '/workflow/process',
         component: Layout,
         hidden: true,
@@ -237,7 +237,7 @@ export const dynamicRoutes = [
                 meta: { title: '抄送任务', activeMenu: '/work/copy', icon: '' }
             }
         ]
-    },
+    },*/
 ]
 
 

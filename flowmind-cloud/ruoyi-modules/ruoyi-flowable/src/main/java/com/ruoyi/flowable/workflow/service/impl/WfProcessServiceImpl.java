@@ -34,6 +34,7 @@ import com.ruoyi.flowable.workflow.mapper.WfFormMapper;
 import com.ruoyi.flowable.workflow.service.IWfProcessService;
 import com.ruoyi.flowable.workflow.service.IWfTaskService;
 import com.ruoyi.flowable.workflow.service.IWfCopyService;
+import com.ruoyi.flowable.workflow.service.IWfDraftService;
 import com.ruoyi.system.api.RemoteUserService;
 import com.ruoyi.system.api.domain.SysDept;
 import com.ruoyi.system.api.domain.SysRole;
@@ -78,6 +79,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
     private final WfDeployFormMapper deployFormMapper;
     private final WfFormMapper formMapper;
     private final IWfCopyService wfCopyService;
+    private final IWfDraftService wfDraftService;
     @Autowired
     private RemoteUserService remoteUserService;
     /**
@@ -651,6 +653,12 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         try {
             ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionId(procDefId).singleResult();
+            
+            // 启动流程前删除对应的草稿
+            if (processDefinition != null) {
+                wfDraftService.deleteByDefinitionId(processDefinition.getId());
+            }
+            
             startProcess(processDefinition, variables);
         } catch (Exception e) {
             e.printStackTrace();
@@ -669,6 +677,12 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         try {
             ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionKey(procDefKey).latestVersion().singleResult();
+            
+            // 启动流程前删除对应的草稿
+            if (processDefinition != null) {
+                wfDraftService.deleteByDefinitionId(processDefinition.getId());
+            }
+            
             startProcess(processDefinition, variables);
         } catch (Exception e) {
             e.printStackTrace();
@@ -1080,41 +1094,39 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         // 获取当前用户ID
         Long userId = SecurityUtils.getUserId();
         
-        // 待办数量
+        // 待办数量 - 包括直接分配给用户和用户所在组的任务
         long todoCount = taskService.createTaskQuery()
             .active()
-            .taskAssignee(String.valueOf(userId))
+            .taskCandidateOrAssigned(TaskUtils.getUserId())
+            .taskCandidateGroupIn(TaskUtils.getCandidateGroup())
             .count();
         counts.put("todoCount", todoCount);
         
-        // 待签数量
+        // 待签数量 - 包括用户可签收的任务和用户所在组可签收的任务
         long claimCount = taskService.createTaskQuery()
             .active()
-            .taskCandidateUser(String.valueOf(userId))
+            .taskCandidateUser(TaskUtils.getUserId())
+            .taskCandidateGroupIn(TaskUtils.getCandidateGroup())
             .count();
         counts.put("claimCount", claimCount);
         
-        // 已办数量
+        // 已办数量 - 只查询已完成的任务
         long finishedCount = historyService.createHistoricTaskInstanceQuery()
             .finished()
             .taskAssignee(String.valueOf(userId))
             .count();
         counts.put("finishedCount", finishedCount);
         
-        // 我的流程数量
-        long ownCount = historyService.createHistoricProcessInstanceQuery()
+        // 我的流程数量 - 只查询用户发起的活跃流程实例，不包含已取消或已完成的
+        long ownCount = runtimeService.createProcessInstanceQuery()
             .startedBy(String.valueOf(userId))
             .count();
         counts.put("ownCount", ownCount);
         
-        // 抄送数量
+        // 抄送数量 - 通过服务查询
         Long copyCount = wfCopyService.countByUserId(userId);
         counts.put("copyCount", copyCount);
         
         return counts;
     }
 }
-
-
-
-
