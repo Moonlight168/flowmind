@@ -1,0 +1,100 @@
+# Docker Compose 配置
+services:
+  # vLLM 推理引擎服务
+  vllm:
+    image: vllm/vllm-openai:v0.6.0
+    container_name: flowmind-vllm
+    restart: "no"
+    ports:
+      - "8001:8000"                 # 宿主机端口 8001 → 容器内 8000（避免端口冲突）
+    runtime: nvidia                 # 启用 NVIDIA GPU 支持（必须）
+    shm_size: 2g                    # 共享内存大小（vLLM KV cache 需要，至少 1g-8g）
+    environment:
+      # 核心：添加 HF 国内镜像源，解决网络连接问题
+      - HF_ENDPOINT=https://hf-mirror.com
+
+    # 启动命令
+    # --model Qwen/Qwen2.5-1.5B-Instruct
+    # 最大序列长度（建议先用 8192，稳定后再调高）
+    # GPU 显存利用率（留 10% 给系统，避免 OOM）
+    # 数据类型（推荐 bfloat16，性能好且精度高）
+    # Qwen 模型需要执行自定义代码（必须加）
+    # API 返回的模型名称（可选，自定义显示名）
+    # 监听所有接口（容器内必须）
+    # 容器内监听端口
+    # 可选：禁用 CUDA Graph，避免某些兼容问题
+    command: >
+      --model Qwen/Qwen2.5-1.5B-Instruct
+      --served-model-name qwen2.5_1.5b_instruct
+      --max-model-len 3072
+      --gpu-memory-utilization 0.85
+      --dtype float16
+      --trust-remote-code
+      --host 0.0.0.0
+      --port 8000
+      --swap-space 1
+      --disable-log-stats
+
+    # 卷挂载（关键！持久化模型缓存）
+    volumes:
+      - F:/huggingface-cache:/root/.cache/huggingface
+
+    # 设备配置
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1          # 使用 1 张 GPU
+              capabilities: [gpu]
+
+    # 健康检查：确保 vLLM 服务正常响应
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - flowmind-network
+
+  # AI 智能设计服务
+  ai-service:
+    build:
+      context: ../../flowmind-ai-flow/ai-service
+      dockerfile: ../../docker/ai-service/Dockerfile
+    image: flowmind-ai-service
+    container_name: flowmind-ai-service
+    restart: "no"
+    env_file:
+      - ../../flowmind-ai-flow/ai-service/.env
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区为北京时间
+    ports:
+o      - "8000:8000"
+      # 调试端口，用于远程调试，生产环境不建议启用
+      - "5678:5678"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # 使容器能访问宿主机
+    depends_on:
+      - vllm
+    volumes:
+      # 应用代码（热重载）
+      - ../../flowmind-ai-flow/ai-service/app:/app/app
+      # 日志文件
+      - ../../logs/ai-service:/app/data/logs
+    # 健康检查：使用 Python urllib（不需要额外安装 curl）
+    # 增加 start_period 给服务更多启动时间
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - flowmind-network
+
+networks:
+  flowmind-network:
+    external: true

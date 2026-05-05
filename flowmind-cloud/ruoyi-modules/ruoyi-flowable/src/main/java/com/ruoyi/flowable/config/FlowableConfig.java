@@ -2,8 +2,10 @@ package com.ruoyi.flowable.config;
 
 import org.flowable.spring.SpringProcessEngineConfiguration;
 import org.flowable.spring.boot.EngineConfigurationConfigurer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * @author XuanXuan
@@ -11,7 +13,12 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class FlowableConfig implements EngineConfigurationConfigurer<SpringProcessEngineConfiguration> {
-
+    
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate(new SimpleClientHttpRequestFactory());
+    }
+    
     @Override
     public void configure(SpringProcessEngineConfiguration engineConfiguration) {
         engineConfiguration.setActivityFontName("宋体");

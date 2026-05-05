@@ -1,23 +1,23 @@
 # Tomcat
 server:
-  port: 9100
+  port: 9008
 
 # Spring
 spring: 
   application:
     # 应用名称
-    name: ruoyi-monitor
+    name: flowmind-monitor
   profiles:
     # 环境配置
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   cloud:
     nacos:
       discovery:
-        # 服务注册地址
-        server-addr: 192.168.0.133
+        # 服务注册地址（Docker 容器内: flowmind-nacos:8848，本地开发: localhost:18848）
+        server-addr: ${SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR:localhost:18848}
       config:
         # 配置中心地址
-        server-addr: 192.168.0.133
+        server-addr: ${SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR:localhost:18848}
         # 配置文件格式
         file-extension: yml
         # 共享配置

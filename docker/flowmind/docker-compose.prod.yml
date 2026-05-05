@@ -1,0 +1,379 @@
+# FlowMind 生产环境 Docker Compose 配置
+# 一键部署：MySQL, Redis, Nacos, Java 微服务（全部8个）, AI 服务, Nginx
+# 使用方式：docker-compose -f docker-compose.prod.yml up -d --build
+# 目录：docker/flowmind/
+
+services:
+  # ==================== 基础服务 ====================
+
+  # MySQL 数据库
+  flowmind-mysql:
+    container_name: flowmind-mysql
+    image: mysql:5.7
+    restart: always
+    ports:
+      - "13306:3306"
+    volumes:
+      - ../cloud/mysql/conf:/etc/mysql/conf.d
+      - ../cloud/mysql/logs:/logs
+      - ../cloud/mysql/data:/var/lib/mysql
+      - ../cloud/sql:/docker-entrypoint-initdb.d
+    command: >
+      mysqld
+      --innodb-buffer-pool-size=512M
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+8:00
+      --lower-case-table-names=1
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: flowmind-cloud
+      TZ: Asia/Shanghai
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存
+  flowmind-redis:
+    container_name: flowmind-redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "16379:6379"
+    volumes:
+      - ../cloud/redis/conf/redis.conf:/flowmind/redis/redis.conf
+      - ../cloud/redis/data:/data
+    command: redis-server /flowmind/redis/redis.conf
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Sentinel 控制台
+  flowmind-sentinel:
+    container_name: flowmind-sentinel
+    image: bladex/sentinel-dashboard:latest
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "8718:8858"
+    networks:
+      - flowmind-network
+
+  # Nacos 注册中心/配置中心
+  flowmind-nacos:
+    container_name: flowmind-nacos
+    image: nacos/nacos-server:v2.3.2
+    restart: always
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:-TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==}
+      - NACOS_AUTH_IDENTITY_KEY=serverIdentity
+      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:-TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ../cloud/nacos/logs:/home/nacos/logs
+      - ../cloud/nacos/conf/application.properties:/home/nacos/conf/application.properties
+    ports:
+      - "18848:8848"
+      - "19090:8080"
+      - "19848:9848"
+      - "19849:9849"
+    depends_on:
+      flowmind-mysql:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ==================== Java 微服务 ====================
+
+  # 网关服务
+  flowmind-gateway:
+    container_name: flowmind-gateway
+    build:
+      context: ../cloud/ruoyi/gateway
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_SENTINEL_TRANSPORT_DASHBOARD=flowmind-sentinel:8858
+      - REDIS_HOST=flowmind-redis
+      - REDIS_PORT=6379
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+      flowmind-redis:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 认证服务
+  flowmind-auth:
+    container_name: flowmind-auth
+    build:
+      context: ../cloud/ruoyi/auth
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - REDIS_HOST=flowmind-redis
+      - REDIS_PORT=6379
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+      flowmind-redis:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # System 模块服务
+  flowmind-system:
+    container_name: flowmind-system
+    build:
+      context: ../cloud/ruoyi/modules/system
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - REDIS_HOST=flowmind-redis
+      - REDIS_PORT=6379
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+      flowmind-redis:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Flowable 工作流模块服务
+  flowmind-flowable:
+    container_name: flowmind-flowable
+    build:
+      context: ../cloud/ruoyi/modules/flowable
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - REDIS_HOST=flowmind-redis
+      - REDIS_PORT=6379
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+      flowmind-redis:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # File 文件模块服务(可选)
+  flowmind-file:
+    container_name: flowmind-file
+    build:
+      context: ../cloud/ruoyi/modules/file
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Gen 代码生成模块服务(可选)
+  flowmind-gen:
+    container_name: flowmind-gen
+    build:
+      context: ../cloud/ruoyi/modules/gen
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Job 定时任务模块服务(可选)
+  flowmind-job:
+    container_name: flowmind-job
+    build:
+      context: ../cloud/ruoyi/modules/job
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Visual 监控模块服务(可选)
+  flowmind-monitor:
+    container_name: flowmind-monitor
+    build:
+      context: ../cloud/ruoyi/visual/monitor
+    restart: always
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=flowmind-nacos:8848
+      - SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR=flowmind-nacos:8848
+      - TZ=Asia/Shanghai
+    depends_on:
+      flowmind-nacos:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    ports:
+      - "8090:9008"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9008/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ==================== AI 服务 ====================
+
+  # AI 智能设计服务
+  flowmind-ai-service:
+    container_name: flowmind-ai-service
+    build:
+      context: ../../flowmind-ai-flow/ai-service
+      dockerfile: ../../docker/ai-service/Dockerfile
+    restart: always
+    env_file:
+      - ../../flowmind-ai-flow/ai-service/.env
+    environment:
+      - ENV_TYPE=prod
+      - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
+      # Redis 配置
+      - REDIS_HOST=flowmind-redis
+      - REDIS_PORT=6379
+      # 服务配置
+      - SERVICE_PORT=8000
+      # Nacos 配置（覆盖 .env 中的 localhost）
+      - NACOS_SERVER_ADDR=flowmind-nacos:8848
+      - NACOS_REGISTER_IP=flowmind-ai-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      flowmind-redis:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==================== Nginx 前端 ====================
+
+  # Nginx 反向代理 + 前端
+  flowmind-nginx:
+    container_name: flowmind-nginx
+    build:
+      context: ../cloud/nginx
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "80:80"
+    volumes:
+      - ../cloud/nginx/html/dist:/flowmind/flowmind-ui
+      - ../cloud/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+      - ../cloud/nginx/logs:/var/log/nginx
+    depends_on:
+      - flowmind-gateway
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+# ==================== 网络配置 ====================
+networks:
+  flowmind-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

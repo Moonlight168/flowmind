@@ -69,16 +69,21 @@
       </el-form>
       <template #footer>
         <div class="dialog-footer">
+          <el-button type="warning" plain icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
           <el-button type="primary" @click="submitForm">确 定</el-button>
           <el-button @click="cancel">取 消</el-button>
         </div>
       </template>
     </el-dialog>
+
+    <AiDesignDialog ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
   </div>
 </template>
 
 <script setup name="Category" >
 import { listCategory, getCategory, delCategory, addCategory, updateCategory } from "@/api/workflow/category";
+import { watch } from 'vue';
+import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
 
 const { proxy } = getCurrentInstance();
 
@@ -89,6 +94,8 @@ const ids = ref([]);
 const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
+const aiDesignVisible = ref(false);
+const aiDesignDialogRef = ref();
 
 const queryFormRef = ref();
 const categoryFormRef = ref();
@@ -196,6 +203,26 @@ const handleExport = () => {
     ...queryParams.value
   }, `category_${new Date().getTime()}.xlsx`);
 }
+/** AI 设计按钮 */
+const handleAiDesign = () => {
+  aiDesignVisible.value = true;
+}
+/** AI 填充数据 */
+const handleAiFill = (formData) => {
+  if (formData) {
+    form.value.categoryName = formData.category_name || '';
+    form.value.code = formData.code || '';
+    form.value.remark = formData.remark || '';
+  }
+  aiDesignVisible.value = false;
+}
+
+// 监听主对话框关闭，清空 AI 聊天
+watch(() => dialog.visible, (val) => {
+  if (!val) {
+    aiDesignDialogRef.value?.clearMessages()
+  }
+})
 
 onMounted(() => {
   getList();

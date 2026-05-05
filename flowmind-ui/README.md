@@ -1,168 +1,111 @@
 <p align="center">
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-b99b286755aef70355a7084753f89cdb7c9.png">
 </p>
-<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind v1.0.0</h1>
-<h4 align="center">基于 RuoYi-Cloud 的工作流管理系统，新增审批中心、用户审批页面和草稿箱功能</h4>
+<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind UI v2.0.0</h1>
+<h4 align="center">基于 RuoYi-Vue 前端的工作流管理系统</h4>
 <p align="center">
-	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v1.0.0-brightgreen.svg"></a>
-	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.0.0-brightgreen.svg"></a>
+	<a href="https://github.com/Moonlight168/flowmind-ui/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
 </p>
 
 ## 平台简介
 
-* 本仓库为FlowMind前端项目，基于[RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud)框架进行扩展开发。
-*
-前端技术栈采用 [Vue3](https://v3.cn.vuejs.org) + [Element Plus](https://element-plus.org/zh-CN) + [Vite](https://cn.vitejs.dev)
-版本。
-* 在RuoYi-Cloud原有功能基础上，新增了以下核心功能：
-    * **审批中心**：提供统一的流程审批管理界面，支持待办任务、已办任务、待签任务、我的流程等全方位流程管理
-    * **用户审批页面**：新建专门的用户审批界面，提供更直观、高效的审批操作体验
-    * **草稿箱**：支持流程草稿的保存、编辑和管理，用户可以随时保存未完成的流程申请，稍后继续编辑
-* 配套后端代码仓库地址[FlowMind-Cloud](https://github.com/Moonlight168/flowmind) 版本。
+本项目基于 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue) 前端框架进行扩展开发，集成 AI 智能流程设计功能。
 
-## 前端运行
+**核心功能**：
+
+- **全局 AI 助手**：悬浮式 AI 交互，支持对话历史管理
+- **AI 智能设计**：分类、流程、表单的 AI 生成
+- **审批中心**：待办、已办、待签、我的流程
+- **草稿箱**：流程草稿的保存与管理
+
+---
+
+## 快速开始
+
+### 环境要求
+
+| 软件    | 版本 |
+| ------- | ---- |
+| Node.js | 16+  |
+
+### 安装运行
 
 ```bash
 # 克隆项目
 git clone https://github.com/Moonlight168/flowmind.git
 
 # 进入项目目录
-cd FlowMind-UI
+cd flowmind/flowmind-ui
 
 # 安装依赖
-yarn --registry=https://registry.npmmirror.com
+npm install
 
 # 启动服务
-yarn dev
+npm run dev
 
-# 构建测试环境 yarn build:stage
-# 构建生产环境 yarn build:prod
-# 前端访问地址 http://localhost:80
+# 构建测试环境
+npm run build:stage
+
+# 构建生产环境
+npm run build:prod
 ```
 
-## 系统模块
+### 访问地址
 
-~~~
-com.flowmind     
-├── flowmind-ui           // 前端框架 [80]
-├── flowmind-gateway      // 网关模块 [8080]
-├── flowmind-auth         // 认证中心 [9200]
-├── flowmind-api          // 接口模块
-│       └── flowmind-api-system                  // 系统接口
-├── flowmind-common       // 通用模块
-│       └── flowmind-common-core                  // 核心模块
-│       └── flowmind-common-datascope             // 权限范围
-│       └── flowmind-common-datasource            // 多数据源
-│       └── flowmind-common-log                   // 日志记录
-│       └── flowmind-common-redis                 // 缓存服务
-│       └── flowmind-common-security              // 安全模块
-│       └── flowmind-common-swagger               // 系统接口
-├── flowmind-modules      // 业务模块
-│       └── flowmind-system                       // 系统模块 [9201]
-│       └── flowmind-gen                          // 代码生成 [9202]
-│       └── flowmind-job                          // 定时任务 [9203]
-│       └── flowmind-file                         // 文件服务 [9300]
-│       └── flowmind-flowable                     // 工作流模块 [9204]
-├── flowmind-visual       // 图形化管理模块
-│       └── flowmind-visual-monitor               // 监控中心 [9100]
-├──pom.xml                // 公共依赖
-~~~
+| 环境     | 地址                  |
+| -------- | --------------------- |
+| 开发环境 | http://localhost:5173 |
+| 生产环境 | http://localhost:88   |
 
-## 架构图
+---
 
-<img src="https://oscimg.oschina.net/oscnet/up-82e9722ecb846786405a904bafcf19f73f3.png"/>
+## 功能页面
 
-## 内置功能
-
-### RuoYi-Cloud原有功能
-
-1. 用户管理：用户是系统操作者，该功能主要完成系统用户配置。
-2. 部门管理：配置系统组织机构（公司、部门、小组），树结构展现支持数据权限。
-3. 岗位管理：配置系统用户所属担任职务。
-4. 菜单管理：配置系统菜单，操作权限，按钮权限标识等。
-5. 角色管理：角色菜单权限分配、设置角色按机构进行数据范围权限划分。
-6. 字典管理：对系统中经常使用的一些较为固定的数据进行维护。
-7. 参数管理：对系统动态配置常用参数。
-8. 通知公告：系统通知公告信息发布维护。
-9. 操作日志：系统正常操作日志记录和查询；系统异常信息日志记录和查询。
-10. 登录日志：系统登录日志记录查询包含登录异常。
-11. 在线用户：当前系统中活跃用户状态监控。
-12. 定时任务：在线（添加、修改、删除)任务调度包含执行结果日志。
-13. 代码生成：前后端代码的生成（java、html、xml、sql）支持CRUD下载 。
-14. 系统接口：根据业务代码自动生成相关的api接口文档。
-15. 服务监控：监视当前系统CPU、内存、磁盘、堆栈等相关信息。
-16. 在线构建器：拖动表单元素生成相应的HTML代码。
-17. 连接池监视：监视当前系统数据库连接池状态，可进行分析SQL找出系统性能瓶颈。
-
-### FlowMind新增功能
-
-18. **审批中心**：
-    * 待办任务：显示当前用户需要处理的任务列表
-    * 已办任务：显示当前用户已经处理完成的任务列表
-    * 待签任务：显示当前用户可以签收的任务列表
-    * 我的流程：显示当前用户发起的流程实例列表
-    * 流程详情：查看流程实例的详细信息、流程图和审批记录
-
-19. **用户审批页面**：
-    * 专门设计的审批操作界面，优化用户审批体验
-    * 支持批量审批、快速决策和一键通过/驳回功能
-    * 提供审批历史查看和审批意见模板功能
-    * 集成智能推荐功能，辅助审批决策
-
-20. **草稿箱**：
-    * 草稿列表：显示用户保存的流程草稿列表
-    * 草稿编辑：支持编辑已保存的草稿，继续完善流程申请
-    * 草稿删除：支持删除不需要的草稿
-    * 草稿转正：支持将草稿直接转换为正式流程申请
-
-## 在线体验
-
-演示地址：https://codebyggbond.dpdns.org/series/myprojects/FlowMind/
-文档地址：https://codebyggbond.dpdns.org/series/myprojects/FlowMind/
-
-## FlowMind特色功能演示
-
-### 审批中心
-
-* 统一的流程审批管理界面，支持多种流程类型的审批
-* 直观的任务列表展示，清晰区分待办、已办、待签等不同状态
-* 详细的流程跟踪功能，实时查看流程进度和审批记录
-
-### 用户审批页面
-
-* 专门设计的用户友好审批界面，提供流畅的审批操作体验
-* 支持批量审批功能，提高审批效率
-* 智能审批辅助功能，提供决策参考和审批建议
-* 个性化审批设置，支持自定义审批快捷操作
-
-### 草稿箱
-
-* 支持流程草稿的随时保存，避免数据丢失
-* 灵活的草稿管理功能，支持编辑、删除和提交
-* 与审批中心无缝集成，草稿可直接转换为正式流程申请
-
-## 演示图
-
-### 用户界面
-
-#### FlowMind特色功能界面
+### 工作台与审批
 
 <table>
     <tr>
-        <td><img src="./src/assets/images/README/流程发起.png" alt="流程发起" width="100%"/><br/><div style="text-align: center;">流程发起</div></td>
-        <td><img src="./src/assets/images/README/草稿箱.png" alt="草稿箱" width="100%"/><br/><div style="text-align: center;">草稿箱</div></td>
-    </tr>
-    <tr>
         <td><img src="./src/assets/images/README/工作台.png" alt="工作台" width="100%"/><br/><div style="text-align: center;">工作台</div></td>
-        <td><img src="./src/assets/images/README/审批中心待办事项.png" alt="审批中心待办事项" width="100%"/><br/><div style="text-align: center;">审批中心待办事项</div></td>
+        <td><img src="./src/assets/images/README/流程发起.png" alt="流程发起" width="100%"/><br/><div style="text-align: center;">流程发起</div></td>
     </tr>
     <tr>
+        <td><img src="./src/assets/images/README/审批中心待办事项.png" alt="审批中心待办事项" width="100%"/><br/><div style="text-align: center;">审批中心待办事项</div></td>
         <td><img src="./src/assets/images/README/我的流程.png" alt="我的流程" width="100%"/><br/><div style="text-align: center;">我的流程</div></td>
+    </tr>
+    <tr>
+        <td><img src="./src/assets/images/README/草稿箱.png" alt="草稿箱" width="100%"/><br/><div style="text-align: center;">草稿箱</div></td>
         <td><img src="./src/assets/images/README/个人信息.png" alt="个人信息" width="100%"/><br/><div style="text-align: center;">个人信息</div></td>
     </tr>
 </table>
 
-### 管理员界面
+### AI 功能
+
+<table>
+    <tr>
+        <td><img src="./src/assets/images/README/全局ai助手.png" alt="全局AI助手" width="100%"/><br/><div style="text-align: center;">全局 AI 助手</div></td>
+        <td><img src="./src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
+    </tr>
+    <tr>
+        <td><img src="./src/assets/images/README/表单设计新增ai设计按钮.png" alt="表单设计AI按钮" width="100%"/><br/><div style="text-align: center;">表单设计 AI 按钮</div></td>
+        <td><img src="./src/assets/images/README/流程设计新增ai设计按钮.png" alt="流程设计AI按钮" width="100%"/><br/><div style="text-align: center;">流程设计 AI 按钮</div></td>
+    </tr>
+</table>
+
+### 流程管理
+
+<table>
+    <tr>
+        <td><img src="./src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
+        <td><img src="./src/assets/images/README/流程部署.png" alt="流程部署" width="100%"/><br/><div style="text-align: center;">流程部署</div></td>
+    </tr>
+    <tr>
+        <td><img src="./src/assets/images/README/流程设计.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">流程设计</div></td>
+        <td><img src="./src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
+    </tr>
+</table>
+
+### 系统管理
 
 <table>
     <tr>
@@ -185,19 +128,73 @@ com.flowmind
         <td><img src="https://oscimg.oschina.net/oscnet/5e8c387724954459291aafd5eb52b456f53.jpg" alt="通知公告" width="100%"/><br/><div style="text-align: center;">通知公告</div></td>
         <td><img src="https://oscimg.oschina.net/oscnet/644e78da53c2e92a95dfda4f76e6d117c4b.jpg" alt="日志管理" width="100%"/><br/><div style="text-align: center;">日志管理</div></td>
     </tr>
-
 </table>
 
-### 流程管理
+---
 
-<table> 
-    <tr>
-        <td><img src="./src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
-        <td><img src="./src/assets/images/README/流程部署.png" alt="流程部署" width="100%"/><br/><div style="text-align: center;">流程部署</div></td>
-    </tr>
-    <tr>
-        <td><img src="./src/assets/images/README/流程设计.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">流程设计</div></td>
-        <td><img src="./src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
-        <td></td>
-    </tr> 
-</table>
+## 技术栈
+
+| 技术               | 说明        |
+| ------------------ | ----------- |
+| Vue 3.5+           | 渐进式框架  |
+| Element Plus 2.10+ | UI 组件库   |
+| Vite 6.x           | 构建工具    |
+| Pinia              | 状态管理    |
+| Vue Router 4.x     | 路由管理    |
+| Axios              | HTTP 客户端 |
+| BPMN-JS            | 流程设计器  |
+| v-form-designer    | 表单设计器  |
+
+---
+
+## 项目结构
+
+```
+flowmind-ui/
+├── src/
+│   ├── api/                 # API 接口
+│   ├── assets/              # 资源文件
+│   ├── components/          # 通用组件
+│   ├── layout/              # 布局组件
+│   ├── router/              # 路由配置
+│   ├── store/               # 状态管理
+│   ├── utils/               # 工具函数
+│   ├── views/               # 页面组件
+│   ├── App.vue              # 根组件
+│   └── main.js              # 入口文件
+├── vite.config.js           # Vite 配置
+└── package.json             # 依赖配置
+```
+
+---
+
+## 开发指南
+
+### 环境变量
+
+```bash
+# .env.development
+VITE_APP_TITLE=FlowMind 管理系统
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+### 添加新页面
+
+1. 在 `src/views/` 目录下创建页面组件
+2. 在 `src/router/` 目录下配置路由
+3. 在 `src/api/` 目录下创建 API 接口
+
+---
+
+## 浏览器支持
+
+| 浏览器  | 版本   |
+| ------- | ------ |
+| Chrome  | 最新版 |
+| Firefox | 最新版 |
+| Safari  | 最新版 |
+| Edge    | 最新版 |
+
+---
+
+**文档更新日期**: 2026-05-04

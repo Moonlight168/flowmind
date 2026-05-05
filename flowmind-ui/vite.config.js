@@ -42,20 +42,26 @@ export default defineConfig(({ mode, command }) => {
     },
     // vite 相关配置
     server: {
-      port: 80,
+      port: 88,
       host: true,
       open: true,
       proxy: {
         // https://cn.vitejs.dev/config/#server-proxy
         '/dev-api': {
-          target: 'http://localhost:8080',
+          target: 'http://localhost:9001',
           changeOrigin: true,
           rewrite: (p) => p.replace(/^\/dev-api/, '')
         }
       }
     },
-    //fix:error:stdin>:7356:1: warning: "@charset" must be the first rule in the file
+    // CSS 相关配置
     css: {
+      // Sass 配置 - 抑制 @import 弃用警告
+      preprocessorOptions: {
+        scss: {
+          silenceDeprecations: ['import']
+        }
+      },
       postcss: {
         plugins: [
           tailwindcss,

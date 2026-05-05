@@ -1,6 +1,8 @@
 package com.ruoyi.gateway.handler;
 
 import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class ValidateCodeHandler implements HandlerFunction<ServerResponse>
 {
+    private static final Logger log = LoggerFactory.getLogger(ValidateCodeHandler.class);
+
     @Autowired
     private ValidateCodeService validateCodeService;
 
@@ -32,9 +36,15 @@ public class ValidateCodeHandler implements HandlerFunction<ServerResponse>
         {
             ajax = validateCodeService.createCaptcha();
         }
-        catch (CaptchaException | IOException e)
+        catch (CaptchaException e)
         {
-            return Mono.error(e);
+            log.warn("验证码创建失败：{}", e.getMessage());
+            ajax = AjaxResult.error("验证码创建失败：" + e.getMessage());
+        }
+        catch (IOException e)
+        {
+            log.error("验证码 IO 异常：{}", e.getMessage(), e);
+            ajax = AjaxResult.error("验证码服务不可用");
         }
         return ServerResponse.status(HttpStatus.OK).body(BodyInserters.fromValue(ajax));
     }

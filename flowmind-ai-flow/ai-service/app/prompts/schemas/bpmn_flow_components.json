@@ -1,0 +1,308 @@
+{
+  "schema_version": "1.0",
+  "engine": "Flowable BPMN 2.0",
+  "description": "Flowable BPMN 流程组件完整格式定义。AI 只需生成节点类型、名称和核心属性，BPMN XML 由后端自动转换生成。",
+
+  "ai_generation_contract": {
+    "description": "AI 生成规范：AI 只负责生成业务语义字段，BPMN XML 由后端转换",
+    "ai_generates": [
+      "flow_name（流程名称）",
+      "flow_key（流程标识，英文 snake_case）",
+      "category_id（流程分类编码，从可用分类中选择）",
+      "nodes（节点列表）",
+      "edges（节点连线列表，可选，默认按 nodes 顺序自动生成线性流程）"
+    ],
+    "auto_filled_by_backend": [
+      "BPMN XML 完整结构",
+      "startEvent / endEvent（自动生成）",
+      "sequenceFlow（从 edges 或 nodes 顺序自动生成）",
+      "BPMNDI 画布布局信息",
+      "definitions 根元素和命名空间"
+    ]
+  },
+
+  "node_types": {
+    "START_EVENT": {
+      "type": "startEvent",
+      "description": "流程开始事件，每个流程自动包含一个，AI 无需生成",
+      "auto_generated": true
+    },
+    "END_EVENT": {
+      "type": "endEvent",
+      "description": "流程结束事件，每个流程自动包含一个，AI 无需生成",
+      "auto_generated": true
+    },
+    "USER_TASK": {
+      "type": "userTask",
+      "description": "用户任务节点，审批流程的核心节点",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["USER_TASK"],
+          "required": true,
+          "description": "节点类型"
+        },
+        "id": {
+          "type": "string",
+          "required": false,
+          "description": "节点唯一标识，AI 可选生成，后端自动生成（如 Task_1）"
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "节点名称，中文（如\"部门经理审批\"、\"HR备案\"）"
+        },
+        "suggested_opinion": {
+          "type": "string",
+          "required": false,
+          "description": "审批意见建议（可选）"
+        },
+        "form_key": {
+          "type": "string",
+          "required": false,
+          "description": "关联表单标识，对应 Flowable 的 flowable:formKey。从可用表单中选择 formId，无匹配则留空"
+        },
+        "assignee": {
+          "type": "string",
+          "required": false,
+          "description": "任务审批人表达式。支持 Flowable 表达式：${initiator}（发起人）、${variableName}（流程变量）"
+        },
+        "candidate_groups": {
+          "type": "string",
+          "required": false,
+          "description": "候选角色/组。对应 Flowable 的 flowable:candidateGroups，多个用逗号分隔"
+        },
+        "data_type": {
+          "type": "string",
+          "enum": ["INITIATOR", "ROLES", "USERS", "EXPRESSION"],
+          "required": false,
+          "description": "审批人类型。INITIATOR=发起人，ROLES=角色组，USERS=指定用户，EXPRESSION=表达式"
+        },
+        "candidate_users": {
+          "type": "string",
+          "required": false,
+          "description": "候选用户。对应 Flowable 的 flowable:candidateUsers，多个用逗号分隔"
+        }
+      }
+    },
+    "EXCLUSIVE_GATEWAY": {
+      "type": "exclusiveGateway",
+      "description": "排他网关（XOR），用于条件分支路由。只有一条路径会被执行",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["EXCLUSIVE_GATEWAY"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false,
+          "description": "节点唯一标识"
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "网关名称（可选，如\"条件判断\"）"
+        }
+      }
+    },
+    "PARALLEL_GATEWAY": {
+      "type": "parallelGateway",
+      "description": "并行网关（AND），用于并行执行多条路径",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["PARALLEL_GATEWAY"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "网关名称（可选）"
+        }
+      }
+    },
+    "INTERMEDIATE_THROW_EVENT": {
+      "type": "intermediateThrowEvent",
+      "description": "中间抛出事件，用于流程中的里程碑或通知触发点",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["INTERMEDIATE_THROW_EVENT"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "事件名称（如\"发送通知\"）"
+        }
+      }
+    },
+    "SUB_PROCESS": {
+      "type": "subProcess",
+      "description": "子流程，用于封装一组子任务",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["SUB_PROCESS"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false
+        },
+        "name": {
+          "type": "string",
+          "required": true,
+          "description": "子流程名称"
+        },
+        "nodes": {
+          "type": "array",
+          "required": false,
+          "description": "子流程内部节点列表（可嵌套）"
+        }
+      }
+    },
+    "DATA_OBJECT": {
+      "type": "dataObject",
+      "description": "数据对象引用，表示流程中传递的数据（只读引用，无需 AI 生成）",
+      "auto_generated": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["DATA_OBJECT"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "数据对象名称"
+        }
+      }
+    },
+    "DATA_STORE": {
+      "type": "dataStore",
+      "description": "数据存储引用，表示外部数据存储（如数据库、文件系统）",
+      "auto_generated": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["DATA_STORE"],
+          "required": true
+        },
+        "id": {
+          "type": "string",
+          "required": false
+        },
+        "name": {
+          "type": "string",
+          "required": false,
+          "description": "数据存储名称"
+        }
+      }
+    }
+  },
+
+  "edge_definition": {
+    "description": "节点连线定义。若省略 edges，则按 nodes 数组顺序自动生成线性流程",
+    "properties": {
+      "source": {
+        "type": "string",
+        "required": true,
+        "description": "源节点 ID 或类型（如\"start\"表示开始事件）"
+      },
+      "target": {
+        "type": "string",
+        "required": true,
+        "description": "目标节点 ID 或类型（如\"end\"表示结束事件）"
+      },
+      "condition": {
+        "type": "string",
+        "required": false,
+        "description": "条件表达式，仅排他网关的出线使用。如 ${amount > 10000}"
+      },
+      "name": {
+        "type": "string",
+        "required": false,
+        "description": "连线名称（可选）"
+      }
+    }
+  },
+
+  "flowable_extensions": {
+    "description": "Flowable 扩展属性，自动绑定到 userTask 元素",
+    "namespace": "http://flowable.org/bpmn",
+    "attributes": {
+      "flowable:formKey": "表单标识，由节点的 form_key 属性映射",
+      "flowable:assignee": "审批人，由节点的 assignee 属性映射",
+      "flowable:candidateGroups": "候选组，由节点的 candidate_groups 属性映射",
+      "flowable:candidateUsers": "候选用户，由节点的 candidate_users 属性映射",
+      "flowable:dataType": "审批人类型，由节点的 data_type 属性映射"
+    }
+  },
+
+  "auto_generation_rules": {
+    "start_event": {
+      "description": "每个流程自动添加开始事件，ID 为 StartEvent_1，名称为\"开始\"",
+      "outgoing": "自动连接到第一个节点"
+    },
+    "end_event": {
+      "description": "每个流程自动添加结束事件，ID 为 EndEvent_1，名称为\"结束\"",
+      "incoming": "自动连接到最后一个节点"
+    },
+    "sequence_flow": {
+      "description": "按 edges 定义生成连线。若无 edges，按 nodes 顺序生成线性连线",
+      "id_pattern": "Flow_N（N 从 1 开始递增）"
+    },
+    "bpmn_di": {
+      "description": "自动生成 BPMNDI 画布布局信息（节点坐标、连线路径）",
+      "default_positions": "按从左到右水平排列，默认间距 170px，节点宽 100px 高 80px"
+    }
+  },
+
+  "example_output": {
+    "flow_name": "请假审批流程",
+    "flow_key": "leave_approval",
+    "category_id": "HR_OA_LEAVE",
+    "description": "用于处理员工请假申请",
+    "nodes": [
+      {"type": "USER_TASK", "name": "部门经理审批", "data_type": "INITIATOR", "assignee": "${initiator}"},
+      {"type": "USER_TASK", "name": "HR备案", "data_type": "ROLES", "candidate_groups": "ROLE_HR"}
+    ]
+  },
+
+  "example_with_gateway": {
+    "flow_name": "报销审批流程",
+    "flow_key": "expense_approval",
+    "category_id": "FINANCE",
+    "description": "根据金额分级审批",
+    "nodes": [
+      {"id": "Task_1", "type": "USER_TASK", "name": "填写报销单", "data_type": "INITIATOR", "assignee": "${initiator}"},
+      {"id": "Gw_1", "type": "EXCLUSIVE_GATEWAY", "name": "金额判断"},
+      {"id": "Task_2", "type": "USER_TASK", "name": "部门经理审批", "data_type": "ROLES", "candidate_groups": "ROLE_MANAGER"},
+      {"id": "Task_3", "type": "USER_TASK", "name": "总经理审批", "data_type": "ROLES", "candidate_groups": "ROLE_CEO"},
+      {"id": "Gw_2", "type": "EXCLUSIVE_GATEWAY", "name": "合并"}
+    ],
+    "edges": [
+      {"source": "start", "target": "Task_1"},
+      {"source": "Task_1", "target": "Gw_1"},
+      {"source": "Gw_1", "target": "Task_2", "condition": "${amount <= 10000}"},
+      {"source": "Gw_1", "target": "Task_3", "condition": "${amount > 10000}"},
+      {"source": "Task_2", "target": "Gw_2"},
+      {"source": "Task_3", "target": "Gw_2"},
+      {"source": "Gw_2", "target": "end"}
+    ]
+  }
+}

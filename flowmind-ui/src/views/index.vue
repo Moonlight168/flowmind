@@ -2,21 +2,21 @@
   <div class="app-container home">
     <el-row :gutter="20">
       <el-col :sm="24" :lg="12" style="padding-left: 20px">
-        <h2>FlowMind 企业级应用平台</h2>
+        <h2>FlowMind 智能流程审批平台</h2>
         <p>
-          FlowMind是一款基于Spring Cloud微服务架构的企业级应用平台，提供了完整的前后端解决方案。系统采用Vue3+Element Plus构建现代化前端界面，后端基于Spring Boot和Spring
-          Cloud生态，为企业提供高效、稳定、可扩展的应用开发框架。
+          FlowMind 是一款基于微服务架构的智能流程审批系统，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用 Flowable 工作流引擎，为企业提供高效、稳定、可扩展的审批解决方案。
         </p>
         <p>
           <b>当前版本:</b> <span>v{{ version }}</span>
         </p>
         <p>
-          <el-tag type="success">企业级应用平台</el-tag>
+          <el-tag type="success">智能审批平台</el-tag>
+          <el-tag type="warning" class="ml-2">AI 驱动</el-tag>
         </p>
         <p>
           <el-button type="primary" icon="Cloudy" plain
-            @click="goTarget('https://gitee.com/y_project/RuoYi-Cloud.git')">访问码云</el-button>
-          <el-button icon="HomeFilled" plain @click="goTarget('https://gitee.com/wish168/flowmind')">访问官网</el-button>
+            @click="goTarget('https://github.com/Moonlight168/flowmind')">访问 GitHub</el-button>
+          <el-button icon="HomeFilled" plain @click="goTarget('https://gitee.com/wish168/flowmind')">访问码云</el-button>
         </p>
       </el-col>
 
@@ -30,25 +30,25 @@
           <el-col :span="6">
             <h4>后端技术</h4>
             <ul>
-              <li>Spring Boot</li>
+              <li>Spring Boot 3.x</li>
               <li>Spring Cloud</li>
+              <li>Flowable</li>
               <li>Nacos</li>
-              <li>Sentinel</li>
-              <li>Seata</li>
-              <li>MyBatis Plus</li>
-              <li>...</li>
+              <li>Redis</li>
+              <li>MySQL</li>
+              <li>LangChain/LangGraph</li>
             </ul>
           </el-col>
           <el-col :span="6">
             <h4>前端技术</h4>
             <ul>
               <li>Vue 3</li>
+              <li>TypeScript</li>
               <li>Element Plus</li>
-              <li>Vue Router</li>
               <li>Pinia</li>
               <li>Axios</li>
               <li>Tailwind CSS</li>
-              <li>...</li>
+              <li>BPMN-JS</li>
             </ul>
           </el-col>
         </el-row>
@@ -60,23 +60,18 @@
         <el-card class="update-log">
           <template v-slot:header>
             <div class="clearfix">
-              <span>关于我们</span>
+              <span>系统架构</span>
             </div>
           </template>
           <div class="body">
-            <p>
-              <i class="el-icon-s-promotion"></i> 更多内容：<el-link href="https://codebyggbond.dpdns.org/series/myprojects/FlowMind/"
-                target="_blank">https://codebyggbond.dpdns.org</el-link>
-            </p>
-            <p>
-              <i class="el-icon-chat-dot-round"></i> 邮箱： <a
-                href="mailto:contact@flowmind.example.com">hjf0893@163.com</a>
-            </p>
-            <p>
-              <i class="el-icon-phone"></i> 电话： <a href="tel:400-123-4567">XXXXXXXXX</a>
-            </p>
-            <p>
-              <i class="el-icon-location"></i> 地址： XXXXXXXXXX
+            <ul>
+              <li><strong>flowmind-ui</strong> - Vue3 前端，端口 5173</li>
+              <li><strong>flowmind-cloud</strong> - Spring Cloud 后端，端口 8080</li>
+              <li><strong>flowmind-ai-flow</strong> - AI 服务，端口 8000</li>
+            </ul>
+            <p class="mt-4">
+              <i class="el-icon-s-promotion"></i> 项目地址：<el-link href="https://gitee.com/wish168/flowmind"
+                target="_blank">gitee.com/wish168/flowmind</el-link>
             </p>
           </div>
         </el-card>
@@ -89,10 +84,20 @@
             </div>
           </template>
           <el-collapse accordion>
-            <el-collapse-item title="v1.0.0 - 2025-12-01">
+            <el-collapse-item title="v2.0.0 - 2026-05">
               <ol>
-                <li>集成Flowable引擎</li>
+                <li>AI 设计功能：智能生成分类、流程、表单</li>
+                <li>多轮对话持续优化设计</li>
+                <li>多模型支持：Qwen、vLLM、Doubao</li>
+              </ol>
+            </el-collapse-item>
+            <el-collapse-item title="v1.0.0 - 2025-12">
+              <ol>
+                <li>OA 工作台全新改版</li>
+                <li>待办/已办/待签等功能完善</li>
+                <li>集成 Flowable 引擎</li>
                 <li>实现草稿箱功能</li>
+                <li>基础审批流程</li>
               </ol>
             </el-collapse-item>
           </el-collapse>
@@ -107,13 +112,14 @@
           </template>
           <div class="body">
             <ul>
-              <li>基于Flowable引擎的工作流设计器</li>
+              <li>AI 设计分类：自然语言描述自动生成流程分类</li>
+              <li>AI 设计流程：自动生成 BPMN 流程结构</li>
+              <li>AI 设计表单：自动生成 v-form-designer 表单</li>
+              <li>多轮对话：LangGraph 工作流引擎持续优化</li>
+              <li>BPMN-JS 可视化流程设计器</li>
               <li>可视化表单设计器</li>
               <li>完整的权限管理系统</li>
-              <li>组织架构管理</li>
               <li>流程实例监控与管理</li>
-              <li>任务分配与处理</li>
-              <li>系统集成接口</li>
             </ul>
           </div>
         </el-card>
@@ -123,7 +129,7 @@
 </template>
 
 <script setup name="Index">
-const version = ref('1.0.0')
+const version = ref('2.0.0')
 
 function goTarget(url) {
   window.open(url, '__blank')

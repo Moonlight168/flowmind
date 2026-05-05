@@ -5,6 +5,7 @@
       <template v-if="!$slots['control-header']">
         <el-button-group key="file-control">
           <el-button :size="headerButtonSize" :type="headerButtonType" icon="el-icon-edit-outline" @click="onSave">保存流程</el-button>
+          <slot name="custom-buttons"></slot>
           <el-button :size="headerButtonSize" :type="headerButtonType" :icon="FolderOpened" @click="$refs.refFile.click()">打开文件</el-button>
           <el-tooltip effect="light">
             <template #content>
@@ -284,6 +285,13 @@ export default {
     if (this.bpmnModeler) this.bpmnModeler.destroy();
     this.$emit("destroy", this.bpmnModeler);
     this.bpmnModeler = null;
+  },
+  watch: {
+    modelValue(newVal) {
+      if (newVal && this.bpmnModeler) {
+        this.createNewDiagram(newVal);
+      }
+    }
   },
   methods: {
     onSave () {

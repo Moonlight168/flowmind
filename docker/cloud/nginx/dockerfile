@@ -1,0 +1,13 @@
+# 基础镜像
+FROM nginx
+
+# 挂载目录
+VOLUME /flowmind/flowmind-ui
+# 创建目录
+RUN mkdir -p /flowmind/flowmind-ui
+# 指定路径
+WORKDIR /flowmind/flowmind-ui
+# 复制conf文件到路径
+COPY ./conf/nginx.conf /flowmind/nginx/nginx.conf
+# 复制html文件到路径
+COPY ./html/dist /flowmind/flowmind-ui

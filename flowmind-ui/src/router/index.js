@@ -54,19 +54,6 @@ export const constantRoutes = [
         hidden: true
     },
     {
-        path: '',
-        component: UserLayout,
-        redirect: '/oa/workplace',
-        children: [
-            {
-                path: '/oa/workplace',
-                component: () => import('@/views/oa/workplace/index.vue'),
-                name: 'Workplace',
-                meta: { title: '工作台', icon: 'dashboard', affix: true }
-            },
-        ]
-    },
-    {
         path: '/user',
         component: Layout,
         hidden: true,
@@ -77,6 +64,34 @@ export const constantRoutes = [
                 component: () => import('@/views/system/user/profile/index'),
                 name: 'Profile',
                 meta: { title: '个人中心', icon: 'user' }
+            }
+        ]
+    },
+    // 首页路由
+    {
+        path: '/',
+        component: Layout,
+        redirect: '/index',
+        children: [
+            {
+                path: 'index',
+                component: () => import('@/views/index'),
+                name: 'Index',
+                meta: { title: '首页', icon: 'icon', affix: true }
+            }
+        ]
+    },
+    // OA工作台路由 - 使用UserLayout，完全跳转不嵌入后台
+    {
+        path: '/oa',
+        component: UserLayout,
+        redirect: '/oa/workplace',
+        children: [
+            {
+                path: 'workplace',
+                component: () => import('@/views/oa/workplace/index.vue'),
+                name: 'Workplace',
+                meta: { title: '工作台', icon: 'dashboard', affix: true }
             }
         ]
     },
@@ -91,19 +106,6 @@ export const notFoundRoute = {
 
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
-    {
-        path: '/admin',
-        component: Layout,
-        redirect: '/admin/index',
-        children: [
-            {
-                path: 'index',
-                component: () => import('@/views/index'),
-                name: 'Index',
-                meta: { title: '首页', icon: 'dashboard', affix: true }
-            }
-        ]
-    },
     {
         path: '/system/user-auth',
         component: Layout,
@@ -171,6 +173,21 @@ export const dynamicRoutes = [
                 component: () => import('@/views/tool/gen/editTable'),
                 name: 'GenEdit',
                 meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
+            }
+        ]
+    },
+    // 流程模型管理路由（支持 AI 助手跳转）
+    {
+        path: '/workflow/model',
+        component: Layout,
+        hidden: true,
+        permissions: ['workflow:model:list'],
+        children: [
+            {
+                path: 'index',
+                component: () => import('@/views/workflow/model/index.vue'),
+                name: 'Model',
+                meta: { title: '流程模型', activeMenu: '/workflow/model', icon: '' }
             }
         ]
     },
@@ -264,7 +281,7 @@ export const oaRoutes = [
                 path: 'task',
                 component: () => import('@/views/oa/task/index.vue'),
                 name: 'Task',
-                meta: { title: '任务中心', icon: 'todo' },
+                meta: { title: '任务中心', icon: 'skill' },
                 redirect: '/oa/task/todo',
                 children: [
                     {

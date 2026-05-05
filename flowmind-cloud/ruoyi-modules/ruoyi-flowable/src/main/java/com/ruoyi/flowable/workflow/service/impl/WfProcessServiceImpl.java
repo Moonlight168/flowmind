@@ -291,9 +291,12 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         TaskQuery taskQuery = taskService.createTaskQuery()
             .active()
             .includeProcessVariables()
-            .taskCandidateOrAssigned(TaskUtils.getUserId())
-            .taskCandidateGroupIn(TaskUtils.getCandidateGroup())
-            .orderByTaskCreateTime().desc();
+            .taskCandidateOrAssigned(TaskUtils.getUserId());
+        List<String> candidateGroups = TaskUtils.getCandidateGroup();
+        if (CollUtil.isNotEmpty(candidateGroups)) {
+            taskQuery.taskCandidateGroupIn(candidateGroups);
+        }
+        taskQuery.orderByTaskCreateTime().desc();
         // 构建搜索条件
         ProcessUtils.buildProcessSearch(taskQuery, processQuery);
         page.setTotal(taskQuery.count());
@@ -1095,19 +1098,25 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         Long userId = SecurityUtils.getUserId();
         
         // 待办数量 - 包括直接分配给用户和用户所在组的任务
-        long todoCount = taskService.createTaskQuery()
+        TaskQuery todoQuery = taskService.createTaskQuery()
             .active()
-            .taskCandidateOrAssigned(TaskUtils.getUserId())
-            .taskCandidateGroupIn(TaskUtils.getCandidateGroup())
-            .count();
+            .taskCandidateOrAssigned(TaskUtils.getUserId());
+        List<String> todoCandidateGroups = TaskUtils.getCandidateGroup();
+        if (CollUtil.isNotEmpty(todoCandidateGroups)) {
+            todoQuery.taskCandidateGroupIn(todoCandidateGroups);
+        }
+        long todoCount = todoQuery.count();
         counts.put("todoCount", todoCount);
-        
+
         // 待签数量 - 包括用户可签收的任务和用户所在组可签收的任务
-        long claimCount = taskService.createTaskQuery()
+        TaskQuery claimQuery = taskService.createTaskQuery()
             .active()
-            .taskCandidateUser(TaskUtils.getUserId())
-            .taskCandidateGroupIn(TaskUtils.getCandidateGroup())
-            .count();
+            .taskCandidateUser(TaskUtils.getUserId());
+        List<String> claimCandidateGroups = TaskUtils.getCandidateGroup();
+        if (CollUtil.isNotEmpty(claimCandidateGroups)) {
+            claimQuery.taskCandidateGroupIn(claimCandidateGroups);
+        }
+        long claimCount = claimQuery.count();
         counts.put("claimCount", claimCount);
         
         // 已办数量 - 只查询已完成的任务

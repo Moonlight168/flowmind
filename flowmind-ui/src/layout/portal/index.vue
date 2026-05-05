@@ -14,7 +14,7 @@
             class="flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 group text-gray-600 hover:bg-gray-100"
             active-class="bg-green-50 !text-green-600 font-medium"
         >
-          <el-icon :size="20" class="mb-0.5 group-hover:scale-105 transition-transform"><Grid /></el-icon>
+          <svg-icon icon-class="dashboard" class="mb-0.5 group-hover:scale-105 transition-transform" style="width: 20px; height: 20px;" />
           <span class="text-[11px]">工作台</span>
         </router-link>
 
@@ -26,7 +26,7 @@
           <div v-if="todoCount > 0" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center border border-white">
             {{ todoCount > 99 ? '99+' : todoCount }}
           </div>
-          <el-icon :size="20" class="mb-0.5 group-hover:scale-105 transition-transform"><Finished /></el-icon>
+          <svg-icon icon-class="skill" class="mb-0.5 group-hover:scale-105 transition-transform" style="width: 20px; height: 20px;" />
           <span class="text-[11px]">审批</span>
         </router-link>
 
@@ -86,7 +86,7 @@ import {useRoute, useRouter} from 'vue-router'
 import useUserStore from '@/store/modules/user'
 import usePermissionStore from '@/store/modules/permission'
 import {isHttp} from '@/utils/validate'
-import {Grid, Finished, Monitor, User, SwitchButton} from '@element-plus/icons-vue'
+import {Monitor, User, SwitchButton} from '@element-plus/icons-vue'
 import {getTaskCounts} from '@/api/workflow/work/process'
 
 const route = useRoute()
@@ -131,7 +131,7 @@ const goToAdmin = async () => {
     })
   }
   
-  await router.push('/admin/index')
+  await router.push('/index')
 }
 
 // 导航到个人信息页面

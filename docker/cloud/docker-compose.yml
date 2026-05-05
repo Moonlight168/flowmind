@@ -1,0 +1,87 @@
+services:
+  flowmind-nacos:
+    container_name: flowmind-nacos
+    image: nacos/nacos-server:v2.3.2
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      # Nacos 3.x / 2.4+ 启动必需的 3 项
+      - NACOS_AUTH_TOKEN=TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==
+      - NACOS_AUTH_IDENTITY_KEY=serverIdentity
+      - NACOS_AUTH_IDENTITY_VALUE=TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./nacos/logs/:/home/nacos/logs
+      - ./nacos/conf/application.properties:/home/nacos/conf/application.properties
+    ports:
+      - "18848:8848"
+      - "19090:8080"
+      - "19848:9848"
+      - "19849:9849"
+    depends_on:
+      - flowmind-mysql
+    networks:
+      - flowmind-network
+
+  flowmind-mysql:
+    container_name: flowmind-mysql
+    image: mysql:5.7
+    build:
+      context: ./mysql
+    ports:
+      - "13306:3306"
+    volumes:
+      - ./mysql/conf:/etc/mysql/conf.d
+      - ./mysql/logs:/logs
+      - ./mysql/data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d
+    command: [
+          'mysqld',
+          '--innodb-buffer-pool-size=80M',
+          '--character-set-server=utf8mb4',
+          '--collation-server=utf8mb4_unicode_ci',
+          '--default-time-zone=+8:00',
+          '--lower-case-table-names=1'
+        ]
+    environment:
+      MYSQL_DATABASE: 'flowmind-cloud'
+      MYSQL_ROOT_PASSWORD: 123456
+      TZ: Asia/Shanghai
+    networks:
+      - flowmind-network
+
+  flowmind-redis:
+    container_name: flowmind-redis
+    image: redis
+    build:
+      context: ./redis
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "16379:6379"
+    volumes:
+      - ./redis/conf/redis.conf:/flowmind/redis/redis.conf
+      - ./redis/data:/data
+    command: redis-server /flowmind/redis/redis.conf
+    networks:
+      - flowmind-network
+
+  # 开发环境注释掉，不需要 nginx
+  # flowmind-nginx:
+  #   container_name: flowmind-nginx
+  #   image: nginx
+  #   build:
+  #     context: ./nginx
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/html/dist:/flowmind/flowmind-ui
+  #     - ./nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+  #     - ./nginx/logs:/var/log/nginx
+  #     - ./nginx/conf.d:/etc/nginx/conf.d
+  #   networks:
+  #     - flowmind-network
+
+networks:
+  flowmind-network:
+    external: true

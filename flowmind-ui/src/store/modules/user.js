@@ -80,7 +80,12 @@ const useUserStore = defineStore(
             removeToken()
             resolve()
           }).catch(error => {
-            reject(error)
+            // logout 失败时也要清除本地状态，确保用户能退出
+            this.token = ''
+            this.roles = []
+            this.permissions = []
+            removeToken()
+            resolve()
           })
         })
       }

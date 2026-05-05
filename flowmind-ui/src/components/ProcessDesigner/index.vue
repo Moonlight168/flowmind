@@ -15,7 +15,11 @@
       @init-finished="initModeler"
       @element-contextmenu="elementContextmenu"
       @save="onSaveProcess"
-    />
+    >
+      <template #custom-buttons>
+        <slot name="custom-buttons" v-bind="controlForm"></slot>
+      </template>
+    </my-process-designer>
     <my-process-penal :bpmn-modeler="modeler" :prefix="controlForm.prefix" class="process-panel" />
 
     <!-- demo config -->
@@ -93,7 +97,7 @@ export default {
   },
   data () {
     return {
-      height: document.documentElement.clientHeight - 94.5 + "px;",
+      height: 'calc(100vh - 200px)',
       xmlString: this.bpmnXml,
       modeler: null,
       controlDrawerVisible: false,
@@ -127,6 +131,12 @@ export default {
       this.reloadIndex += 1;
       this.modeler = null; // 避免 panel 异常
     },
+    // 监听 bpmnXml prop 变化并更新 xmlString
+    updateBpmnXml(newVal) {
+      if (newVal && newVal !== this.xmlString) {
+        this.xmlString = newVal;
+      }
+    },
     changeLabelEditingStatus(status) {
       this.addis.labelEditing = status ? { labelEditingProvider: ['value', ''] } : false;
       this.reloadProcessDesigner();
@@ -147,6 +157,14 @@ export default {
     },
     onSaveProcess(saveData) {
       this.$emit('save', saveData);
+    }
+  },
+  watch: {
+    bpmnXml: {
+      handler(newVal) {
+        this.updateBpmnXml(newVal);
+      },
+      immediate: true
     }
   }
 }

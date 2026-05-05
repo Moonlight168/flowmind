@@ -106,11 +106,22 @@
       </el-form>
       <template #footer>
         <div class="dialog-footer">
+          <el-button type="warning" plain icon="MagicStick" @click="handleAiDesignBasic">AI 设计</el-button>
           <el-button type="primary" @click="submitForm">确 定</el-button>
           <el-button @click="cancel">取 消</el-button>
         </div>
       </template>
     </el-dialog>
+
+    <!-- 基础信息 AI 设计对话框 -->
+    <AiDesignDialog
+      ref="aiDesignBasicDialogRef"
+      v-model="aiDesignBasicVisible"
+      designType="flow"
+      mode="basic"
+      :formData="form"
+      @fill="handleAiFillBasic"
+    />
 
     <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen>
       <ProcessDesigner
@@ -120,8 +131,22 @@
         :designer-form="designerForm"
         :bpmn-xml="bpmnXml"
         @save="onSaveDesigner"
-      />
+      >
+        <template #custom-buttons>
+          <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
+        </template>
+      </ProcessDesigner>
     </el-dialog>
+
+    <!-- AI 设计对话框 -->
+    <AiDesignDialog
+      ref="aiDesignDialogRef"
+      v-model="aiDesignVisible"
+      designType="flow"
+      mode="design"
+      :formData="designerFlowInfo"
+      @fill="handleAiFill"
+    />
 
     <el-dialog :title="history.title" v-model="history.visible" append-to-body>
       <el-table v-loading="historyLoading" :data="historyList" @selection-change="handleSelectionChange">
@@ -163,6 +188,8 @@ import { getBpmnXml, listModel, historyModel, latestModel, addModel, updateModel
 import { listAllCategory } from "@/api/workflow/category";
 import ProcessDesigner from "@/components/ProcessDesigner";
 import ProcessViewer from "@/components/ProcessViewer";
+import { useAiSessionStore } from '@/store/modules/aiSession';
+import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
 
 const { proxy } = getCurrentInstance() ;
 
@@ -186,6 +213,11 @@ const historyTotal = ref(0);
 const modelFormRef = ref();
 const queryFormRef = ref();
 const modelDesignerRef = ref(null)
+const aiDesignVisible = ref(false);
+const aiDesignDialogRef = ref();
+const aiDesignBasicVisible = ref(false);
+const aiDesignBasicDialogRef = ref();
+const designerFlowInfo = ref({});
 
 const dialog = reactive({
   visible: false,
@@ -245,6 +277,7 @@ const designerForm = reactive({
 const { queryParams, form, rules } = toRefs(data);
 
 const router = useRouter();
+const aiSession = useAiSessionStore();
 
 /** 查询模型列表 */
 const getList = async () => {
@@ -289,7 +322,7 @@ const handleAdd = () => {
   })
 }
 /** 修改按钮操作 */
-const handleUpdate = (row) => {
+const handleUpdate = async (row) => {
   dialog.visible = true;
   dialog.title = "修改模型";
   nextTick(async () => {
@@ -312,11 +345,11 @@ const handleExport = () => {
   proxy?.download("flowable/model/export", {
     ...queryParams.value
   }, `model_${new Date().getTime()}.xlsx`);
-};
+}
 /** 查看流程图 */
 const handleProcessView = async (row) => {
   reloadIndex.value++;
-  // 发送请求，获取xml
+  // 发送请求，获取 xml
   const res = await getBpmnXml(row.modelId);
   processXml.value = res.data;
   processDialog.visible = true;
@@ -327,6 +360,13 @@ const handleDesigner = async (row) => {
   designerForm.modelId = row.modelId;
   const res = await getBpmnXml(row.modelId);
   bpmnXml.value = res.data || '';
+  designerFlowInfo.value = {
+    modelId: row.modelId,
+    modelName: row.modelName,
+    modelKey: row.modelKey,
+    category: row.category,
+    description: row.description || ''
+  };
   designerLoading.value = false;
   designer.title = "流程设计 - " + row.modelName;
   designer.visible = true;
@@ -344,7 +384,7 @@ const handleDeploy = (row) => {
   });
 }
 const handleLatest = async (row) => {
-  await proxy.$modal.confirm('是否将此模型保存为新版本?');
+  await proxy.$modal.confirm('是否将此模型保存为新版本？');
   historyLoading.value = true;
   await latestModel({modelId: row.modelId});
   history.visible = false;
@@ -367,9 +407,10 @@ const handleHistory = (row) => {
   getHistoryList();
 }
 /** 提交表单操作 */
-const submitForm = () => {
+const submitForm = async () => {
   modelFormRef.value.validate(async (valid) => {
     if (valid) {
+      // 普通模式：直接保存模型
       form.value.modelId ? await updateModel(form.value) : await addModel(form.value);
       proxy.$modal.msgSuccess("操作成功");
       dialog.visible = false;
@@ -385,11 +426,26 @@ const getCategoryList = async () => {
 
 const onSaveDesigner = async (str) => {
   bpmnXml.value = str;
+
+  // 检查是否为新模型（AI 生成的流程）
+  if (!designerForm.modelId) {
+    // 新模型，先弹出表单让用户填写模型信息
+    dialog.visible = true;
+    dialog.title = "新增模型";
+    form.value = {
+      ...initFormData,
+      modelName: designerForm.form.processName || '新流程',
+      modelKey: designerForm.form.processKey || `Process_${new Date().getTime()}`
+    };
+    return;
+  }
+
+  // 已有模型，直接询问是否保存为新版本
   let dataBody = {
     modelId: designerForm.modelId,
     bpmnXml: str
   }
-  proxy.$modal.confirm('是否将此模型保存为新版本?').then(() => {
+  proxy.$modal.confirm('是否将此模型保存为新版本？').then(() => {
     confirmSave(dataBody, true)
   }).catch(action => {
     if (action === 'cancel') {
@@ -419,9 +475,73 @@ const categoryFormat = (row) => {
     return category ? category.categoryName : '';
 }
 
-onMounted(() => {
+/** 基础信息表单 AI 设计按钮 */
+const handleAiDesignBasic = () => {
+  aiDesignBasicVisible.value = true;
+};
+
+/** 基础信息表单 AI 填充 */
+const handleAiFillBasic = (data) => {
+  if (!data) return;
+  if (data.flow_name) {
+    form.value.modelName = data.flow_name;
+  }
+  if (data.code) {
+    form.value.category = data.code;
+  }
+  if (data.description) {
+    form.value.description = data.description;
+  }
+  aiDesignBasicVisible.value = false;
+};
+
+/** 可视化设计 AI 设计按钮 */
+const handleAiDesign = () => {
+  aiDesignVisible.value = true;
+};
+
+/** 可视化设计 AI 填充 */
+const handleAiFill = (data) => {
+  if (!data) return;
+  // 填充 BPMN XML 到设计器
+  if (data.bpmn_xml && data.bpmn_xml.trim()) {
+    bpmnXml.value = data.bpmn_xml;
+  }
+  // 填充流程基本信息
+  if (data.flow_name) {
+    designerForm.form.processName = data.flow_name;
+  }
+  if (data.flow_key) {
+    designerForm.form.processKey = data.flow_key;
+  }
+  aiDesignVisible.value = false;
+};
+
+// 监听基础信息对话框关闭，清空 AI 聊天
+watch(() => dialog.visible, (val) => {
+  if (!val) {
+    aiDesignBasicDialogRef.value?.clearMessages();
+  }
+});
+
+// 监听设计器关闭，清空 AI 聊天
+watch(() => designer.visible, (val) => {
+  if (!val) {
+    aiDesignDialogRef.value?.clearMessages();
+  }
+});
+
+onMounted(async () => {
   getCategoryList()
   getList();
+
+  // 恢复 AI 会话历史（如有）
+  if (aiSession.hasActiveSession) {
+    const chatHistory = await aiSession.restoreSession()
+    if (chatHistory) {
+      console.log('AI 会话已恢复，历史消息数:', chatHistory.length)
+    }
+  }
 });
 </script>
 

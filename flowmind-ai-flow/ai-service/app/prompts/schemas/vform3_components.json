@@ -1,0 +1,403 @@
+{
+  "schema_version": "2.0",
+  "form_engine": "VForm3",
+  "description": "VForm3 表单组件完整格式定义。AI 只需生成 type + options 核心字段，其他元数据由前端自动补充。",
+
+  "ai_generation_contract": {
+    "description": "AI 生成规范：AI 只负责生成业务语义字段，其他全部由前端自动补全",
+    "ai_generates": [
+      "type（组件类型）",
+      "formItemFlag（固定 true，字段组件）",
+      "options.name（字段绑定名）",
+      "options.label（字段标签）",
+      "options.defaultValue（默认值，可选）",
+      "options.placeholder（占位文本，可选）",
+      "options.disabled（是否禁用，可选）",
+      "options.required（是否必填，可选）",
+      "options.optionItems（选项列表，用于 select/radio/checkbox/cascader）",
+      "options.format / options.valueFormat（日期时间格式，可选）",
+      "options.multiple（是否多选，用于 select/cascader）",
+      "options.rows（文本域行数，用于 textarea）",
+      "options.type（输入类型，用于 input/date）"
+    ],
+    "auto_filled_by_frontend": [
+      "key（随机数字 ID）",
+      "id（字符串唯一 ID）",
+      "icon（组件图标，如 input-field）",
+      "columnWidth（默认 200px）",
+      "labelWidth（默认 null）",
+      "labelAlign（默认空）",
+      "labelHidden（默认 false）",
+      "labelIconClass（默认 null）",
+      "labelIconPosition（默认 rear）",
+      "labelTooltip（默认 null）",
+      "hidden（默认 false）",
+      "clearable（默认 true）",
+      "validation / validationHint（默认空）",
+      "requiredHint（默认空）",
+      "customClass（默认空）",
+      "所有事件回调（onCreated/onMounted/onChange 等，默认空字符串）"
+    ]
+  },
+
+  "form_config": {
+    "description": "formConfig 由前端自动生成，AI 只需提供业务相关配置",
+    "ai_generates": ["layoutType（固定 PC）", "jsonVersion（固定 3）", "modelName", "refName", "labelWidth", "labelPosition"],
+    "auto_filled_by_frontend": ["rulesName", "size", "labelAlign", "cssCode", "customClass", "functions", "onFormCreated", "onFormMounted", "onFormDataChange", "onFormValidate"]
+  },
+
+  "containers": {
+    "description": "容器组件用于布局，包含子组件。AI 仅生成 type + options.name + options.label，其他由前端补全。",
+    "types": {
+      "grid": {
+        "name": "栅格",
+        "type": "grid",
+        "category": "container",
+        "children": "容器组件和字段组件",
+        "features": ["24栅格列", "响应式布局", "容器嵌套"],
+        "limitations": ["不可按像素指定宽度或高度"],
+        "ai_generates": ["type", {"options": ["name", "label", "hidden", "gutter", "colHeight", "customClass"]}],
+        "grid_col_structure": {
+          "description": "grid 的每一列是一个 grid-col 对象",
+          "ai_generates": ["type", {"options": ["name", "hidden", "span", "offset", "customClass"]}],
+          "auto_filled": ["key", "id", "icon", "internal: true", "widgetList: []", "responsive", "md", "sm", "xs", "push", "pull"]
+        }
+      },
+      "table": {
+        "name": "表格",
+        "type": "table",
+        "category": "container",
+        "children": "容器组件和字段组件",
+        "features": ["合并行或列", "容器嵌套"],
+        "limitations": ["不支持响应式布局"],
+        "ai_generates": ["type", {"options": ["name", "hidden", "customClass"]}],
+        "row_structure": {
+          "description": "table 的 rows 是行数组，每行 cols 是单元格数组",
+          "cell_options": ["name", "cellWidth", "cellHeight", "colspan", "rowspan", "customClass"]
+        }
+      },
+      "tab": {
+        "name": "页签",
+        "type": "tab",
+        "category": "container",
+        "children": "容器组件和字段组件",
+        "features": ["多页签展示", "容器嵌套"],
+        "ai_generates": ["type", {"options": ["name", "hidden", "customClass"]}],
+        "tab_pane_structure": {
+          "description": "tab 的 tabs 是页签数组，每个页签包含 widgetList",
+          "ai_generates": ["type", {"options": ["name", "label", "hidden", "active", "disabled", "customClass"]}]
+        }
+      },
+      "card": {
+        "name": "卡片",
+        "type": "card",
+        "category": "container",
+        "children": "容器组件和字段组件",
+        "features": ["容器嵌套"],
+        "ai_generates": ["type", {"options": ["name", "label", "hidden", "folded", "showFold", "cardWidth", "shadow", "customClass"]}]
+      },
+      "subForm": {
+        "name": "子表单",
+        "type": "subForm",
+        "category": "container",
+        "children": "字段组件",
+        "features": ["单行式布局", "支持多个子表单(Pro)"],
+        "limitations": ["不支持容器嵌套，只能嵌套字段组件"],
+        "ai_generates": ["type", {"options": ["name", "label", "hidden", "customClass"]}]
+      },
+      "dataTable": {
+        "name": "数据表格",
+        "type": "dataTable",
+        "category": "container",
+        "children": "字段组件",
+        "features": ["多行多列展示数据", "Pro版本专属"]
+      }
+    }
+  },
+
+  "fields": {
+    "description": "字段组件用于收集用户输入。AI 生成 type + options 核心业务字段，其他前端自动补全。",
+    "common_options": {
+      "always_generated": ["name", "label"],
+      "optional_business": ["defaultValue", "placeholder", "disabled", "hidden", "required"],
+      "auto_filled": ["key", "id", "icon", "formItemFlag", "columnWidth", "labelWidth", "labelAlign", "labelHidden", "labelIconClass", "labelIconPosition", "labelTooltip", "validation", "validationHint", "requiredHint", "customClass", "clearable", "all_event_callbacks"]
+    },
+    "types": {
+      "input": {
+        "name": "单行输入",
+        "type": "input",
+        "formItemFlag": true,
+        "icon": "text-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "readonly", "clearable", "showPassword", "type(text/password/email等)", "minLength", "maxLength", "showWordLimit", "prefixIcon", "suffixIcon"]
+        }
+      },
+      "textarea": {
+        "name": "多行输入",
+        "type": "textarea",
+        "formItemFlag": true,
+        "icon": "textarea-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "readonly", "rows", "minLength", "maxLength", "showWordLimit"]
+        }
+      },
+      "number": {
+        "name": "计数器",
+        "type": "number",
+        "formItemFlag": true,
+        "icon": "number-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "min", "max", "precision", "step", "controlsPosition(right/default)"]
+        }
+      },
+      "radio": {
+        "name": "单选项",
+        "type": "radio",
+        "formItemFlag": true,
+        "icon": "radio-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "disabled", "hidden", "required", "displayStyle(inline/button)", "buttonStyle", "border", "optionItems: [{label, value}]"]
+        }
+      },
+      "checkbox": {
+        "name": "多选项",
+        "type": "checkbox",
+        "formItemFlag": true,
+        "icon": "checkbox-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue: []", "disabled", "hidden", "required", "displayStyle(inline/button)", "buttonStyle", "border", "optionItems: [{label, value}]"]
+        }
+      },
+      "select": {
+        "name": "下拉选项",
+        "type": "select",
+        "formItemFlag": true,
+        "icon": "select-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "clearable", "filterable", "multiple", "multipleLimit", "allowCreate", "remote", "automaticDropdown", "optionItems: [{label, value}]"]
+        }
+      },
+      "cascader": {
+        "name": "级联选择",
+        "type": "cascader",
+        "formItemFlag": true,
+        "icon": "cascader-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "clearable", "filterable", "multiple", "checkStrictly", "showAllLevels", "optionItems: [{label, value, children?}]"]
+        }
+      },
+      "time": {
+        "name": "时间",
+        "type": "time",
+        "formItemFlag": true,
+        "icon": "time-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "readonly", "clearable", "editable", "format(HH:mm:ss)", "autoFullWidth"]
+        }
+      },
+      "time-range": {
+        "name": "时间范围",
+        "type": "time-range",
+        "formItemFlag": true,
+        "icon": "time-range-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "startPlaceholder", "endPlaceholder", "disabled", "hidden", "required", "readonly", "clearable", "editable", "format(HH:mm:ss)", "autoFullWidth"]
+        }
+      },
+      "date": {
+        "name": "日期",
+        "type": "date",
+        "formItemFlag": true,
+        "icon": "date-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "placeholder", "disabled", "hidden", "required", "readonly", "clearable", "editable", "type(date)", "format(YYYY-MM-DD)", "valueFormat(YYYY-MM-DD)", "autoFullWidth"]
+        }
+      },
+      "date-range": {
+        "name": "日期范围",
+        "type": "date-range",
+        "formItemFlag": true,
+        "icon": "date-range-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "startPlaceholder", "endPlaceholder", "disabled", "hidden", "required", "readonly", "clearable", "editable", "type(daterange)", "format(YYYY-MM-DD)", "valueFormat(YYYY-MM-DD)", "autoFullWidth"]
+        }
+      },
+      "switch": {
+        "name": "开关",
+        "type": "switch",
+        "formItemFlag": true,
+        "icon": "switch-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue: false", "disabled", "hidden", "switchWidth", "activeText", "inactiveText", "activeColor", "inactiveColor"]
+        }
+      },
+      "rate": {
+        "name": "评分",
+        "type": "rate",
+        "formItemFlag": true,
+        "icon": "rate-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "disabled", "hidden", "required", "max(5)", "lowThreshold", "highThreshold", "allowHalf", "showText", "showScore"]
+        }
+      },
+      "color": {
+        "name": "颜色选择器",
+        "type": "color",
+        "formItemFlag": true,
+        "icon": "color-field",
+        "ai_generates": {
+          "options": ["name", "label", "defaultValue", "disabled", "hidden", "required"]
+        }
+      },
+      "slider": {
+        "name": "滑块",
+        "type": "slider",
+        "formItemFlag": true,
+        "icon": "slider-field",
+        "ai_generates": {
+          "options": ["name", "label", "disabled", "hidden", "required", "min(0)", "max(100)", "step", "range(false)", "showStops", "height"]
+        }
+      },
+      "static-text": {
+        "name": "静态文字",
+        "type": "static-text",
+        "formItemFlag": false,
+        "icon": "static-text",
+        "ai_generates": {
+          "options": ["name", "label", "hidden", "textContent"]
+        }
+      },
+      "html-text": {
+        "name": "HTML",
+        "type": "html-text",
+        "formItemFlag": false,
+        "icon": "html-text",
+        "ai_generates": {
+          "options": ["name", "label", "hidden", "htmlContent"]
+        }
+      },
+      "button": {
+        "name": "按钮",
+        "type": "button",
+        "formItemFlag": false,
+        "icon": "button",
+        "ai_generates": {
+          "options": ["name", "label", "disabled", "hidden", "displayStyle(block/inline)", "type(primary/success/warning/danger/info/text)", "plain", "round", "circle", "icon"]
+        }
+      },
+      "divider": {
+        "name": "分隔线",
+        "type": "divider",
+        "formItemFlag": false,
+        "icon": "divider",
+        "ai_generates": {
+          "options": ["name", "label", "hidden", "direction(horizontal/vertical)", "contentPosition(center/left/right)"]
+        }
+      },
+      "picture-upload": {
+        "name": "图片上传",
+        "type": "picture-upload",
+        "formItemFlag": true,
+        "icon": "picture-upload-field",
+        "ai_generates": {
+          "options": ["name", "label", "disabled", "hidden", "required", "multipleSelect", "showFileList", "limit", "fileMaxSize", "fileTypes", "uploadURL", "uploadTip", "withCredentials"]
+        }
+      },
+      "file-upload": {
+        "name": "文件上传",
+        "type": "file-upload",
+        "formItemFlag": true,
+        "icon": "file-upload-field",
+        "ai_generates": {
+          "options": ["name", "label", "disabled", "hidden", "required", "multipleSelect", "showFileList", "limit", "fileMaxSize", "fileTypes", "uploadURL", "uploadTip", "withCredentials"]
+        }
+      },
+      "rich-editor": {
+        "name": "富文本",
+        "type": "rich-editor",
+        "formItemFlag": true,
+        "icon": "rich-editor-field",
+        "ai_generates": {
+          "options": ["name", "label", "placeholder", "disabled", "hidden", "required", "contentHeight", "minLength", "maxLength", "showWordLimit"]
+        }
+      }
+    }
+  },
+
+  "custom_extensions": {
+    "description": "自定义扩展组件（需额外安装或注册）",
+    "types": {
+      "alert": {
+        "name": "警告提示",
+        "type": "alert",
+        "formItemFlag": false,
+        "icon": "alert",
+        "ai_generates": {
+          "options": ["name", "label", "hidden", "title", "type(info/success/warning/error)", "description", "closable", "closeText", "center", "showIcon", "effect(light/dark)"]
+        }
+      }
+    }
+  },
+
+  "options_field_mapping": {
+    "description": "options 中 optionItems 格式的字段",
+    "fields_with_optionItems": ["radio", "checkbox", "select", "cascader"],
+    "option_item_format": {
+      "label": "显示文本（AI 生成）",
+      "value": "绑定值（AI 生成）",
+      "children": "子选项（仅 cascader 可选，AI 生成）"
+    }
+  },
+
+  "date_time_formats": {
+    "description": "日期时间组件的 format 和 valueFormat 推荐值",
+    "date": {"format": "YYYY-MM-DD", "valueFormat": "YYYY-MM-DD"},
+    "time": {"format": "HH:mm:ss", "valueFormat": "HH:mm:ss"},
+    "date-range": {"format": "YYYY-MM-DD", "valueFormat": "YYYY-MM-DD"},
+    "time-range": {"format": "HH:mm:ss", "valueFormat": "HH:mm:ss"}
+  },
+
+  "default_values_by_type": {
+    "description": "各组件的默认值参考",
+    "input": "",
+    "textarea": "",
+    "number": 0,
+    "radio": null,
+    "checkbox": [],
+    "select": null,
+    "cascader": null,
+    "time": null,
+    "time-range": null,
+    "date": null,
+    "date-range": null,
+    "switch": false,
+    "rate": null,
+    "color": null,
+    "slider": 0,
+    "picture-upload": "",
+    "file-upload": "",
+    "rich-editor": ""
+  },
+
+  "quick_reference": {
+    "field_by_input_type": {
+      "文本输入": ["input", "textarea", "rich-editor"],
+      "数值输入": ["number", "slider"],
+      "选择输入": ["radio", "checkbox", "select", "cascader"],
+      "日期时间": ["time", "time-range", "date", "date-range"],
+      "开关": ["switch"],
+      "评分": ["rate"],
+      "颜色": ["color"],
+      "上传": ["picture-upload", "file-upload"],
+      "展示": ["static-text", "html-text", "divider", "button"]
+    },
+    "container_by_purpose": {
+      "响应式布局": "grid",
+      "表格数据展示": "table",
+      "分页展示": "tab",
+      "卡片分组": "card",
+      "重复数据行": "subForm",
+      "复杂表格数据": "dataTable"
+    }
+  }
+}

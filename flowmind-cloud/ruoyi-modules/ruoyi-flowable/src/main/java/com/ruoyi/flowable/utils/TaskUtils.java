@@ -6,6 +6,8 @@ import com.ruoyi.common.security.auth.AuthUtil;
 import com.ruoyi.common.security.utils.SecurityUtils;
 import com.ruoyi.flowable.common.constant.TaskConstants;
 import com.ruoyi.system.api.model.LoginUser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +19,8 @@ import java.util.List;
  * @createTime 2022/4/24 12:42
  */
 public class TaskUtils {
+    private static final Logger log = LoggerFactory.getLogger(TaskUtils.class);
+
     public static String getUserId() {
         String token = SecurityUtils.getToken();
         if (StringUtils.isNotEmpty(token)) {
@@ -47,7 +51,12 @@ public class TaskUtils {
                 if (ObjectUtil.isNotNull(user.getSysUser().getDeptId())) {
                     list.add(TaskConstants.DEPT_GROUP_PREFIX + user.getSysUser().getDeptId());
                 }
+            } else {
+                log.warn("[TaskUtils] getCandidateGroup 返回空: 无法从Token获取用户信息，请检查Redis连接或Token有效性");
             }
+        }
+        if (list.isEmpty()) {
+            log.warn("[TaskUtils] getCandidateGroup 返回空: 用户可能没有绑定角色或部门");
         }
         return list;
     }

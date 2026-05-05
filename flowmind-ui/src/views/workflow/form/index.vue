@@ -50,28 +50,38 @@
     </el-card>
 
     <!-- 流程表单设计器对话框 -->
-    <el-dialog 
-      :title="designer.title" 
-      v-model="designer.visible" 
-      fullscreen 
+    <el-dialog
+      :title="designer.title"
+      v-model="designer.visible"
+      fullscreen
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
       <div id="form-designer">
-        <v-form-designer 
-          ref="vfDesignerRef" 
-          :resetFormJson="true" 
-          :designer-config="designerConfig" 
+        <v-form-designer
+          ref="vfDesignerRef"
+          :resetFormJson="true"
+          :designer-config="designerConfig"
           v-if="designer.visible"
           :global-dsv="{}"
         >
           <!-- 自定义按钮插槽 -->
           <template #customToolButtons>
-            <el-button link type="primary" icon="Finished" @click="dialog.visible = true">保存</el-button>
+            <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
+            <el-button type="success" plain @click="dialog.visible = true">保存</el-button>
           </template>
         </v-form-designer>
       </div>
     </el-dialog>
+
+    <!-- AI 设计对话框 -->
+    <AiDesignDialog
+      ref="aiDesignDialogRef"
+      v-model="aiDesignVisible"
+      designType="form"
+      :formData="{}"
+      @fill="handleAiFill"
+    />
 
     <!-- 预览表单对话框 -->
     <el-dialog :title="render.title" v-model="render.visible" width="60%" append-to-body>
@@ -100,6 +110,8 @@
 
 <script setup name="Form" >
 import { listForm, addForm, updateForm, getForm, delForm } from "@/api/workflow/form";
+import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import { watch } from 'vue';
 
 const { proxy } = getCurrentInstance();
 
@@ -118,18 +130,15 @@ const queryFormRef = ref();
 
 const designerConfig = reactive({
   externalLink: false,
-  toolbarMaxWidth: 510,
-  // languageMenu: true,
-  //externalLink: false,
+  toolbarMaxWidth: 800,
   formTemplates: false,
-  //eventCollapse: false,
-  //clearDesignerButton: false,
-  //previewFormButton: false,
 })
 const designer = reactive({
   visible: false,
   title: ''
 })
+const aiDesignVisible = ref(false);
+const aiDesignDialogRef = ref();
 const render = reactive({
   visible: false,
   title: ''
@@ -138,6 +147,7 @@ const dialog = reactive({
   visible: false,
   title: ''
 });
+
 const initFormData = {
   formId: undefined,
   formName: '',
@@ -198,12 +208,10 @@ const handleAdd = () => {
   designer.visible = true;
   nextTick(() => {
     reset();
-    // Check if the designer ref is available before calling methods on it
     if (vfDesignerRef.value && vfDesignerRef.value.clearDesigner) {
       vfDesignerRef.value.clearDesigner();
     } else {
       console.warn('v-form-designer component is not ready yet');
-      // Try again after a short delay
       setTimeout(() => {
         if (vfDesignerRef.value && vfDesignerRef.value.clearDesigner) {
           vfDesignerRef.value.clearDesigner();
@@ -220,13 +228,11 @@ const handleUpdate = (row) => {
       const formId = row?.formId || ids.value[0];
       const res = await getForm(formId);
       form.value = res.data;
-      
-      // Check if the designer ref is available before calling methods on it
+
       if (vfDesignerRef.value && vfDesignerRef.value.setFormJson) {
         vfDesignerRef.value.setFormJson(form.value.content);
       } else {
         console.warn('v-form-designer component is not ready yet');
-        // Try again after a short delay
         setTimeout(() => {
           if (vfDesignerRef.value && vfDesignerRef.value.setFormJson) {
             vfDesignerRef.value.setFormJson(form.value.content);
@@ -243,12 +249,10 @@ const handleDetail = (row) => {
   render.visible = true;
   render.title = '查看表单详情';
   nextTick(async () => {
-    // Check if the render ref is available before calling methods on it
     if (vfRenderRef.value && vfRenderRef.value.setFormJson) {
       vfRenderRef.value.setFormJson(row.content || {formConfig: {}, widgetList: []});
     } else {
       console.warn('v-form-render component is not ready yet');
-      // Try again after a short delay
       setTimeout(() => {
         if (vfRenderRef.value && vfRenderRef.value.setFormJson) {
           vfRenderRef.value.setFormJson(row.content || {formConfig: {}, widgetList: []});
@@ -259,12 +263,11 @@ const handleDetail = (row) => {
 }
 /** 提交表单操作 */
 const submitForm = () => {
-  // Check if the designer ref is available before calling methods on it
   if (!vfDesignerRef.value || !vfDesignerRef.value.getFormJson) {
     console.error('v-form-designer component is not available');
     return;
   }
-  
+
   const formJson = vfDesignerRef.value.getFormJson();
   form.value.content = JSON.stringify(formJson);
   nextTick(async () => {
@@ -283,12 +286,47 @@ const handleDelete = async (row) => {
   getList();
   proxy?.$modal.msgSuccess("删除成功");
 }
-/** 导出按钮操作 */
-const handleExport = () => {
-  proxy?.download("workflow/form/export", {
-    ...queryParams.value
-  }, `form_${new Date().getTime()}.xlsx`);
-}
+
+/** AI 设计按钮 */
+const handleAiDesign = () => {
+  aiDesignVisible.value = true;
+};
+
+/** AI 填充表单 */
+const handleAiFill = (data) => {
+  // data 是 form_data（完整 VForm3 JSON + form_name）
+  if (!data || !vfDesignerRef.value) return;
+
+  // 更新表单名称
+  if (data.form_name) {
+    form.value.formName = data.form_name;
+  }
+
+  // 直接将完整 VForm3 JSON 加载到设计器
+  if (vfDesignerRef.value.setFormJson && data.widgetList) {
+    vfDesignerRef.value.setFormJson(data);
+  }
+
+  aiDesignVisible.value = false;
+};
+
+/** 表单设计器打开后 */
+const handleDesignerOpened = () => {
+  // Dialog 完全打开后的回调，确保 DOM 已渲染
+};
+
+/** 表单设计器关闭后 */
+const handleDesignerClosed = () => {
+  // 清理状态
+  aiDesignDialogRef.value?.clearMessages();
+};
+
+// 监听设计器关闭，清空 AI 聊天
+watch(() => designer.visible, (val) => {
+  if (!val) {
+    aiDesignDialogRef.value?.clearMessages();
+  }
+});
 
 getList();
 </script>
@@ -305,13 +343,13 @@ getList();
     display: flex;
     align-items: center;
   }
-  
-  /* 覆盖VForm 3组件库中的高度样式 */
+
+  /* 覆盖 VForm 3 组件库中的高度样式 */
   :deep(.widget-collapse .el-collapse-item__content ul .container-widget-item),
   :deep(.widget-collapse .el-collapse-item__content ul .field-widget-item) {
     height: auto !important;
   }
-  
+
   /* 修复字段操作按钮显示问题 */
   :deep(.field-action), :deep(.container-action) {
     display: flex !important;
@@ -319,7 +357,7 @@ getList();
     justify-content: center;
     opacity: 1 !important;
     visibility: visible !important;
-    
+
     i {
       display: inline-flex !important;
       align-items: center;
@@ -329,21 +367,21 @@ getList();
       margin: 0 2px;
       cursor: pointer;
       border-radius: 2px;
-      
+
       &:hover {
         background-color: rgba(64, 158, 255, 0.1);
         color: #409eff;
       }
     }
   }
-  
+
   /* 确保拖拽手柄正确显示 */
   :deep(.drag-handler) {
     display: flex !important;
     align-items: center;
     opacity: 1 !important;
     visibility: visible !important;
-    
+
     i {
       display: inline-flex !important;
       align-items: center;

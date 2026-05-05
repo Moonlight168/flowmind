@@ -42,3 +42,4 @@ export function delForm(formId) {
     method: 'delete'
   });
 }
+

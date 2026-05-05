@@ -74,18 +74,11 @@
             </exclusions>
         </dependency>
 
-<!--        &lt;!&ndash; RuoYi Common DataSource &ndash;&gt;
+        <!-- RuoYi Common DataSource -->
         <dependency>
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-common-datasource</artifactId>
-            <exclusions>
-                &lt;!&ndash; 排除 dynamic-datasource，Flowable 使用独立数据源 &ndash;&gt;
-                <exclusion>
-                    <groupId>com.baomidou</groupId>
-                    <artifactId>dynamic-datasource-spring-boot3-starter</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>-->
+        </dependency>
 
         <!-- RuoYi Common DataScope -->
         <dependency>
@@ -109,10 +102,11 @@
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-common-swagger</artifactId>
         </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.20</version>
+            <version>1.18.30</version>
         </dependency>
         <!--糊涂工具-->
         <dependency>

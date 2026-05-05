@@ -13,7 +13,7 @@ import org.springframework.cache.annotation.EnableCaching;
 @EnableCustomConfig
 @SpringBootApplication
 @EnableCaching
-@EnableRyFeignClients
+@EnableRyFeignClients(basePackages = { "com.ruoyi", "com.flowmind" })
 public class RuoYiFlowableApplication {
     public static void main(String[] args)
     {

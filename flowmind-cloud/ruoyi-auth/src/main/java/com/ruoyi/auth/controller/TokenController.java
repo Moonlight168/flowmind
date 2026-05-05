@@ -1,6 +1,8 @@
 package com.ruoyi.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +27,8 @@ import com.ruoyi.system.api.model.LoginUser;
 @RestController
 public class TokenController
 {
+    private static final Logger log = LoggerFactory.getLogger(TokenController.class);
+
     @Autowired
     private TokenService tokenService;
 
@@ -43,16 +47,25 @@ public class TokenController
     @DeleteMapping("logout")
     public R<?> logout(HttpServletRequest request)
     {
-        String token = SecurityUtils.getToken(request);
-        if (StringUtils.isNotEmpty(token))
+        try
         {
-            String username = JwtUtils.getUserName(token);
-            // 删除用户缓存记录
-            AuthUtil.logoutByToken(token);
-            // 记录用户退出日志
-            sysLoginService.logout(username);
+            String token = SecurityUtils.getToken(request);
+            if (StringUtils.isNotEmpty(token))
+            {
+                String username = JwtUtils.getUserName(token);
+                // 删除用户缓存记录
+                AuthUtil.logoutByToken(token);
+                // 记录用户退出日志
+                sysLoginService.logout(username);
+            }
+            return R.ok();
         }
-        return R.ok();
+        catch (Exception e)
+        {
+            // token 可能已过期或无效，但还是要让用户退出
+            log.warn("logout error: {}", e.getMessage(), e);
+            return R.ok();  // 始终返回成功，确保前端能退出
+        }
     }
 
     @PostMapping("refresh")
