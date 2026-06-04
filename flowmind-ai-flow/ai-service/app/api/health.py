@@ -17,7 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from app.adapters.llm.core.llm_client import get_llm_client
+from app.adapters.factory import ModelFactory
 from app.domain.dto import ResponseVO
 from app.infra.logger import log_api_endpoint
 
@@ -31,27 +31,31 @@ router = APIRouter(
 @log_api_endpoint()
 def health_check(request: Request) -> ResponseVO[dict[str, str]]:
     """健康检查接口"""
-    return ResponseVO.success({
-        "status": "healthy",
-        "service": "flowmind-ai-flow",
-        "timestamp": datetime.now().isoformat(),
-    })
+    return ResponseVO.success(
+        {
+            "status": "healthy",
+            "service": "flowmind-ai-flow",
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
 
 @router.get("/models", response_model=ResponseVO[dict[str, Any]])
 @log_api_endpoint()
 def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
     """模型适配器状态接口"""
-    llm_client = get_llm_client()
-    adapters = llm_client.get_available_adapters()
-    current_adapter = llm_client.get_current_adapter()
+    manager = ModelFactory.get_model_manager()
+    adapters = manager.get_available_adapters_info()
+    current_adapter = manager.get_current_adapter()
 
     total_count = len(adapters)
 
-    return ResponseVO.success({
-        "status": "healthy" if total_count > 0 else "unhealthy",
-        "current_adapter": current_adapter,
-        "total_count": total_count,
-        "adapters": adapters,
-        "timestamp": datetime.now().isoformat(),
-    })
+    return ResponseVO.success(
+        {
+            "status": "healthy" if total_count > 0 else "unhealthy",
+            "current_adapter": current_adapter,
+            "total_count": total_count,
+            "adapters": adapters,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )

@@ -149,9 +149,20 @@ export default {
       this.element = element;
     },
     initModeler(modeler) {
-      setTimeout(() => {
-        this.modeler = modeler;
-      }, 10);
+      this.modeler = modeler;
+    },
+    /** 获取当前最新的 BPMN XML（从 modeler 实时获取） */
+    async getCurrentXml() {
+      if (this.modeler) {
+        try {
+          const { xml } = await this.modeler.saveXML({ format: true });
+          return xml || '';
+        } catch (e) {
+          console.error('获取 XML 失败:', e);
+          return this.xmlString || '';
+        }
+      }
+      return this.xmlString || '';
     },
     elementContextmenu(element) {
     },

@@ -70,11 +70,12 @@ def invoke_chat_workflow(
             result = None
             for step in chat_workflow.stream(initial_state, config):
                 result = step
-            if result and "__interrupt__" in result:
-                pass
-            else:
-                final_state = chat_workflow.get_state(config)
-                result = final_state.values if final_state else {}
+            # stream() 完成后 result 已是最终状态，无需 get_state() 覆盖
+            if isinstance(result, dict):
+                for node_output in result.values():
+                    if isinstance(node_output, dict):
+                        result = node_output
+                        break
         else:
             result = chat_workflow.invoke(initial_state, config)
         return result

@@ -25,7 +25,7 @@ load_dotenv(_env_path, override=True)
 
 # ============ 默认值常量 ============
 SECONDS_PER_HOUR = 3600
-DEFAULT_MAX_TOKENS = 2000
+DEFAULT_MAX_TOKENS = 4096  # 增加到 4096 以支持复杂流程设计
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
 
@@ -34,13 +34,13 @@ DEFAULT_MODELS = [
     {
         "name": "vllm",
         "model": "qwen2.5_1.5b_instruct",
-        "base_url": "http://localhost:8001/v1/chat/completions",
+        "base_url": "http://localhost:8001/v1",
         "timeout": 60,
     },
     {
         "name": "qwen",
         "model": "qwen-turbo",
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "api_key": None,
     },
 ]
@@ -89,8 +89,20 @@ class AppSettings(BaseSettings):
         default=["http://localhost:5173", "http://localhost:80"],
         description="允许的跨域来源，prod环境需修改为实际域名",
     )
+    execution_mode: str = Field(
+        default="invoke",
+        description="工作流执行模式: stream(分步执行,调试用) / invoke(同步执行,生产用)",
+    )
 
     model_config = SettingsConfigDict(env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @field_validator("execution_mode")
+    @classmethod
+    def validate_execution_mode(cls, v: str) -> str:
+        allowed = ["stream", "invoke"]
+        if v not in allowed:
+            raise ValueError(f"execution_mode 仅支持: {', '.join(allowed)}")
+        return v
 
 
 class LogSettings(BaseSettings):
@@ -128,9 +140,9 @@ class BackendSettings(BaseSettings):
         default="http://localhost:9001",
         alias="BACKEND_BASE_URL",
     )
-    category_api_path: str = Field(default="/ruoyi-flowable/category")
-    form_api_path: str = Field(default="/ruoyi-flowable/form")
-    flow_model_api_path: str = Field(default="/ruoyi-flowable/model")
+    category_api_path: str = Field(default="/flowable/category")
+    form_api_path: str = Field(default="/flowable/form")
+    flow_model_api_path: str = Field(default="/flowable/model")
     role_api_path: str = Field(default="/system/role")
     timeout: int = Field(default=30)
 

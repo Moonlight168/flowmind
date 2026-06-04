@@ -23,3 +23,10 @@ export function designForm(data) {
     data
   })
 }
+
+export function clearDesignState(designType) {
+  return request({
+    url: '/flowmind-ai/design/state/' + designType,
+    method: 'delete'
+  })
+}

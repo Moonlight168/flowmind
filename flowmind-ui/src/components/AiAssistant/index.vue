@@ -53,7 +53,26 @@
       >
         <!-- 历史列表头部 -->
         <div class="history-header flex items-center justify-between p-3 border-b border-gray-200">
-          <span class="text-sm font-semibold text-gray-700">历史对话</span>
+          <div class="flex items-center gap-2">
+            <el-checkbox
+              v-if="historyList.length > 0"
+              :model-value="selectedThreadIds.length === historyList.length && historyList.length > 0"
+              :indeterminate="selectedThreadIds.length > 0 && selectedThreadIds.length < historyList.length"
+              @change="toggleSelectAll"
+              size="small"
+            />
+            <span class="text-sm font-semibold text-gray-700">历史对话</span>
+            <el-button
+              v-if="selectedThreadIds.length > 0"
+              link
+              type="danger"
+              :icon="Delete"
+              size="small"
+              @click="handleBatchDeleteHistory"
+            >
+              删除{{ selectedThreadIds.length }}
+            </el-button>
+          </div>
           <el-button link type="info" @click="toggleHistoryList">
             <el-icon><Close /></el-icon>
           </el-button>
@@ -66,8 +85,16 @@
             :class="['history-item flex flex-col p-2 rounded-lg mb-1 cursor-pointer', session.thread_id === threadId ? 'active bg-blue-50' : 'hover:bg-gray-50']"
             @click="handleSelectHistory(session)"
           >
-            <div class="history-preview text-xs text-gray-700 truncate">{{ session.preview || '新对话' }}</div>
-            <div class="history-meta flex items-center justify-between mt-1">
+            <div class="flex items-center gap-2">
+              <el-checkbox
+                :model-value="selectedThreadIds.includes(session.thread_id)"
+                @change="() => toggleSelectOne(session.thread_id)"
+                @click.stop
+                size="small"
+              />
+              <div class="history-preview text-xs text-gray-700 truncate flex-1">{{ session.preview || '新对话' }}</div>
+            </div>
+            <div class="history-meta flex items-center justify-between mt-1 pl-6">
               <span class="history-time text-xs text-gray-400">{{ formatTime(session.updated_at) }}</span>
               <el-button
                 link
@@ -109,15 +136,19 @@
 
       <!-- 输入区域 -->
       <div class="window-input p-3 bg-white border-t border-gray-200 flex gap-2 items-end">
-        <el-input
-          v-model="inputMessage"
-          type="textarea"
-          :rows="1"
-          placeholder=""
-          @keydown.enter.exact="sendMessage"
-          :disabled="isLoading || awaitingConfirmation"
-          class="flex-1"
-        />
+        <div class="flex-1 relative">
+          <el-input
+            v-model="inputMessage"
+            type="textarea"
+            :rows="1"
+            :maxlength="MAX_INPUT_LENGTH"
+            placeholder=""
+            @keydown.enter.exact="sendMessage"
+            :disabled="isLoading || awaitingConfirmation"
+            class="flex-1"
+            show-word-limit
+          />
+        </div>
         <el-button
           type="primary"
           :loading="isLoading"
@@ -142,8 +173,8 @@
 <script setup>
 import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Close, Delete, Plus, List, MoreFilled } from '@element-plus/icons-vue'
-import { aiFormChat, getAiFormState, deleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
+import { ChatDotRound, Close, Delete, Plus, List, MoreFilled, Check } from '@element-plus/icons-vue'
+import { aiFormChat, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
 import MessageItem from './MessageItem.vue'
@@ -159,6 +190,7 @@ const hasPageAiDesign = computed(() => PAGE_WITH_AI_DESIGN.includes(route.path))
 const aiSession = useAiSessionStore()
 
 // 状态管理
+const MAX_INPUT_LENGTH = 2000
 const isVisible = ref(false)
 const isLoading = ref(false)
 const inputMessage = ref('')
@@ -186,6 +218,8 @@ const awaitingConfirmation = computed(() => {
 // 历史面板相关
 const showHistoryList = ref(false)
 const historyList = ref([])
+const selectedThreadIds = ref([])
+const isLoadingHistory = ref(false)
 
 // 窗口位置（支持拖拽）
 const windowPosition = ref({ x: 0, y: 0 })
@@ -263,12 +297,16 @@ function handleNewChat() {
 
 // 加载聊天历史列表
 async function handleLoadHistoryList() {
+  if (isLoadingHistory.value) return
+  isLoadingHistory.value = true
   try {
     const res = await getChatHistoryList()
     historyList.value = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])
   } catch (error) {
     console.error('加载聊天历史列表失败:', error)
     historyList.value = []
+  } finally {
+    isLoadingHistory.value = false
   }
 }
 
@@ -322,6 +360,56 @@ async function handleDeleteHistory(threadIdToDelete) {
       console.error('删除历史会话失败:', error)
       ElMessage.error('删除失败')
     }
+  }
+}
+
+// 批量删除历史会话
+async function handleBatchDeleteHistory() {
+  if (selectedThreadIds.value.length === 0) {
+    ElMessage.warning('请先选择要删除的对话')
+    return
+  }
+  try {
+    await proxy.$modal.confirm(`确定要删除选中的 ${selectedThreadIds.value.length} 条对话记录吗？`, '提示', { type: 'warning' })
+
+    const res = await batchDeleteAiFormState(selectedThreadIds.value)
+    if (res?.status === 'success' || res?.code === 200) {
+      ElMessage.success('批量删除成功')
+      selectedThreadIds.value = []
+      handleLoadHistoryList()
+      // 如果删除的包含当前会话，清空
+      if (selectedThreadIds.value.includes(aiSession.threadId)) {
+        aiSession.resetSession()
+        messages.value = []
+        inputMessage.value = ''
+      }
+    } else {
+      ElMessage.error(res?.message || '批量删除失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量删除历史会话失败:', error)
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+  if (selectedThreadIds.value.length === historyList.value.length) {
+    selectedThreadIds.value = []
+  } else {
+    selectedThreadIds.value = historyList.value.map(s => s.thread_id)
+  }
+}
+
+// 切换单个选中
+function toggleSelectOne(threadId) {
+  const index = selectedThreadIds.value.indexOf(threadId)
+  if (index > -1) {
+    selectedThreadIds.value.splice(index, 1)
+  } else {
+    selectedThreadIds.value.push(threadId)
   }
 }
 

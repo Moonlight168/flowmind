@@ -190,6 +190,7 @@ import ProcessDesigner from "@/components/ProcessDesigner";
 import ProcessViewer from "@/components/ProcessViewer";
 import { useAiSessionStore } from '@/store/modules/aiSession';
 import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance() ;
 
@@ -278,6 +279,7 @@ const { queryParams, form, rules } = toRefs(data);
 
 const router = useRouter();
 const aiSession = useAiSessionStore();
+const userStore = useUserStore();
 
 /** 查询模型列表 */
 const getList = async () => {
@@ -358,6 +360,9 @@ const handleProcessView = async (row) => {
 const handleDesigner = async (row) => {
   reloadIndex.value++;
   designerForm.modelId = row.modelId;
+  // 设置设计器表单信息
+  designerForm.form.processName = row.modelName || '';
+  designerForm.form.processKey = row.modelKey || '';
   const res = await getBpmnXml(row.modelId);
   bpmnXml.value = res.data || '';
   designerFlowInfo.value = {
@@ -492,11 +497,29 @@ const handleAiFillBasic = (data) => {
   if (data.description) {
     form.value.description = data.description;
   }
-  aiDesignBasicVisible.value = false;
 };
 
 /** 可视化设计 AI 设计按钮 */
-const handleAiDesign = () => {
+const handleAiDesign = async () => {
+  // 从设计器获取最新的 BPMN XML（包括未保存的修改）
+  if (modelDesignerRef.value) {
+    const latestXml = await modelDesignerRef.value.getCurrentXml();
+    if (latestXml) {
+      bpmnXml.value = latestXml;
+    }
+  }
+  // 同步流程基本信息到 designerFlowInfo
+  designerFlowInfo.value = {
+    ...designerFlowInfo.value,
+    modelId: designerForm.modelId,
+    modelName: designerForm.form.processName || designerFlowInfo.value.modelName || '',
+    modelKey: designerForm.form.processKey || designerFlowInfo.value.modelKey || '',
+    category: designerFlowInfo.value.category || '',
+    description: designerFlowInfo.value.description || '',
+    bpmnXml: bpmnXml.value,
+  };
+  // 等待 Vue 更新后再打开弹窗
+  await nextTick();
   aiDesignVisible.value = true;
 };
 
@@ -514,17 +537,16 @@ const handleAiFill = (data) => {
   if (data.flow_key) {
     designerForm.form.processKey = data.flow_key;
   }
-  aiDesignVisible.value = false;
 };
 
-// 监听基础信息对话框关闭，清空 AI 聊天
+// 监听基础信息对话框关闭，清空 AI 聊天和后端 checkpoint
 watch(() => dialog.visible, (val) => {
   if (!val) {
     aiDesignBasicDialogRef.value?.clearMessages();
   }
 });
 
-// 监听设计器关闭，清空 AI 聊天
+// 监听设计器关闭，清空 AI 聊天和后端 checkpoint
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignDialogRef.value?.clearMessages();

@@ -6,7 +6,7 @@ FlowMind 智能流程设计服务 - 聊天节点
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.adapters.llm.core.llm_client import get_llm_client
+from app.adapters.factory import ModelFactory
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
 
@@ -18,15 +18,12 @@ def chat_node(state: AppState) -> AppState:
     使用 messages 数组格式传递完整对话历史给 LLM。
     """
     try:
-        # 清除旧意图：用户新输入到达，清除上次的残留意图
-        state["user_intent"] = ""
-
         last_message = (
             state["messages"][-1] if state["messages"] else HumanMessage(content="")
         )
         user_input = last_message.content
 
-        llm_client = get_llm_client()
+        manager = ModelFactory.get_model_manager()
 
         # 构建 messages 数组：system + 历史对话 + 当前用户输入
         messages = [
@@ -50,13 +47,14 @@ def chat_node(state: AppState) -> AppState:
         # 添加当前用户输入
         messages.append({"role": "user", "content": user_input})
 
-        result = llm_client.generate_messages(messages, task_name="general")
+        result = manager.create_llm(task_name="chat").invoke(messages)
 
         # LLM 服务不可用时，返回错误信息
         if result is None:
             ai_response = "抱歉，AI 服务当前不可用，请稍后重试。"
         else:
-            ai_response = result
+            ai_response = result.content
+        logger.debug(f"[AI输出] chat_response: {ai_response}")
 
         state["chat_response"] = ai_response
 

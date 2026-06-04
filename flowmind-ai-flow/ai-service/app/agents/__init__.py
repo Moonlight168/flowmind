@@ -5,7 +5,7 @@ FlowMind 智能流程设计服务 - Agent 模块
 """
 
 from .base import BaseAgent, ToolResult
-from .reviewer import ReviewerAgent, ReviewResult, reviewer_agent, with_reviewer
+from .reviewer import ReviewerAgent, ReviewResult, reviewer_agent
 from .tools import Tool, ToolRegistry, tool_registry
 
 __all__ = [
@@ -17,5 +17,4 @@ __all__ = [
     "ToolResult",
     "reviewer_agent",
     "tool_registry",
-    "with_reviewer",
 ]

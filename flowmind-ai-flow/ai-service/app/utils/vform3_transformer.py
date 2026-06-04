@@ -496,21 +496,32 @@ def _get_default_value(widget_type: str) -> Any:
     return defaults.get(widget_type)
 
 
-def transform_to_vform3(ai_result: dict[str, Any]) -> dict[str, Any]:
+def transform_to_vform3(ai_result: dict[str, Any], current_form_data: dict[str, Any] | None = None) -> dict[str, Any]:
     """将 AI 生成的简化格式转换为完整的 VForm3 JSON
 
     Args:
         ai_result: AI 生成的简化格式表单数据
+        current_form_data: 当前表单已有数据，用于合并缺失字段
 
     Returns:
         完整的 VForm3 表单 JSON，可直接用于 VFormRender
     """
+    current = current_form_data or {}
     # 转换 widgetList
     ai_widgets = ai_result.get("widgetList", [])
+    current_widgets = current.get("widgetList", [])
     transformed_widgets = [_transform_widget(w) for w in ai_widgets]
+
+    # 合并 widgetList：AI 没有的字段从 current 保留
+    if current_widgets and ai_widgets:
+        ai_keys = {w.get("field") for w in ai_widgets if w.get("field")}
+        for cw in current_widgets:
+            if cw.get("field") and cw.get("field") not in ai_keys:
+                transformed_widgets.append(cw)
 
     # 构建 formConfig
     ai_form_config = ai_result.get("formConfig", {}) or {}
+    current_form_config = current.get("formConfig", {}) or {}
     form_config = {
         "modelName": ai_form_config.get("modelName", "formData"),
         "refName": ai_form_config.get("refName", "vForm"),
@@ -529,9 +540,13 @@ def transform_to_vform3(ai_result: dict[str, Any]) -> dict[str, Any]:
         "onFormDataChange": "",
         "onFormValidate": "",
     }
+    # 合并 current_form_config 中 AI 没有覆盖的字段
+    for k, v in current_form_config.items():
+        if k not in form_config or not form_config[k]:
+            form_config[k] = v
 
     return {
-        "form_name": ai_result.get("form_name", ""),
+        "form_name": ai_result.get("form_name", "") or current.get("form_name", ""),
         "widgetList": transformed_widgets,
         "formConfig": form_config,
     }

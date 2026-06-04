@@ -14,8 +14,8 @@ from typing import TypeVar
 from app.graph.state.app_state import AppState
 from app.infra.logger import (
     get_request_id,
+    get_session_id,
     logger,
-    set_session_id,
 )
 
 T = TypeVar("T", bound=AppState)
@@ -41,10 +41,8 @@ def node_handler(node_name: str = ""):
             else:
                 node_execution_count = 1
 
-            # 从 state 提取 session_id 并注入日志系统
-            thread_id = state.get("thread_id", "")
-            session_id = thread_id[:8] if thread_id else "-"
-            set_session_id(session_id)
+            # session_id 从 context 读取，不从 state（避免 LastValue channel 冲突）
+            session_id = get_session_id()
 
             # 记录进入节点前的 chat_response，避免打印历史残留回复
             old_chat_response = str(state.get("chat_response", "") or "")

@@ -8,6 +8,7 @@ from enum import StrEnum
 
 class Role(StrEnum):
     """角色类型"""
+
     FLOW_DESIGNER = "FLOW_DESIGNER"
     FORM_DESIGNER = "FORM_DESIGNER"
     CATEGORY_DESIGNER = "CATEGORY_DESIGNER"
@@ -27,27 +28,34 @@ class TaskConfig:
 
 
 class Task(StrEnum):
+    FLOW_DESIGN_BASIC = "flow_design_basic"
     FLOW_DESIGN = "flow_design"
-    FORM_GENERATION = "form_generation"
-    CATEGORY_CLASSIFICATION = "category_classification"
+    FORM_DESIGN = "form_design"
+    CATEGORY_DESIGN = "category_design"
 
 
 TASK_CONFIGS: dict[Task, TaskConfig] = {
+    Task.FLOW_DESIGN_BASIC: TaskConfig(
+        module="app.prompts.tasks.flow_model_basic",
+        schema="flow_design_basic",
+        role=Role.FLOW_DESIGNER,
+        description="流程模型基本信息设计",
+    ),
     Task.FLOW_DESIGN: TaskConfig(
         module=TASK_MODULE_FLOW_DESIGN,
-        schema="flow_design",
+        schema="flow_design_nodes",
         role=Role.FLOW_DESIGNER,
         description="使用bpmnio.js生成流程模型设计",
     ),
-    Task.FORM_GENERATION: TaskConfig(
+    Task.FORM_DESIGN: TaskConfig(
         module=TASK_MODULE_FORM_GENERATION,
-        schema="form_generation",
+        schema="form_design",
         role=Role.FORM_DESIGNER,
         description="使用vform3生成流程表单设计",
     ),
-    Task.CATEGORY_CLASSIFICATION: TaskConfig(
+    Task.CATEGORY_DESIGN: TaskConfig(
         module=TASK_MODULE_CATEGORY_CLASSIFY,
-        schema="category_classification",
+        schema="category_design",
         role=Role.CATEGORY_DESIGNER,
         description="进行流程分类设计",
     ),

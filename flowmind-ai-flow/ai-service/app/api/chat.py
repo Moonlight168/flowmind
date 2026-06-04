@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import require_auth
 from app.domain.dto import ChatRequestDTO, ResponseVO
-from app.graph.workflows.chat_workflow import chat_workflow, get_chat_workflow_state, invoke_chat_workflow
+from app.graph.workflows.chat_workflow import (
+    chat_workflow,
+    get_chat_workflow_state,
+    invoke_chat_workflow,
+)
 from app.infra.logger import generate_trace_id, set_trace_id
 from app.utils.auth import TokenUser
 
@@ -56,7 +60,7 @@ async def get_chat_state(
     """获取会话状态和消息历史"""
     state = get_chat_workflow_state(thread_id)
     if state is None:
-        return ResponseVO.fail("会话不存在或已过期", code=404)
+        return ResponseVO.error("会话不存在或已过期", code=404)
 
     return ResponseVO.success({"messages": state.get("messages", [])})
 
@@ -73,7 +77,25 @@ async def delete_chat_state(
             checkpointer.delete_thread(thread_id)
         return ResponseVO.success({"thread_id": thread_id})
     except Exception as e:
-        return ResponseVO.fail(f"删除失败: {str(e)}")
+        return ResponseVO.error(500, f"删除失败: {e!s}")
+
+
+@router.post("/state/batch-delete", response_model=ResponseVO[dict[str, Any]])
+async def batch_delete_chat_state(
+    thread_ids: list[str],
+    current_user: TokenUser = Depends(require_auth),
+) -> ResponseVO[dict[str, Any]]:
+    """批量删除会话"""
+    try:
+        checkpointer = chat_workflow.checkpointer
+        deleted_count = 0
+        for thread_id in thread_ids:
+            if hasattr(checkpointer, "delete_thread"):
+                checkpointer.delete_thread(thread_id)
+                deleted_count += 1
+        return ResponseVO.success({"deleted_count": deleted_count})
+    except Exception as e:
+        return ResponseVO.error(f"批量删除失败: {e!s}")
 
 
 @router.get("/history", response_model=ResponseVO[list[dict[str, Any]]])
@@ -99,4 +121,4 @@ async def get_chat_history(
         ]
         return ResponseVO.success(result)
     except Exception as e:
-        return ResponseVO.fail(f"获取历史失败: {str(e)}")
+        return ResponseVO.error(f"获取历史失败: {e!s}")

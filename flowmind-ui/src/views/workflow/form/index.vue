@@ -79,7 +79,7 @@
       ref="aiDesignDialogRef"
       v-model="aiDesignVisible"
       designType="form"
-      :formData="{}"
+      :formData="form"
       @fill="handleAiFill"
     />
 
@@ -111,6 +111,7 @@
 <script setup name="Form" >
 import { listForm, addForm, updateForm, getForm, delForm } from "@/api/workflow/form";
 import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import useUserStore from "@/store/modules/user";
 import { watch } from 'vue';
 
 const { proxy } = getCurrentInstance();
@@ -139,6 +140,7 @@ const designer = reactive({
 })
 const aiDesignVisible = ref(false);
 const aiDesignDialogRef = ref();
+const userStore = useUserStore();
 const render = reactive({
   visible: false,
   title: ''
@@ -289,25 +291,37 @@ const handleDelete = async (row) => {
 
 /** AI 设计按钮 */
 const handleAiDesign = () => {
+  // 同步设计器的最新数据到 form.value，确保 AiDesignDialog 能获取到
+  if (vfDesignerRef.value && vfDesignerRef.value.getFormJson) {
+    const formJson = vfDesignerRef.value.getFormJson();
+    if (formJson && Object.keys(formJson).length > 0) {
+      form.value.content = JSON.stringify(formJson);
+    }
+  }
   aiDesignVisible.value = true;
 };
 
 /** AI 填充表单 */
 const handleAiFill = (data) => {
   // data 是 form_data（完整 VForm3 JSON + form_name）
-  if (!data || !vfDesignerRef.value) return;
+  if (!data) return;
 
   // 更新表单名称
   if (data.form_name) {
     form.value.formName = data.form_name;
   }
 
-  // 直接将完整 VForm3 JSON 加载到设计器
-  if (vfDesignerRef.value.setFormJson && data.widgetList) {
-    vfDesignerRef.value.setFormJson(data);
-  }
+  // 提取 VForm3 需要的核心字段，存储到 form.value.content
+  const formJson = {
+    widgetList: data.widgetList || [],
+    formConfig: data.formConfig || {}
+  };
+  form.value.content = JSON.stringify(formJson);
 
-  aiDesignVisible.value = false;
+  // 加载到设计器（如设计器已挂载）
+  if (vfDesignerRef.value?.setFormJson) {
+    vfDesignerRef.value.setFormJson(formJson);
+  }
 };
 
 /** 表单设计器打开后 */
@@ -321,7 +335,7 @@ const handleDesignerClosed = () => {
   aiDesignDialogRef.value?.clearMessages();
 };
 
-// 监听设计器关闭，清空 AI 聊天
+// 监听设计器关闭，清空 AI 聊天和后端 checkpoint
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignDialogRef.value?.clearMessages();

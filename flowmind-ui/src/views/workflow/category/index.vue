@@ -84,6 +84,7 @@
 import { listCategory, getCategory, delCategory, addCategory, updateCategory } from "@/api/workflow/category";
 import { watch } from 'vue';
 import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance();
 
@@ -96,6 +97,7 @@ const multiple = ref(true);
 const total = ref(0);
 const aiDesignVisible = ref(false);
 const aiDesignDialogRef = ref();
+const userStore = useUserStore();
 
 const queryFormRef = ref();
 const categoryFormRef = ref();
@@ -214,10 +216,9 @@ const handleAiFill = (formData) => {
     form.value.code = formData.code || '';
     form.value.remark = formData.remark || '';
   }
-  aiDesignVisible.value = false;
 }
 
-// 监听主对话框关闭，清空 AI 聊天
+// 监听主对话框关闭，清空 AI 聊天和后端 checkpoint
 watch(() => dialog.visible, (val) => {
   if (!val) {
     aiDesignDialogRef.value?.clearMessages()

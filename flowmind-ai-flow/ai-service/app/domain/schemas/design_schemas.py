@@ -8,16 +8,16 @@ FlowMind 智能流程设计服务 - 流程设计相关 JSON Schema
 - 审批人属性（assignees、strategy）不生成，由用户在前端编辑器中设置
 """
 
-# 流程设计 Schema
-# AI 生成流程基本信息 + 节点结构，BPMN XML 由后端从 nodes 自动生成
-FLOW_DESIGN_SCHEMA = {
+# 流程基本信息 Schema（basic 模式）
+# 仅生成流程名称、分类、描述，不涉及 BPMN 流程编排
+FLOW_DESIGN_BASIC_SCHEMA = {
     "type": "object",
     "properties": {
         "flow_name": {
             "type": "string",
             "description": "流程名称（如\"请假审批流程\"、\"报销审批流程\"等）",
         },
-        "category_id": {
+        "code": {
             "type": "string",
             "description": "流程分类编码，从可用分类中选择最匹配的 code，若无匹配则留空",
         },
@@ -25,54 +25,66 @@ FLOW_DESIGN_SCHEMA = {
             "type": "string",
             "description": "流程描述（可选）",
         },
+    },
+    "required": ["flow_name", "code"],
+    "additionalProperties": False,
+}
+
+# 流程编排设计 Schema（design 模式）
+# 仅生成节点和连线，流程基本信息从 current_form_data 读取
+FLOW_DESIGN_NODES_SCHEMA = {
+    "type": "object",
+    "properties": {
         "nodes": {
             "type": "array",
-            "description": "流程节点列表。简单流程只用 USER_TASK；复杂流程可加 EXCLUSIVE_GATEWAY + edges 实现条件分支",
+            "description": "流程节点列表",
             "items": {
                 "type": "object",
                 "properties": {
                     "type": {
                         "type": "string",
                         "enum": [
+                            "START_EVENT",
+                            "END_EVENT",
                             "USER_TASK",
                             "EXCLUSIVE_GATEWAY",
                             "PARALLEL_GATEWAY",
+                            "INCLUSIVE_GATEWAY",
+                            "COMPLEX_GATEWAY",
+                            "EVENT_GATEWAY",
                             "INTERMEDIATE_THROW_EVENT",
                         ],
                         "description": "节点类型",
                     },
                     "id": {
                         "type": "string",
-                        "description": "节点唯一标识（可选，后端自动生成）",
+                        "description": "节点唯一标识",
                     },
                     "name": {
                         "type": "string",
                         "description": "节点名称",
                     },
-                    "suggested_opinion": {
-                        "type": "string",
-                        "description": "审批意见建议（仅 USER_TASK，可选）",
-                    },
-                    "form_key": {
-                        "type": "string",
-                        "description": "关联表单标识（仅 USER_TASK），必须从可用表单中选择 id 值",
-                    },
                     "assignee": {
                         "type": "string",
-                        "description": "审批人表达式，如 ${initiator}（仅 USER_TASK，可选）",
+                        "description": "审批人表达式，如 ${initiator}",
                     },
                     "candidate_groups": {
-                        "type": "string",
-                        "description": "候选角色组（仅 USER_TASK），必须从可用角色中选择 key 值",
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "候选角色组 key 列表",
                     },
                     "text": {
                         "type": "string",
-                        "description": "审批人显示名称（仅 USER_TASK），对应 candidate_groups 的角色中文名",
+                        "description": "审批人显示名称",
                     },
                     "data_type": {
                         "type": "string",
                         "enum": ["INITIATOR", "ROLES", "USERS", "EXPRESSION"],
-                        "description": "审批人类型（仅 USER_TASK），如 ROLES 对应 candidate_groups",
+                        "description": "审批人类型",
+                    },
+                    "form_key": {
+                        "type": "string",
+                        "description": "关联表单标识",
                     },
                 },
                 "required": ["type", "name"],
@@ -81,29 +93,20 @@ FLOW_DESIGN_SCHEMA = {
         },
         "edges": {
             "type": "array",
-            "description": "节点连线（可选，省略时按 nodes 顺序自动生成线性流程）",
+            "description": "节点连线列表。定义节点间的连接关系。source/target 使用节点 id，特殊值 'start' 表示开始事件，'end' 表示结束事件",
             "items": {
                 "type": "object",
                 "properties": {
-                    "source": {
-                        "type": "string",
-                        "description": "源节点 ID，或 \"start\" 表示开始事件",
-                    },
-                    "target": {
-                        "type": "string",
-                        "description": "目标节点 ID，或 \"end\" 表示结束事件",
-                    },
-                    "condition": {
-                        "type": "string",
-                        "description": "条件表达式（仅排他网关出线使用），如 ${amount > 10000}",
-                    },
+                    "source": {"type": "string", "description": "源节点 ID，或 'start' 表示从开始事件出发"},
+                    "target": {"type": "string", "description": "目标节点 ID，或 'end' 表示到达结束事件"},
+                    "condition": {"type": "string", "description": "条件表达式（仅排他网关出线需要），如 ${amount > 10000}"},
                 },
                 "required": ["source", "target"],
                 "additionalProperties": False,
             },
         },
     },
-    "required": ["flow_name", "category_id"],
+    "required": ["nodes"],
     "additionalProperties": False,
 }
 
@@ -121,7 +124,7 @@ CATEGORY_GENERATION_SCHEMA = {
         },
         "remark": {"type": "string", "description": "分类备注"},
     },
-    "required": ["category_name", "code", "remark"],
+    "required": ["category_name", "code"],
     "additionalProperties": False,
 }
 

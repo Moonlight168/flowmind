@@ -5,6 +5,11 @@ FlowMind 智能流程设计服务 - Redis 检查点存储
 - 对话状态持久化（存储/恢复）
 - 对话列表查询（支持预览、时间）
 - 对话删除
+
+Key 结构：
+- checkpoint:design:{thread_id}:{checkpoint_id} - LangGraph 内部检查点
+- chat:thread:{thread_id} - 简化版对话数据（供列表查询用）
+- chat:threads - 所有对话 thread_id 集合
 """
 
 from __future__ import annotations
@@ -31,10 +36,15 @@ logger = logging.getLogger(__name__)
 
 
 class RedisCheckpoint(BaseCheckpointSaver):
-    """Redis 对话存储（LangGraph 检查点标准接口）"""
+    """Redis 对话存储（LangGraph 检查点标准接口 + 简化列表管理）"""
 
+    # LangGraph 内部前缀
     CHECKPOINT_PREFIX = "checkpoint"
     METADATA_PREFIX = "metadata"
+
+    # 简化版 key 前缀
+    CHAT_PREFIX = "chat"
+    CHAT_THREADS_KEY = "chat:threads"
 
     def __init__(
         self,
@@ -60,12 +70,16 @@ class RedisCheckpoint(BaseCheckpointSaver):
         logger.info(f"RedisCheckpoint initialized, TTL={ttl}h")
 
     def _checkpoint_key(self, thread_id: str, ns: str = "") -> str:
-        """检查点键"""
+        """LangGraph 检查点键"""
         return f"{self.CHECKPOINT_PREFIX}:{ns}:{thread_id}"
 
     def _metadata_key(self, thread_id: str, ns: str = "") -> str:
-        """元数据键"""
+        """LangGraph 元数据键"""
         return f"{self.METADATA_PREFIX}:{ns}:{thread_id}"
+
+    def _chat_thread_key(self, thread_id: str) -> str:
+        """简化版对话数据键"""
+        return f"{self.CHAT_PREFIX}:thread:{thread_id}"
 
     @staticmethod
     def _sanitize_checkpoint(checkpoint: Checkpoint) -> Checkpoint:
@@ -122,7 +136,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
         sanitized_checkpoint = self._sanitize_checkpoint(checkpoint)
 
-        # 保存检查点
+        # 保存 LangGraph 检查点
         payload = {
             "checkpoint": sanitized_checkpoint,
             "metadata": metadata,
@@ -132,8 +146,8 @@ class RedisCheckpoint(BaseCheckpointSaver):
         typed = self.serde.dumps_typed(payload)
         self.redis.setex(key, self.ttl_seconds, ormsgpack.packb(typed))
 
-        # 保存元数据（预览、时间）
-        self._save_metadata(thread_id, ns, sanitized_checkpoint)
+        # 保存简化版数据（用于列表查询）
+        self._save_chat_thread(thread_id, sanitized_checkpoint)
 
         logger.debug(f"Checkpoint saved: thread_id={thread_id}")
 
@@ -145,18 +159,43 @@ class RedisCheckpoint(BaseCheckpointSaver):
             },
         }
 
-    def _save_metadata(self, thread_id: str, ns: str, checkpoint: Checkpoint) -> None:
-        """保存对话元数据（预览、更新时间）"""
+    def _save_chat_thread(self, thread_id: str, checkpoint: Checkpoint) -> None:
+        """保存简化版对话数据"""
         try:
+            # 提取第一条用户消息作为预览
+            preview = "新对话"
             updated_at = datetime.now().isoformat()
 
-            metadata_key = self._metadata_key(thread_id, ns)
-            self.redis.hset(metadata_key, mapping={
+            channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
+            messages = channel_values.get("messages", []) if isinstance(channel_values, dict) else []
+
+            for msg in messages:
+                if hasattr(msg, "type") and msg.type == "human":
+                    content = msg.content if hasattr(msg, "content") else ""
+                    if content:
+                        preview = content[:50] + ("..." if len(content) > 50 else "")
+                    break
+                elif isinstance(msg, dict) and msg.get("type") == "human":
+                    content = msg.get("content", "")
+                    if content:
+                        preview = content[:50] + ("..." if len(content) > 50 else "")
+                    break
+
+            # 存储简化版数据
+            thread_key = self._chat_thread_key(thread_id)
+            thread_data = {
+                "thread_id": thread_id,
+                "preview": preview,
                 "updated_at": updated_at,
-            })
-            self.redis.expire(metadata_key, self.ttl_seconds)
+            }
+            self.redis.setex(thread_key, self.ttl_seconds, ormsgpack.packb(thread_data))
+
+            # 添加到线程集合
+            self.redis.sadd(self.CHAT_THREADS_KEY, thread_id)
+            self.redis.expire(self.CHAT_THREADS_KEY, self.ttl_seconds)
+
         except Exception as e:
-            logger.warning(f"Failed to save metadata: {e}")
+            logger.warning(f"Failed to save chat thread: {e}")
 
     def save_preview(self, thread_id: str, user_input: str, ns: str = "") -> None:
         """保存用户输入作为预览"""
@@ -164,12 +203,29 @@ class RedisCheckpoint(BaseCheckpointSaver):
             preview = user_input[:50] + ("..." if len(user_input) > 50 else "")
             updated_at = datetime.now().isoformat()
 
-            metadata_key = self._metadata_key(thread_id, ns)
-            self.redis.hset(metadata_key, mapping={
-                "preview": preview,
-                "updated_at": updated_at,
-            })
-            self.redis.expire(metadata_key, self.ttl_seconds)
+            # 更新简化版数据
+            thread_key = self._chat_thread_key(thread_id)
+            existing = self.redis.get(thread_key)
+            if existing:
+                try:
+                    thread_data = ormsgpack.unpackb(existing)
+                    thread_data["preview"] = preview
+                    thread_data["updated_at"] = updated_at
+                    self.redis.setex(thread_key, self.ttl_seconds, ormsgpack.packb(thread_data))
+                except Exception:
+                    pass
+            else:
+                thread_data = {
+                    "thread_id": thread_id,
+                    "preview": preview,
+                    "updated_at": updated_at,
+                }
+                self.redis.setex(thread_key, self.ttl_seconds, ormsgpack.packb(thread_data))
+
+            # 添加到线程集合
+            self.redis.sadd(self.CHAT_THREADS_KEY, thread_id)
+            self.redis.expire(self.CHAT_THREADS_KEY, self.ttl_seconds)
+
         except Exception as e:
             logger.warning(f"Failed to save preview: {e}")
 
@@ -204,11 +260,18 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
     def delete_thread(self, thread_id: str, ns: str = "") -> None:
         """删除对话"""
+        # 删除 LangGraph 检查点
         checkpoint_key = self._checkpoint_key(thread_id, ns)
         metadata_key = self._metadata_key(thread_id, ns)
-
         self.redis.delete(checkpoint_key)
         self.redis.delete(metadata_key)
+
+        # 删除简化版数据
+        thread_key = self._chat_thread_key(thread_id)
+        self.redis.delete(thread_key)
+
+        # 从线程集合中移除
+        self.redis.srem(self.CHAT_THREADS_KEY, thread_id)
 
         logger.info(f"Deleted thread: thread_id={thread_id}")
 
@@ -216,60 +279,35 @@ class RedisCheckpoint(BaseCheckpointSaver):
         """列出所有对话（带预览、时间）"""
         try:
             threads = []
-            pattern = f"{self.CHECKPOINT_PREFIX}:*"
-            count = 0
 
-            for key in self.redis.scan_iter(pattern, count=limit * 2):
-                if count >= limit:
+            # 从简化版数据中获取列表
+            thread_ids = self.redis.smembers(self.CHAT_THREADS_KEY)
+            if not thread_ids:
+                return []
+
+            for thread_id_bytes in thread_ids:
+                thread_id = thread_id_bytes.decode() if isinstance(thread_id_bytes, bytes) else thread_id_bytes
+                thread_key = self._chat_thread_key(thread_id)
+                data = self.redis.get(thread_key)
+
+                if data:
+                    try:
+                        thread_data = ormsgpack.unpackb(data)
+                        threads.append({
+                            "thread_id": thread_data.get("thread_id", thread_id),
+                            "preview": thread_data.get("preview", "新对话"),
+                            "updated_at": thread_data.get("updated_at"),
+                        })
+                    except Exception as e:
+                        logger.debug(f"Failed to parse thread data: {e}")
+                        threads.append({
+                            "thread_id": thread_id,
+                            "preview": "新对话",
+                            "updated_at": None,
+                        })
+
+                if len(threads) >= limit:
                     break
-
-                key_str = key.decode() if isinstance(key, bytes) else key
-                parts = key_str.split(":")
-                if len(parts) >= 3:
-                    ns = parts[1]
-                    thread_id = parts[2]
-
-                    # 直接从 checkpoint 获取消息来提取预览
-                    data = self.redis.get(key)
-                    preview = "新对话"
-                    updated_at = None
-
-                    if data:
-                        try:
-                            typed = ormsgpack.unpackb(data)
-                            payload = self.serde.loads_typed(typed)
-                            checkpoint = payload.get("checkpoint", {})
-                            metadata = payload.get("metadata", {})
-
-                            # 提取第一条用户消息
-                            channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
-                            messages = channel_values.get("messages", []) if isinstance(channel_values, dict) else []
-
-                            for msg in messages:
-                                if hasattr(msg, "type") and msg.type == "human":
-                                    content = msg.content if hasattr(msg, "content") else ""
-                                    if content:
-                                        preview = content[:50] + ("..." if len(content) > 50 else "")
-                                    break
-                                elif isinstance(msg, dict) and msg.get("type") == "human":
-                                    content = msg.get("content", "")
-                                    if content:
-                                        preview = content[:50] + ("..." if len(content) > 50 else "")
-                                    break
-
-                            # 更新时间从 metadata 获取
-                            if isinstance(metadata, dict):
-                                updated_at = metadata.get("updated_at")
-                        except Exception as e:
-                            logger.debug(f"Failed to parse checkpoint: {e}")
-
-                    threads.append({
-                        "thread_id": thread_id,
-                        "ns": ns,
-                        "preview": preview,
-                        "updated_at": updated_at,
-                    })
-                    count += 1
 
             # 按更新时间倒序
             threads.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
@@ -281,8 +319,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
     def thread_exists(self, thread_id: str, ns: str = "") -> bool:
         """检查对话是否存在"""
-        key = self._checkpoint_key(thread_id, ns)
-        return self.redis.exists(key) > 0
+        return self.redis.sismember(self.CHAT_THREADS_KEY, thread_id)
 
     def get_or_create_thread_id(self, user_key: str | None = None) -> str:
         """获取或创建新的线程ID"""

@@ -34,6 +34,15 @@ export function deleteAiFormState(threadId) {
   })
 }
 
+// 批量删除 AI 状态
+export function batchDeleteAiFormState(threadIds) {
+  return request({
+    url: '/flowmind-ai/chat/state/batch-delete',
+    method: 'post',
+    data: threadIds
+  })
+}
+
 // 检查 AI 服务健康状态
 export function checkAiHealth() {
   return request({

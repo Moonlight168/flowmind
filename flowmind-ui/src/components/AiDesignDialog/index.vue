@@ -1,11 +1,18 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="title"
     width="520px"
     destroy-on-close
     class="ai-design-dialog"
   >
+    <template #header>
+      <div class="dialog-header">
+        <span class="dialog-title">{{ title }}</span>
+        <el-button link type="info" @click="clearMessages" :disabled="loading">
+          新建对话
+        </el-button>
+      </div>
+    </template>
     <div class="dialog-messages" ref="messagesContainer">
       <div
         v-for="(msg, index) in messages"
@@ -20,12 +27,11 @@
         </div>
         <div
           :class="[
-            'message-text px-3.5 py-2.5 rounded-3xl text-sm leading-relaxed break-all',
+            'message-text px-3.5 py-2.5 rounded-3xl text-sm leading-relaxed break-all markdown-content',
             msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-gray-800'
           ]"
-        >
-          {{ msg.content }}
-        </div>
+          v-html="renderMarkdown(msg.content)"
+        ></div>
       </div>
       <div v-if="loading" class="message assistant flex gap-3 mb-4">
         <div class="message-avatar flex-shrink-0 flex items-center justify-center text-blue-500">
@@ -47,6 +53,8 @@
           @keydown.enter="handleSend"
           :disabled="loading"
           size="default"
+          maxlength="2000"
+          show-word-limit
         />
         <el-button type="primary" @click="handleSend" :loading="loading" :disabled="!inputText.trim()">
           发送
@@ -58,9 +66,11 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { designCategory, designFlow, designForm } from '@/api/workflow/design'
+import { designCategory, designFlow, designForm, clearDesignState } from '@/api/workflow/design'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
+import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 
 const userStore = useUserStore()
 
@@ -101,8 +111,37 @@ const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
 const messagesContainer = ref(null)
+// 统一维护当前表单数据：AI 更新和外部修改都同步到这里
+const currentFormData = ref({})
 
 const designApi = { category: designCategory, flow: designFlow, form: designForm }
+
+// 监听外部 formData 变化，同步到 currentFormData
+watch(() => props.formData, (newVal) => {
+  if (newVal && Object.keys(newVal).length > 0) {
+    // 合并外部数据，保留 AI 已返回的数据
+    currentFormData.value = { ...currentFormData.value, ...newVal }
+  }
+}, { deep: true, immediate: true })
+
+// Markdown 渲染配置
+const md = new MarkdownIt({
+  html: true,
+  breaks: true,
+  linkify: true,
+  typographer: true
+})
+
+// 渲染 Markdown 并处理换行
+function renderMarkdown(content) {
+  if (!content) return ''
+
+  let formattedContent = content
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+
+  return DOMPurify.sanitize(md.render(formattedContent))
+}
 
 const storageKey = computed(() => {
   const id = props.sessionId || 'new'
@@ -113,25 +152,48 @@ onMounted(() => {
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
     try {
-      messages.value = JSON.parse(saved).messages || []
+      const state = JSON.parse(saved)
+      messages.value = state.messages || []
+      // 恢复已保存的表单数据
+      if (state.currentFormData && Object.keys(state.currentFormData).length > 0) {
+        currentFormData.value = state.currentFormData
+      } else {
+        currentFormData.value = { ...props.formData }
+      }
     } catch (e) {
       console.error('恢复聊天记录失败:', e)
+      currentFormData.value = { ...props.formData }
     }
+  } else {
+    currentFormData.value = { ...props.formData }
   }
 })
 
 watch(visible, (val) => {
   if (val) {
+    // 弹窗打开时：优先用 sessionStorage 保存的数据，其次用外部传入的
     const saved = sessionStorage.getItem(storageKey.value)
     if (saved) {
       try {
-        messages.value = JSON.parse(saved).messages || []
+        const state = JSON.parse(saved)
+        messages.value = state.messages || []
+        if (state.currentFormData && Object.keys(state.currentFormData).length > 0) {
+          currentFormData.value = state.currentFormData
+        } else {
+          currentFormData.value = { ...props.formData }
+        }
       } catch (e) {
-        messages.value = []
+        currentFormData.value = { ...props.formData }
       }
+    } else {
+      currentFormData.value = { ...props.formData }
     }
   } else {
-    sessionStorage.setItem(storageKey.value, JSON.stringify({ messages: messages.value }))
+    // 弹窗关闭时：保存状态
+    sessionStorage.setItem(storageKey.value, JSON.stringify({
+      messages: messages.value,
+      currentFormData: currentFormData.value
+    }))
   }
 })
 
@@ -150,22 +212,30 @@ async function handleSend() {
     const api = designApi[props.designType]
     const res = await api({
       user_input: userInput,
-      conversation_history: messages.value,
-      current_form_data: props.formData,
+      current_form_data: currentFormData.value,
       mode: props.mode
     })
 
     const data = res.data || res
 
-    if (data.form_data) {
+    // 有 form_data 则更新 currentFormData 并通知父组件
+    if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
+      currentFormData.value = data.form_data
       emit('fill', data.form_data)
+      // intent 为 success 时关闭对话框
+      if (data.intent === 'success') {
+        visible.value = false
+      }
     }
     if (data.message) {
       messages.value.push({ role: 'assistant', content: data.message })
       scrollToBottom()
     }
 
-    sessionStorage.setItem(storageKey.value, JSON.stringify({ messages: messages.value }))
+    sessionStorage.setItem(storageKey.value, JSON.stringify({
+      messages: messages.value,
+      currentFormData: currentFormData.value
+    }))
   } catch (error) {
     console.error('AI 设计失败:', error)
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
@@ -183,9 +253,15 @@ function scrollToBottom() {
   }, 0)
 }
 
+
 function clearMessages() {
   messages.value = []
+  // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
+  // 只清空 AI 生成的数据
+  currentFormData.value = { ...props.formData }
   sessionStorage.removeItem(storageKey.value)
+  // 同步清除后端 Redis 中的对话历史
+  clearDesignState(props.designType)
 }
 
 defineExpose({
@@ -194,6 +270,13 @@ defineExpose({
 </script>
 
 <style lang="scss" scoped>
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
 .dialog-messages {
   height: 320px;
   overflow-y: auto;
@@ -221,6 +304,124 @@ defineExpose({
 .message-text {
   max-width: 75%;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+// Markdown 内容样式
+.markdown-content {
+  word-break: break-word;
+  white-space: normal;
+
+  :deep(p) {
+    margin: 0.5em 0;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  :deep(p:first-child) {
+    margin-top: 0;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(code) {
+    background-color: rgba(0, 0, 0, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9em;
+    white-space: pre;
+  }
+
+  :deep(pre) {
+    background-color: #f6f8fa;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0.5em 0;
+
+    code {
+      background-color: transparent;
+      padding: 0;
+      white-space: pre;
+    }
+  }
+
+  :deep(ul), :deep(ol) {
+    padding-left: 1.5em;
+    margin: 0.5em 0;
+  }
+
+  :deep(li) {
+    margin: 0.25em 0;
+    white-space: normal;
+  }
+
+  :deep(li > p) {
+    margin: 0;
+    display: inline;
+  }
+
+  :deep(blockquote) {
+    border-left: 4px solid #667eea;
+    padding-left: 1em;
+    margin: 0.5em 0;
+    color: #666;
+  }
+
+  :deep(strong) {
+    font-weight: 600;
+  }
+
+  :deep(em) {
+    font-style: italic;
+  }
+
+  :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
+    margin: 0.75em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  :deep(h1:first-child), :deep(h2:first-child), :deep(h3:first-child) {
+    margin-top: 0;
+  }
+
+  :deep(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+    display: block;
+    overflow-x: auto;
+  }
+
+  :deep(th), :deep(td) {
+    border: 1px solid #ddd;
+    padding: 6px 12px;
+    text-align: left;
+  }
+
+  :deep(th) {
+    background-color: #f6f8fa;
+    font-weight: 600;
+  }
+
+  :deep(a) {
+    color: #667eea;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  :deep(hr) {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 1em 0;
+  }
 }
 
 .typing-dot {

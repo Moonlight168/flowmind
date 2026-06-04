@@ -7,10 +7,7 @@ FlowMind 智能流程设计服务 - 审查 Agent
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.messages import HumanMessage
-
 from app.domain.schemas import SchemaRegistry
-from app.graph.state import AppState
 from app.infra.logger import logger
 
 
@@ -37,8 +34,6 @@ class ReviewerAgent:
     2. 业务规则验证（可扩展）
     3. 自动重试机制
     """
-
-    MAX_RETRIES = 2
 
     def review(
         self,
@@ -134,125 +129,19 @@ class ReviewerAgent:
         Returns:
             错误信息列表
         """
-        # 当前无特定业务规则，预留扩展点
-        return []
+        errors = []
 
-    def review_with_retry(
-        self,
-        agent_process_func,
-        state: AppState,
-        schema_name: str,
-    ) -> AppState:
-        """带重试的审查流程
+        # 检查开始节点是否有 formKey（流程保存的必要条件）
+        nodes = output.get("nodes", [])
+        for node in nodes:
+            if node.get("type", "").upper() == "START_EVENT":
+                form_key = node.get("form_key", "")
+                if not form_key:
+                    errors.append("开始节点缺少 form_key，请调用 search_forms(\"\") 获取表单列表并选择一个表单")
+                break
 
-        Args:
-            agent_process_func: Agent 的 _process 方法
-            state: 当前状态
-            schema_name: Schema 名称
-
-        Returns:
-            更新后的状态
-        """
-        for attempt in range(self.MAX_RETRIES + 1):
-            # 执行 Agent 处理
-            result_state = agent_process_func(state)
-
-            # 获取输出数据进行审查
-            output = self._extract_output(state, schema_name)
-            if not output:
-                # 无法提取输出，直接返回
-                return result_state
-
-            # 审查输出
-            review_result = self.review(output, schema_name, state)
-
-            if review_result.passed:
-                logger.debug(f"审查通过，尝试次数: {attempt + 1}")
-                return result_state
-
-            # 审查未通过，准备重试
-            if attempt < self.MAX_RETRIES:
-                logger.warning(
-                    f"审查未通过（第 {attempt + 1} 次），错误: {review_result.errors}"
-                )
-                # 将错误反馈加入消息历史
-                error_message = self._build_error_message(review_result.errors)
-                state["messages"].append(HumanMessage(content=error_message))
-            else:
-                # 超过最大重试次数
-                logger.error(f"审查失败，已达到最大重试次数 ({self.MAX_RETRIES})")
-                state["review_failed"] = True
-                state["review_errors"] = review_result.errors
-
-        return state
-
-    def _extract_output(
-        self,
-        state: AppState,
-        schema_name: str,
-    ) -> dict[str, Any] | None:
-        """从状态中提取输出数据
-
-        Args:
-            state: 当前状态
-            schema_name: Schema 名称
-
-        Returns:
-            输出数据或 None
-        """
-        # 根据 Schema 名称确定要提取的字段
-        schema_to_field = {
-            "category_classification": "category",
-            "flow_design": "bpmn_structure",
-            "form_generation": "form_json",
-        }
-
-        field_name = schema_to_field.get(schema_name)
-        if field_name:
-            return state.get(field_name)
-
-        return None
-
-    def _build_error_message(self, errors: list[str]) -> str:
-        """构建错误反馈消息
-
-        Args:
-            errors: 错误列表
-
-        Returns:
-            格式化的错误消息
-        """
-        error_list = "\n".join(f"- {e}" for e in errors)
-        return f"输出格式不符合要求，请修正以下问题：\n{error_list}"
+        return errors
 
 
 # 全局审查器实例
 reviewer_agent = ReviewerAgent()
-
-
-def with_reviewer(schema_name: str):
-    """审查装饰器工厂
-
-    为 Agent 的 _process 方法添加审查和重试能力。
-
-    Args:
-        schema_name: Schema 名称
-
-    Returns:
-        装饰器函数
-
-    Usage:
-        class MyAgent(BaseAgent):
-            @with_reviewer("my_schema")
-            def _process(self, state: AppState) -> AppState:
-                ...
-    """
-    def decorator(func):
-        def wrapper(self, state: AppState) -> AppState:
-            return reviewer_agent.review_with_retry(
-                agent_process_func=func,
-                state=state,
-                schema_name=schema_name,
-            )
-        return wrapper
-    return decorator

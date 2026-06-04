@@ -1,7 +1,7 @@
 """
 FlowMind 智能流程设计服务 - 统一状态定义
 
-使用 LangGraph 1.0.x 单一状态。
+最小化设计：只保留节点间必须传递的数据
 """
 
 from typing import Annotated, TypedDict
@@ -11,39 +11,33 @@ from langgraph.graph import add_messages
 
 
 class AppState(TypedDict, total=False):
-    """统一应用状态"""
-    # ===== 基础 =====
+    """统一应用状态
+
+    设计原则：
+    - messages 是核心字段，所有历史通过它存取
+    - design_type/mode 在 initial_state 传入，在节点间传递
+    - Checkpoint 自动持久化所有状态字段
+    """
+    # 核心：消息历史（LangGraph add_messages 自动追加，Checkpoint 自动持久化）
     messages: Annotated[list[BaseMessage], add_messages]
-    thread_id: str
-    trace_id: str | None
 
-    # ===== 通用 AI 回复 =====
-    chat_response: str
-
-    # ===== 设计相关 =====
+    # design workflow 必须字段
     design_type: str | None
-    user_input: str | None
-    conversation_history: list[dict]
-    current_form_data: dict | None
     mode: str | None
-    schema_name: str | None
+    user_input: str | None
+    current_form_data: dict | None
 
-    # 设计结果
+    # chat 专用
+    chat_response: str | None
+
+    # design 专用
+    needs_clarification: bool | None
+    clarification_message: str | None
     design_output: dict | None
     raw_result: dict | None
-    formatted_result: dict | None
-
-    # 设计状态
-    design_success: bool | None
     design_error: str | None
-    review_passed: bool | None
-    review_errors: list | None
-    review_suggestions: list | None
-    review_retry_count: int | None
-    format_success: bool | None
-    format_error: str | None
+    design_success: bool | None
+    intent: str | None  # 标识 clarification/success
 
-    # ===== 任务上下文 =====
-    last_node: str | None
-    node_execution_count: int
-    task_context: dict
+    # review 专用
+    review_retry_count: int | None  # 审查重试计数

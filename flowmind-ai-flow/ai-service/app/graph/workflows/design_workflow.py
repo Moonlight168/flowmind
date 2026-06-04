@@ -1,22 +1,42 @@
 """
-FlowMind 智能流程设计服务 - 设计 Workflow
+FlowMind 智能审批服务 - 设计 Workflow
 
-统一的流程/表单/分类设计 Workflow，包含：
-- design_node: 调用 DesignAgent 生成内容
-- review_node: 审查输出质量（失败时自动重试）
-- format_node: 包装元数据信封
+简化版工作流设计：
+- design_node: 调用 LLM 生成内容，追加 AI 回复到 messages
+- review_node: 审查输出，失败时注入错误反馈到 messages 并重试
+- format_node: 统一格式化输出
+
+状态管理：
+- messages: 唯一的历史记录，所有节点都追加到它
+- design_type/mode: 仅在首次设置，后续从 checkpoint 恢复
+- intent: 标识最终结果类型 (clarification/success/error)
 """
 
+import redis
+from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.config.settings import settings
 from app.core.checkpoint.redis_checkpoint import RedisCheckpoint
-from app.graph.nodes.design_node import design_node
 from app.graph.nodes.format_node import format_node
+from app.graph.nodes.react_agent_node import react_agent_node
 from app.graph.nodes.review_node import review_node
 from app.graph.state.app_state import AppState
 from app.infra.logger import generate_trace_id, log_context, logger
+
+LOCK_TTL_SECONDS = 120
+
+
+def _get_redis_client() -> redis.Redis:
+    return redis.Redis(
+        host=settings.redis.host,
+        port=settings.redis.port,
+        db=settings.redis.db,
+        password=settings.redis.password,
+        decode_responses=True,
+    )
+
 
 # 创建全局检查点存储
 try:
@@ -24,36 +44,63 @@ try:
 except Exception as exc:
     if not settings.app.debug:
         raise RuntimeError("Redis checkpoint 初始化失败，生产环境禁止降级") from exc
-
     logger.warning(f"Redis checkpoint 初始化失败，降级到 MemorySaver: {exc!s}")
     checkpointer = MemorySaver()
 
 
-def _review_router(state: AppState) -> str:
-    """审查路由：通过则进入 format，未通过且未超重试次数则回到 design"""
-    if state.get("review_passed", True):
+def _result_router(state: AppState) -> str:
+    """根据 intent 路由到对应节点
+
+    - intent == "success" + review_passed: 成功，格式化
+    - intent == "success" + !review_passed: 审查失败，重试 design
+    - intent == "error" 或超重试: 结束
+    """
+    intent = state.get("intent", "clarification")
+    design_output = state.get("design_output") or {}
+    review_info = design_output.get("review", {})
+    review_passed = review_info.get("passed", True)
+    review_retry_count = state.get("review_retry_count") or 0
+
+    logger.info(f"[router] intent={intent}, review_passed={review_passed}, retry={review_retry_count}")
+
+    # 成功 + 审查通过 = 结束
+    if intent == "success" and review_passed:
         return "format"
-    if (state.get("review_retry_count") or 0) < 2:
+
+    # 成功 + 审查失败 + 未超重试次数 = 重试
+    if intent == "success" and not review_passed and review_retry_count < 3:
         return "design"
+
+    # 其他情况（错误 或 超重试）= 结束
     return "format"
 
 
 def create_design_workflow() -> StateGraph:
-    """创建设计 Workflow"""
     workflow = StateGraph(AppState)
 
-    # 添加节点
-    workflow.add_node("design", design_node)
+    workflow.add_node("design", react_agent_node)
     workflow.add_node("review", review_node)
     workflow.add_node("format", format_node)
 
-    # 设置入口和结束
     workflow.set_entry_point("design")
-    workflow.add_edge("design", "review")
-    workflow.add_conditional_edges("review", _review_router, {
-        "design": "design",
-        "format": "format",
-    })
+
+    # design → review/format 的条件路由
+    # clarification 和 error 直接进入 format，success 进入 review
+    workflow.add_conditional_edges(
+        "design",
+        lambda state: "format" if state.get("intent") in ("clarification", "error") else "review",
+        {"review": "review", "format": "format"},
+    )
+
+    workflow.add_conditional_edges(
+        "review",
+        _result_router,
+        {
+            "design": "design",
+            "format": "format",
+        },
+    )
+
     workflow.add_edge("format", END)
 
     return workflow.compile(checkpointer=checkpointer)
@@ -67,21 +114,14 @@ def invoke_design_workflow(
     user_input: str,
     thread_id: str,
     trace_id: str | None = None,
-    conversation_history: list[dict] | None = None,
     current_form_data: dict | None = None,
     mode: str = "create",
     **kwargs,
 ) -> dict:
     """设计 Workflow 调用入口
 
-    Args:
-        design_type: 设计类型 (category/flow/form)
-        user_input: 用户输入
-        thread_id: 线程 ID
-        trace_id: 追踪 ID
-        conversation_history: 对话历史
-        current_form_data: 当前表单数据
-        mode: 设计模式 (create/update)
+    重要：每次调用都会在 checkpoint 中追加新的用户消息，
+    对话历史通过 LangGraph 的 checkpoint 机制自动管理。
     """
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -92,48 +132,66 @@ def invoke_design_workflow(
     if not trace_id:
         trace_id = generate_trace_id()
 
+    # 检查是否是首次调用（checkpoint 不存在）
+    is_first_call = not checkpointer.thread_exists(thread_id)
+
+    # 构建初始状态
+    # 注意：messages 使用 add_messages reducer，会自动追加到 checkpoint 中的现有消息
     initial_state: AppState = {
-        "design_type": design_type,
-        "user_input": user_input,
-        "trace_id": trace_id,
-        "thread_id": thread_id,
-        "conversation_history": conversation_history or [],
+        "messages": [HumanMessage(content=user_input)],
         "current_form_data": current_form_data or {},
-        "mode": mode,
-        "schema_name": _get_schema_name(design_type),
     }
 
-    with log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None):
-        if settings.app.debug:
-            result = None
-            for step in design_workflow.stream(initial_state, config):
-                result = step
-            if result and "__interrupt__" in result:
-                pass
-            else:
-                final_state = design_workflow.get_state(config)
-                result = final_state.values if final_state else {}
-        else:
+    # design_type/mode 只在首次设置（checkpoint 不存在时）
+    # 后续调用从 checkpoint 恢复
+    if is_first_call:
+        initial_state["design_type"] = design_type
+        initial_state["mode"] = mode
+        initial_state["intent"] = "clarification"  # 默认追问
+    else:
+        # 非首次调用，从 checkpoint 恢复 design_type/mode
+        # 但需要确保 current_form_data 被正确传递
+        logger.debug(f"[invoke] 从 checkpoint 恢复 thread_id={thread_id}")
+
+    lock_key = f"lock:design:{thread_id}"
+    redis_client = _get_redis_client()
+    acquired = redis_client.set(lock_key, "1", nx=True, ex=LOCK_TTL_SECONDS)
+
+    if not acquired:
+        raise RuntimeError("请等待上一个请求完成后再发起新请求")
+
+    logger.info(f"[invoke] 开始执行 design_type={design_type}, thread_id={thread_id}, is_first_call={is_first_call}")
+
+    try:
+        with log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None):
             result = design_workflow.invoke(initial_state, config)
 
-        # 提取格式化结果（含元数据信封）
-        if isinstance(result, dict) and "formatted_result" in result:
-            return result["formatted_result"]
-        return result
+            # 从最终状态提取 design_output
+            if isinstance(result, dict):
+                design_output = result.get("design_output", {})
+                if design_output:
+                    logger.info(f"[invoke] 完成, intent={result.get('intent')}")
+                    return design_output
+
+            logger.warning(f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}")
+            return result
+    finally:
+        redis_client.delete(lock_key)
 
 
-def _get_schema_name(design_type: str) -> str:
-    """获取设计类型对应的 Schema 名称"""
-    schema_map = {
-        "category": "category_classification",
-        "flow": "flow_design",
-        "form": "form_generation",
-    }
-    return schema_map.get(design_type, "")
+def delete_design_thread(thread_id: str) -> None:
+    """删除设计对话历史"""
+    try:
+        checkpointer.delete_thread(thread_id)
+        logger.info(f"删除设计对话: thread_id={thread_id}")
+    except Exception as e:
+        logger.warning(f"删除设计对话失败: {e}")
 
 
 __all__ = [
+    "checkpointer",
     "create_design_workflow",
+    "delete_design_thread",
     "design_workflow",
     "invoke_design_workflow",
 ]

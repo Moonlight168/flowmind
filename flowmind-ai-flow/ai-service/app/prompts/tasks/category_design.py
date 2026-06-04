@@ -5,12 +5,30 @@ FlowMind 智能流程设计服务 - 流程分类设计任务
 """
 
 # 任务指令
-TASK = """根据用户输入和对话历史进行流程分类设计。
+TASK = """设计流程分类。
 
-请以JSON格式输出，分类规则：
-- category_name: 根据流程类型生成（如"请假审批"、"报销审批"）
-- code: 英文下划线命名（如"leave_approval"、"expense_approval"）
-- remark: 简要说明分类用途
+## 当前分类基本信息
 
-若对话历史中已有分类，保持一致；若首次请求，根据用户输入生成新分类。
+{flow_basic_info}
+
+## 设计规则
+
+- 设计前先用 search_categories(category_code=xxx) 验证 code 是否已存在
+- code 重复时**自动生成新的 code**（如 leave_approval_v2），不要询问用户
+- 当用户说"添加备注"、"备注"或类似表述时，**直接生成合适的 remark**，不需要询问用户
+- remark 由你根据 category_name 和业务场景自动生成
+- 其他字段的修改同理，不要重复询问已有信息
+
+## 输出格式（JSON）
+
+- category_name：分类名称，如"请假审批"
+- code：英文下划线命名，如"leave_approval"
+- remark：分类用途说明（可选，未提供时不设置）
+
+## 输出
+
+**重要**：直接输出 JSON 文本作为 AI 消息内容，不要尝试调用任何工具！
+**禁止**：不要在 JSON 前后添加任何解释、总结或额外文本！只输出纯 JSON！
+
+生成成功：`{"category_name": "...", "code": "...", "remark": "..."}`
 """

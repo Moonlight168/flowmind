@@ -5,88 +5,127 @@ FlowMind 智能流程设计服务 - 流程模型设计任务
 """
 
 # 任务指令
-TASK = """使用bpmnio.js设计完整审批流程模型，包含节点、审批人、条件分支。
+TASK = """设计审批流程编排。AI 只需生成节点和连线。
 
-## 输出要求
+## 当前流程基本信息
 
-请以JSON格式输出，必须包含以下字段：
+{flow_basic_info}
 
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| flow_name | string | 是 | 流程名称，如"请假审批流程" |
-| category_id | string | 是 | 流程分类编码，必须从【可用分类】中选择 code 值，无匹配则留空 "" |
-| description | string | 否 | 流程简要描述 |
-| nodes | array | 是 | 流程节点列表 |
-| edges | array | 否 | 节点连线列表。省略时按 nodes 顺序自动生成线性流程 |
+**重要**：
+- 上述流程基本信息已确定，**直接复用，不要重新生成**
+- 如果提示"已有流程编排"，表示用户在**修改现有流程**，**必须保留原有节点，只根据用户需求增量修改**
 
-## 支持的节点类型
+## 输出格式（JSON）
 
-| 类型 | 说明 | 适用场景 |
-|------|------|----------|
-| USER_TASK | 用户任务（审批节点） | 审批、填写、确认 |
-| EXCLUSIVE_GATEWAY | 排他网关（XOR） | 条件分支，如金额分级审批 |
-| PARALLEL_GATEWAY | 并行网关（AND） | 并行审批，多部门同时审核 |
-| INTERMEDIATE_THROW_EVENT | 中间抛出事件 | 里程碑、通知触发点 |
+**design 模式**（生成流程编排）：
+- 必填：nodes（节点列表）
+- 可选：edges（节点连线，省略时按 nodes 顺序自动生成线性流程）
 
-## USER_TASK 节点属性
+**注意**：不要输出 flow_name、code、description，它们已在上方【当前流程基本信息】中！
 
-| 属性 | 必填 | 说明 |
-|------|------|------|
-| type | 是 | 固定为 "USER_TASK" |
-| name | 是 | 节点名称，中文（如"部门经理审批"） |
-| assignee | 否 | 审批人表达式，如 "${initiator}" 表示发起人 |
-| candidate_groups | 是 | 候选角色组，必须从【可用角色】中选择 key 值 |
-| text | 是 | 审批人显示名称，对应 candidate_groups 的角色中文名 |
-| data_type | 是 | 审批人类型：INITIATOR/ROLES/USERS/EXPRESSION |
-| form_key | 是 | 关联表单标识，必须从【可用表单】中选择 id 值 |
+## 节点类型
 
-## edges 连线规则
+**START_EVENT（开始事件）**
+- type：固定 "START_EVENT"
+- id：固定 "startEvent" 或自定义
+- name：节点名称，如"开始"
+- form_key：关联表单（**必须先调用 search_forms("") 获取表单列表，输出 id 值，无匹配则留空 ""**）
 
-- source: 源节点 ID 或 "start"（开始事件）
-- target: 目标节点 ID 或 "end"（结束事件）
-- condition: 条件表达式（仅排他网关出线需要），如 "${amount > 10000}"
-- 简单线性流程可省略 edges，按 nodes 顺序自动生成
+**END_EVENT（结束事件）**
+- type：固定 "END_EVENT"
+- id：固定 "endEvent" 或自定义
+- name：节点名称，如"结束"
 
-## 重要约束
+**USER_TASK（审批节点）**
+- type：固定 "USER_TASK"
+- id：唯一标识，如 "node_approve"
+- name：节点名称，如"部门经理审批"
+- assignee：审批人表达式，填写人用 ${initiator}
+- candidate_groups：审批角色（**必须先调用 search_roles() 获取角色列表，输出 key 值如 ROLE1，禁止输出中文名**）
+- text：审批人显示名称（**对应 candidate_groups 的角色中文名，如"超级管理员"**）
+- data_type：审批人类型，填写人用 INITIATOR，审批人用 ROLES
+- form_key：关联表单（**必须先调用 search_forms("") 获取表单列表，输出 id 值，无匹配则留空 ""**）
 
-- 所有字段值（category_id、candidate_groups、form_key）必须从提供的可用列表中选择，禁止自行编造
-- 如果对应的可用列表为空或未提供，则该字段留空 ""
-- 简单审批流程使用 USER_TASK 即可，需要条件分支时再使用 EXCLUSIVE_GATEWAY
+**EXCLUSIVE_GATEWAY（排他/互斥网关）**：条件分支，仅选中一条路径
+- type：固定 "EXCLUSIVE_GATEWAY"
+- id：唯一标识，如 "gateway_condition"
+- name：节点名称，如"金额判断"
+- **关键约束**：排他网关必须有 ≥2 条出边，每条出边必须有 condition 字段
+- **示例**：见下方 edges 示例
 
-## 示例1：简单线性流程
+**PARALLEL_GATEWAY（并行网关）**：所有分支同时执行
+- type：固定 "PARALLEL_GATEWAY"
+- id：唯一标识，如 "gateway_parallel"
+- **关键约束**：并行网关必须成对出现（fork + join）
 
-用户输入"请假审批"：
+**INCLUSIVE_GATEWAY（相容/包容网关）**：可选中一条或多条路径
+- type：固定 "INCLUSIVE_GATEWAY"
+- id：唯一标识，如 "gateway_inclusive"
+- name：节点名称，如"条件判断"
+- **关键约束**：相容网关必须有 ≥2 条出边，每条出边必须有 condition 字段
+
+**COMPLEX_GATEWAY（复杂网关）**：复杂条件组合
+- type：固定 "COMPLEX_GATEWAY"
+- id：唯一标识，如 "gateway_complex"
+- name：节点名称，如"复杂条件"
+
+**EVENT_GATEWAY（事件网关）**：基于事件触发的分支
+- type：固定 "EVENT_GATEWAY"
+- id：唯一标识，如 "gateway_event"
+- name：节点名称，如"事件等待"
+
+## Edges 连线格式
+
+edges 定义节点之间的连线关系：
+
+```json
 {
-  "flow_name": "请假审批流程",
-  "category_id": "HR",
-  "description": "用于处理员工请假申请",
-  "nodes": [
-    {"type": "USER_TASK", "name": "部门经理审批", "candidate_groups": "ROLE1", "text": "超级管理员", "data_type": "ROLES", "form_key": "1"},
-    {"type": "USER_TASK", "name": "HR备案", "candidate_groups": "ROLE2", "text": "普通角色", "data_type": "ROLES", "form_key": "1"}
+  "source": "源节点ID",
+  "target": "目标节点ID",
+  "condition": "条件表达式（仅排他网关需要）"
+}
+```
+
+**特殊值**：
+- `"start"` 表示从开始事件出发
+- `"end"` 表示到达结束事件
+
+**示例**：
+```json
+{
+  "edges": [
+    {"source": "start", "target": "node_submit"},
+    {"source": "node_submit", "target": "gateway_amount"},
+    {"source": "gateway_amount", "target": "node_manager", "condition": "${amount > 10000}"},
+    {"source": "gateway_amount", "target": "node_director", "condition": "${amount <= 10000}"},
+    {"source": "node_manager", "target": "end"},
+    {"source": "node_director", "target": "end"}
   ]
 }
+```
 
-## 示例2：条件分支流程
+**重要**：排他网关必须有多个 outgoing edges，每个 edge 必须有 condition！
 
-用户输入"报销审批，5000以下部门经理批，5000以上总经理批"：
-{
-  "flow_name": "报销审批流程",
-  "category_id": "FINANCE",
-  "description": "根据金额分级审批",
-  "nodes": [
-    {"id": "Task_1", "type": "USER_TASK", "name": "填写报销单", "assignee": "${initiator}", "data_type": "INITIATOR", "form_key": "2"},
-    {"id": "Gw_1", "type": "EXCLUSIVE_GATEWAY", "name": "金额判断"},
-    {"id": "Task_2", "type": "USER_TASK", "name": "部门经理审批", "candidate_groups": "ROLE1", "text": "超级管理员", "data_type": "ROLES", "form_key": "2"},
-    {"id": "Task_3", "type": "USER_TASK", "name": "总经理审批", "candidate_groups": "ROLE1", "text": "超级管理员", "data_type": "ROLES", "form_key": "2"},
-    {"id": "Gw_2", "type": "EXCLUSIVE_GATEWAY", "name": "合并"}
-  ],
-  "edges": [
-    {"source": "start", "target": "Task_1"},
-    {"source": "Task_1", "target": "Gw_1"},
-    {"source": "Gw_1", "target": "Task_2", "condition": "${amount <= 5000}"},
-    {"source": "Gw_1", "target": "Task_3", "condition": "${amount > 5000}"},
-    {"source": "Task_2", "target": "Gw_2"},
-    {"source": "Task_3", "target": "Gw_2"},
-    {"source": "Gw_2", "target": "end"}
-  ]
-}"""
+## 约束
+
+- **code 必须先调用 search_categories("") 获取分类列表，搜索结果格式：`[{"categoryId": 7, "categoryName": "人事管理", "code": "1", "remark": "..."}]`，从结果中选择相关分类，输出该分类的 code 字段值（如 "1"），禁止自行猜测或编造**
+- **candidate_groups 必须先调用 search_roles() 获取角色列表，输出 key 值（如 ROLE1），禁止输出中文名**
+- **text 对应 candidate_groups 的角色中文名，必须从 search_roles() 返回的 name 字段获取**
+- **form_key 必须先调用 search_forms("") 获取表单列表，输出 id 值，无匹配则留空 ""**
+- **已存在于【当前流程基本信息】的数据优先复用，只有用户明确修改才变更**
+
+## 空结果处理
+
+**每个工具最多调用 2 次**，如果结果为空则按以下方式处理：
+- **search_categories 返回空列表**：系统中还没有分类，code 留空 ""
+- **search_roles 返回空列表**：无可用角色，nodes 中不要添加审批节点或询问用户
+- **search_forms 返回空列表**：系统中还没有表单，form_key 留空 ""
+
+## 输出格式
+
+**重要**：直接输出 JSON 文本作为 AI 消息内容，不要尝试调用任何工具！
+**禁止**：不要在 JSON 前后添加任何解释、总结或额外文本！只输出纯 JSON！
+
+- 需要追问时，输出：`{"intent": "clarification", "message": "您的追问内容"}`
+- design 模式：`{"nodes": [...], "edges": [...]}`
+"""

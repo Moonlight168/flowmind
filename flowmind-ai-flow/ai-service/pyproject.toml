@@ -50,9 +50,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 addopts = "-v --tb=short"
 testpaths = [
-    "tests/unit",
-    "tests/integration",
-    "tests/e2e"
+    "tests/system"
 ]
 python_files = "test_*.py"
 python_classes = "Test*"

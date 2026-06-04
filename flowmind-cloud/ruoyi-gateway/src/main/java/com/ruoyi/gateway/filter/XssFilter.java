@@ -64,6 +64,11 @@ public class XssFilter implements GlobalFilter, Ordered
         {
             return chain.filter(exchange);
         }
+        // 排除包含 BPMN XML 的端点（避免破坏 XML 内容）
+        if (url.contains("/model/save") || url.contains("/model/add") || url.contains("/model/edit"))
+        {
+            return chain.filter(exchange);
+        }
         ServerHttpRequestDecorator httpRequestDecorator = requestDecorator(exchange);
         return chain.filter(exchange.mutate().request(httpRequestDecorator).build());
 
