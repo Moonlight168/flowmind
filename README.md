@@ -4,7 +4,7 @@
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind</h1>
 <h4 align="center">基于 RuoYi-Cloud + Flowable 的智能工作流管理系统</h4>
 <p align="center">
-	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.0.0-brightgreen.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.1.0-brightgreen.svg"></a>
 	<a href="https://github.com/Moonlight168/flowmind"><img src="https://img.shields.io/github/stars/Moonlight168/flowmind?style=flat"></a>
 	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
@@ -30,7 +30,17 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 | **AI 设计分类** | 自然语言描述 → 自动生成流程分类              |
 | **AI 设计流程** | 业务需求描述 → 自动生成 BPMN 2.0 流程        |
 | **AI 设计表单** | 表单内容描述 → 自动生成 v-form-designer 表单 |
-| **多轮对话**    | 持续优化设计结果直到满意                      |
+| **React 模式** | 基于 ReAct 架构的智能 Agent，支持多轮追问     |
+| **追问优化**    | AI 主动询问细节，持续优化设计结果直到满意    |
+
+### React 模式 Agent
+
+全新的 Agent 架构，采用 Reasoning + Acting 模式：
+
+- **智能推理**：AI 分析用户意图，规划执行步骤
+- **工具调用**：动态调用 BPMN 设计、表单生成等工具
+- **追问机制**：主动询问缺失信息，确保设计完整
+- **结果验证**：自动验证生成结果的正确性
 
 ### 全局 AI 助手
 
@@ -203,4 +213,4 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
 
-**最后更新**: 2026-05-04
+**最后更新**: 2026-06-04

@@ -4,7 +4,7 @@
       <el-col :sm="24" :lg="12" style="padding-left: 20px">
         <h2>FlowMind 智能流程审批平台</h2>
         <p>
-          FlowMind 是一款基于微服务架构的智能流程审批系统，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用 Flowable 工作流引擎，为企业提供高效、稳定、可扩展的审批解决方案。
+          FlowMind 是一款基于微服务架构的智能流程审批系统，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用 Flowable 工作流引擎，结合 React 模式 Agent 架构，为企业提供高效、稳定、可扩展的审批解决方案。
         </p>
         <p>
           <b>当前版本:</b> <span>v{{ version }}</span>
@@ -12,6 +12,7 @@
         <p>
           <el-tag type="success">智能审批平台</el-tag>
           <el-tag type="warning" class="ml-2">AI 驱动</el-tag>
+          <el-tag type="info" class="ml-2">React 模式</el-tag>
         </p>
         <p>
           <el-button type="primary" icon="Cloudy" plain
@@ -84,6 +85,13 @@
             </div>
           </template>
           <el-collapse accordion>
+            <el-collapse-item title="v2.1.0 - 2026-06">
+              <ol>
+                <li>React 模式 Agent 架构，支持智能追问</li>
+                <li>BPMN 设计与验证工具链</li>
+                <li>适配器层简化优化</li>
+              </ol>
+            </el-collapse-item>
             <el-collapse-item title="v2.0.0 - 2026-05">
               <ol>
                 <li>AI 设计功能：智能生成分类、流程、表单</li>
@@ -112,10 +120,11 @@
           </template>
           <div class="body">
             <ul>
+              <li>React 模式 Agent：智能推理与工具调用</li>
+              <li>AI 追问优化：主动询问细节完善设计</li>
               <li>AI 设计分类：自然语言描述自动生成流程分类</li>
               <li>AI 设计流程：自动生成 BPMN 流程结构</li>
               <li>AI 设计表单：自动生成 v-form-designer 表单</li>
-              <li>多轮对话：LangGraph 工作流引擎持续优化</li>
               <li>BPMN-JS 可视化流程设计器</li>
               <li>可视化表单设计器</li>
               <li>完整的权限管理系统</li>
@@ -129,7 +138,7 @@
 </template>
 
 <script setup name="Index">
-const version = ref('2.0.0')
+const version = ref('2.1.0')
 
 function goTarget(url) {
   window.open(url, '__blank')
