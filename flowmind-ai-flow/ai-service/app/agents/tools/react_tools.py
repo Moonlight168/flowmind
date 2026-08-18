@@ -6,7 +6,7 @@ FlowMind 智能审批服务 - ReAct 工具工厂
 auth_token 通过闭包注入，不暴露给 LLM。
 """
 
-from typing import Any, Literal
+from typing import Any
 
 from langchain_core.tools import tool
 
@@ -24,9 +24,6 @@ def create_tools(design_type: str, auth_token: str) -> list:
         LangChain @tool 装饰的工具列表
     """
     tools = []
-
-    # 压缩工具始终添加，让 Agent 自主决定是否压缩
-    tools.append(_make_compress_tool())
 
     if design_type in ("category_design", "flow_design"):
         tools.append(_make_search_categories_tool(auth_token))
@@ -131,33 +128,3 @@ def _make_search_forms_tool(auth_token: str):
 
     return search_forms
 
-def _make_compress_tool():
-    """compress_conversation_history 工具"""
-    from app.agents.tools.compress_tools import (
-        compress_conversation_history as _compress,
-    )
-
-    @tool
-    def compress_conversation_history(
-        mode: Literal["hybrid", "llm_enhanced", "rule_based"] = "hybrid",
-        conversation_history: list[dict[str, Any]] | None = None
-    ) -> dict[str, Any]:
-        """压缩对话历史以节省 token。
-
-        当对话轮次过多（超过4-5轮）时使用此工具压缩历史。
-
-        Args:
-            mode: 压缩模式
-                - hybrid（推荐）：优先 LLM 智能摘要，失败时回退规则压缩
-                - llm_enhanced：使用 LLM 生成语义完整摘要（需额外 token）
-                - rule_based：基于规则的快速压缩（无额外 token 消耗）
-            conversation_history: 待压缩的对话历史列表，格式为 [{"role": "user"/"assistant"/"system", "content": "..."}]
-        """
-        if conversation_history is None:
-            conversation_history = []
-        logger.info("[TOOL_CALL] compress_conversation_history", mode=mode, history_len=len(conversation_history))
-        result = _compress(mode=mode, conversation_history=conversation_history)
-        logger.info("[TOOL_CALL] compress_conversation_history 完成", compressed_count=result.get("compressed_count", 0))
-        return result
-
-    return compress_conversation_history

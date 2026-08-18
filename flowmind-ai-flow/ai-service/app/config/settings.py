@@ -157,6 +157,17 @@ class NacosSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
+class CompressConfig(BaseSettings):
+    """对话历史压缩配置"""
+
+    max_messages: int = Field(default=12, description="消息数超过该值才触发压缩")
+    keep_recent: int = Field(default=4, description="保留最近 N 条完整消息")
+    enable_llm_summary: bool = Field(default=True, description="True=中间段 LLM 摘要；False=纯裁剪")
+    summary_max_tokens: int = Field(default=300, description="LLM 摘要 token 上限")
+
+    model_config = SettingsConfigDict(env_prefix="COMPRESS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+
 class Settings(BaseSettings):
     """应用主配置"""
 
@@ -174,6 +185,7 @@ class Settings(BaseSettings):
     backend: BackendSettings = Field(default_factory=BackendSettings)
     nacos: NacosSettings = Field(default_factory=NacosSettings)
     log: LogSettings = Field(default_factory=LogSettings)
+    compress: CompressConfig = Field(default_factory=CompressConfig)
 
     jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
 

@@ -42,6 +42,7 @@ class ModelManager:
         "flow_design": {"temperature": 0.3},
         "form_design": {"temperature": 0.3},
         "chat": {"temperature": 0.8},
+        "compress": {"temperature": 0.0, "max_tokens": 300},
     }
 
     # 需要 JSON 输出格式的任务

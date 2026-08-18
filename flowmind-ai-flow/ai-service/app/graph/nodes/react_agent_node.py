@@ -11,6 +11,7 @@ FlowMind 智能审批服务 - ReAct Agent 节点
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.react_agent import run_react_agent
+from app.agents.compression import compress_history
 from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
@@ -49,6 +50,9 @@ def react_agent_node(state: AppState) -> AppState:
             conversation_history.append({"role": "assistant", "content": msg.content})
 
     mode = state.get("mode", "design")
+
+    # 前置压缩：消息过多时裁剪/摘要，再喂给 LLM
+    conversation_history = compress_history(conversation_history)
 
     result = run_react_agent(
         design_type=design_type,
