@@ -41,3 +41,4 @@ class AppState(TypedDict, total=False):
 
     # review 专用
     review_retry_count: int | None  # 审查重试计数
+    review_error_history: list[list[str]] | None  # 最近 3 次错误 rule_id 集合（用于死循环检测）

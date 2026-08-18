@@ -168,6 +168,14 @@ class CompressConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="COMPRESS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
+class ValidationConfig(BaseSettings):
+    """校验配置"""
+
+    review_max_retry_count: int = Field(default=3, description="review 节点重试预算")
+
+    model_config = SettingsConfigDict(env_prefix="VALIDATION_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+
 class Settings(BaseSettings):
     """应用主配置"""
 
@@ -186,6 +194,7 @@ class Settings(BaseSettings):
     nacos: NacosSettings = Field(default_factory=NacosSettings)
     log: LogSettings = Field(default_factory=LogSettings)
     compress: CompressConfig = Field(default_factory=CompressConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
     jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
 

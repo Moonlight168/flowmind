@@ -110,11 +110,14 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
 
         # basic 模式仅返回基本信息，不生成 BPMN XML
         if mode != "basic":
-            try:
-                bpmn_xml = generate_bpmn_xml({"nodes": nodes, "edges": edges}, category) if nodes else ""
-            except Exception as e:
-                logger.error(f"[format] generate_bpmn_xml 失败: {e}, nodes={nodes}, category={category}")
-                bpmn_xml = ""
+            # 优先复用 review 阶段 BPMNXMLValidator 缓存的 bpmn_xml，避免二次生成
+            bpmn_xml = raw_result.get("bpmn_xml") or ""
+            if not bpmn_xml and nodes:
+                try:
+                    bpmn_xml = generate_bpmn_xml({"nodes": nodes, "edges": edges}, category)
+                except Exception as e:
+                    logger.error(f"[format] generate_bpmn_xml 失败: {e}, nodes={nodes}, category={category}")
+                    bpmn_xml = ""
 
             form_data["bpmn_xml"] = bpmn_xml
 
