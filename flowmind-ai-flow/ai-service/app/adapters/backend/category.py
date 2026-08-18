@@ -49,7 +49,7 @@ class CategoryService(BackendService):
             logger.error(f"检查分类是否存在失败（网络错误）：{e}")
             return False
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"检查分类是否存在失败（未预期）：{e}", exc_info=True)
             return False
 
@@ -85,7 +85,7 @@ class CategoryService(BackendService):
             logger.error(f"搜索分类失败（网络错误）：{e}")
             return []
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"搜索分类失败（未预期）：{e}", exc_info=True)
             return []
 
@@ -155,7 +155,7 @@ class CategoryService(BackendService):
         except requests.exceptions.RequestException as e:
             logger.error(f"创建分类异常（网络错误）：{e}")
             return None
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"创建分类异常（未预期）：{e}", exc_info=True)
             return None
 
@@ -204,7 +204,7 @@ class CategoryService(BackendService):
         except requests.exceptions.RequestException as e:
             logger.error(f"更新分类异常（网络错误）：{e}")
             return None
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"更新分类异常（未预期）：{e}", exc_info=True)
             return None
 

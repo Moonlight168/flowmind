@@ -116,7 +116,7 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
             if not bpmn_xml and nodes:
                 try:
                     bpmn_xml = generate_bpmn_xml({"nodes": nodes, "edges": edges}, category)
-                except Exception as e:
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
                     logger.error(f"[format] generate_bpmn_xml 失败: {e}, nodes={nodes}, category={category}")
                     bpmn_xml = ""
 

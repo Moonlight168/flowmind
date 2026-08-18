@@ -45,9 +45,6 @@ class ModelManager:
         "compress": {"temperature": 0.0, "max_tokens": 300},
     }
 
-    # 需要 JSON 输出格式的任务
-    JSON_FORMAT_TASKS = {"category_design", "flow_design", "form_design"}
-
     def create_llm(self, task_name: str | None = None) -> "ChatOpenAI":
         """创建 ChatOpenAI 实例，失败时自动降级到下一优先级模型"""
         candidates = self.get_available_providers()
@@ -78,12 +75,8 @@ class ModelManager:
             params.update(self.TASK_TEMPERATURE_CONFIG[task_name])
 
         model_kwargs = {}
-        # 注意：tool calling 任务（通过 bind_tools 实现）不能设置 response_format
-        # 因为 tool calling 需要模型输出工具调用格式，而不是 JSON 格式
-        # 只有直接生成 JSON 的任务才能设置 response_format
-        if task_name in self.JSON_FORMAT_TASKS and task_name not in ("flow_design", "category_design", "form_design"):
-            model_kwargs["response_format"] = {"type": "json_object"}
-
+        # 注意：当前所有设计任务都走 tool-calling（bind_tools），不能设置 response_format
+        # （结构化输出与 tool-calling 互斥）；chat 任务无需 JSON 输出
         return ChatOpenAI(
             model=config.get("model_name", ""),
             base_url=config.get("base_url", "").rstrip("/"),

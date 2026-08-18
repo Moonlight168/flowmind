@@ -20,6 +20,12 @@ from app.utils.auth import TokenUser
 router = APIRouter(prefix="/design", tags=["设计"])
 
 
+def _design_thread_id(design_type: str, user_key: str) -> str:
+    """生成设计会话 thread_id，兼容 category_design / category 两种写法"""
+    short = design_type.replace("_design", "")
+    return f"design_{short}_{user_key}"
+
+
 @router.post("/category", response_model=ResponseVO[dict[str, Any]])
 async def design_category(
     payload: DesignRequestDTO,
@@ -29,7 +35,7 @@ async def design_category(
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
 
-    thread_id = f"design_category_{current_user.user_key}"
+    thread_id = payload.thread_id or _design_thread_id("category_design", current_user.user_key)
 
     try:
         result = invoke_design_workflow(
@@ -54,7 +60,7 @@ async def design_flow(
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
 
-    thread_id = f"design_flow_{current_user.user_key}"
+    thread_id = payload.thread_id or _design_thread_id("flow_design", current_user.user_key)
 
     try:
         result = invoke_design_workflow(
@@ -80,7 +86,7 @@ async def design_form(
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
 
-    thread_id = f"design_form_{current_user.user_key}"
+    thread_id = payload.thread_id or _design_thread_id("form_design", current_user.user_key)
 
     try:
         result = invoke_design_workflow(
@@ -102,6 +108,6 @@ async def delete_design_state(
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
     """删除设计会话"""
-    thread_id = f"design_{design_type}_{current_user.user_key}"
+    thread_id = _design_thread_id(design_type, current_user.user_key)
     delete_design_thread(thread_id)
     return ResponseVO.success({"thread_id": thread_id})

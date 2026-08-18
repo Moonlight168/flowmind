@@ -34,7 +34,8 @@ langgraph>=1.0.0
 openai==1.48.0
 
 # 其他依赖
-python-jose==3.3.0
+pyjwt==2.10.1
+json-repair==0.63.2
 regex==2024.9.11
 typing-extensions==4.12.2
 debugpy==1.8.0

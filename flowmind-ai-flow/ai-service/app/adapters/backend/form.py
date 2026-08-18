@@ -53,7 +53,7 @@ class FormService(BackendService):
             logger.error(f"搜索表单失败（网络错误）：{e}")
             return []
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"搜索表单失败（未预期）：{e}", exc_info=True)
             return []
 
@@ -112,7 +112,7 @@ class FormService(BackendService):
             logger.error(f"创建表单异常（网络错误）：{e}")
             return None
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"创建表单异常（未预期）：{e}", exc_info=True)
             return None
 
@@ -162,6 +162,6 @@ class FormService(BackendService):
             logger.error(f"更新表单异常（网络错误）：{e}")
             return None
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"更新表单异常（未预期）：{e}", exc_info=True)
             return None

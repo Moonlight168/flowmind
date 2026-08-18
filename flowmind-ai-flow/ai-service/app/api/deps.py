@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.auth_context import set_auth_token, set_current_user
 from app.infra.logger import logger
-from app.utils.auth import TokenUser, parse_token_strict
+from app.utils.auth import TokenParseError, TokenUser, parse_token_strict
 
 security = HTTPBearer(auto_error=False)
 
@@ -52,6 +52,6 @@ async def require_auth(
         return token_user
     except HTTPException:
         raise
-    except Exception as e:
+    except TokenParseError as e:
         logger.warning(f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Token validation failed: {e}")
         raise HTTPException(status_code=403, detail="Invalid or expired token")

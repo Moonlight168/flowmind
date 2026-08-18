@@ -52,6 +52,6 @@ class RoleService(BackendService):
         except requests.exceptions.RequestException as e:
             logger.error(f"搜索角色失败（网络错误）：{e}")
             return []
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"搜索角色失败（未预期）：{e}", exc_info=True)
             return []

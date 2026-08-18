@@ -56,7 +56,7 @@ class FlowService(BackendService):
             logger.error(f"搜索流程模型失败（网络错误）：{e}")
             return []
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"搜索流程模型失败（未预期）：{e}", exc_info=True)
             return []
 
@@ -134,7 +134,7 @@ class FlowService(BackendService):
             logger.error(f"创建流程模型异常（网络错误）：{e}")
             return None
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"创建流程模型异常（未预期）：{e}", exc_info=True)
             return None
 
@@ -190,6 +190,6 @@ class FlowService(BackendService):
             logger.error(f"更新流程模型异常（网络错误）：{e}")
             return None
         # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             logger.error(f"更新流程模型异常（未预期）：{e}", exc_info=True)
             return None
