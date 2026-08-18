@@ -6,6 +6,7 @@ FlowMind 智能审批服务 - 格式化节点
 2. 统一返回格式：{ form_data, message, intent }
 """
 
+from app.agents.validators import build_category
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
@@ -95,7 +96,7 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
     elif design_type == "flow_design":
         nodes = raw_result.get("nodes", [])
         edges = raw_result.get("edges", [])
-        category = {"category_name": raw_result.get("category_name", ""), "code": raw_result.get("code", "")}
+        category = build_category(raw_result, current_form_data or {})
         logger.info(f"[format] flow_design raw_result keys: {list(raw_result.keys())}")
         logger.info(f"[format] nodes type: {type(nodes)}, category: {category}, mode: {mode}")
 
