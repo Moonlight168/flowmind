@@ -105,9 +105,10 @@ async def design_form(
 @router.delete("/state/{design_type}", response_model=ResponseVO[dict[str, Any]])
 async def delete_design_state(
     design_type: str,
+    thread_id: str | None = None,
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
-    """删除设计会话"""
-    thread_id = _design_thread_id(design_type, current_user.user_key)
-    delete_design_thread(thread_id)
-    return ResponseVO.success({"thread_id": thread_id})
+    """删除设计会话（thread_id 可选，不传则删除默认会话）"""
+    tid = thread_id or _design_thread_id(design_type, current_user.user_key)
+    delete_design_thread(tid)
+    return ResponseVO.success({"thread_id": tid})

@@ -74,9 +74,8 @@ class ModelManager:
         if task_name in self.TASK_TEMPERATURE_CONFIG:
             params.update(self.TASK_TEMPERATURE_CONFIG[task_name])
 
-        model_kwargs = {}
-        # 注意：当前所有设计任务都走 tool-calling（bind_tools），不能设置 response_format
-        # （结构化输出与 tool-calling 互斥）；chat 任务无需 JSON 输出
+        # 所有设计任务走 tool-calling（bind_tools），chat 任务无需 JSON 输出，
+        # 因此不设置 response_format（与 tool-calling 互斥）
         return ChatOpenAI(
             model=config.get("model_name", ""),
             base_url=config.get("base_url", "").rstrip("/"),
@@ -84,7 +83,6 @@ class ModelManager:
             temperature=params["temperature"],
             max_tokens=params["max_tokens"],
             timeout=config.get("timeout", 60),
-            model_kwargs=model_kwargs,
         )
 
     def get_available_providers(self) -> list[str]:

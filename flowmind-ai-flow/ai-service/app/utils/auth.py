@@ -59,7 +59,7 @@ def parse_token(token: str | None) -> TokenUser | None:
             username=claims.get("username") or "",
             user_key=claims.get("user_key") or "",
         )
-    except jwt.exceptions.DecodeError:
+    except jwt.exceptions.PyJWTError:
         return None
     except (ValueError, TypeError):
         return None
@@ -99,7 +99,7 @@ def parse_token_strict(token: str | None) -> TokenUser:
             username=username,
             user_key=user_key,
         )
-    except jwt.exceptions.DecodeError as e:
-        raise TokenParseError(f"Invalid token format: {e}")
+    except jwt.exceptions.PyJWTError as e:
+        raise TokenParseError(f"Invalid token: {e}")
     except ValueError as e:
         raise TokenParseError(f"Invalid user_id in token: {e}")
