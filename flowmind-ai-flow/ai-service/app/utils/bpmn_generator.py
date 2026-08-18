@@ -476,10 +476,13 @@ def _create_bpmn_diagram(
         width=str(event_size), height=str(event_size)
     )
 
-    # 节点
+    # 节点（跳过 START_EVENT/END_EVENT，它们由上方固定的 StartEvent_1/EndEvent_1 shape 表示，
+    # 避免 DI 图残留重复事件图形）
     for i, (node, node_id) in enumerate(zip(nodes, node_ids, strict=False)):
-        node_x = start_x + (i + 1) * gap_x
         node_type = node.get("type", "USER_TASK").upper()
+        if node_type in ("START_EVENT", "END_EVENT"):
+            continue
+        node_x = start_x + (i + 1) * gap_x
 
         shape = etree.SubElement(
             plane, f"{{{bpmndi}}}BPMNShape",

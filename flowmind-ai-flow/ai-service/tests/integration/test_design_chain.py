@@ -104,6 +104,9 @@ def test_flow_design_full_chain(chain, monkeypatch):
     assert len(form_data["nodes"]) == 3
     assert form_data["modelName"] == "请假审批"  # 前端基本信息保留
     assert "bpmn2:process" in form_data["bpmn_xml"]
+    # DI 图不应残留重映射前的 startEvent/endEvent shape
+    assert 'bpmnElement="startEvent"' not in form_data["bpmn_xml"]
+    assert 'bpmnElement="endEvent"' not in form_data["bpmn_xml"]
 
 
 def test_flow_design_basic(chain, monkeypatch):
