@@ -64,7 +64,9 @@ class RedisCheckpoint(BaseCheckpointSaver):
                 decode_responses=False,
             )
 
-        ttl = ttl_hours if ttl_hours is not None else settings.redis.checkpoint_ttl_hours
+        ttl = (
+            ttl_hours if ttl_hours is not None else settings.redis.checkpoint_ttl_hours
+        )
         self.ttl_seconds = ttl * SECONDS_PER_HOUR
 
         logger.info(f"RedisCheckpoint initialized, TTL={ttl}h")
@@ -166,8 +168,16 @@ class RedisCheckpoint(BaseCheckpointSaver):
             preview = "新对话"
             updated_at = datetime.now().isoformat()
 
-            channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
-            messages = channel_values.get("messages", []) if isinstance(channel_values, dict) else []
+            channel_values = (
+                checkpoint.get("channel_values", {})
+                if isinstance(checkpoint, dict)
+                else {}
+            )
+            messages = (
+                channel_values.get("messages", [])
+                if isinstance(channel_values, dict)
+                else []
+            )
 
             for msg in messages:
                 if hasattr(msg, "type") and msg.type == "human":
@@ -211,7 +221,9 @@ class RedisCheckpoint(BaseCheckpointSaver):
                     thread_data = ormsgpack.unpackb(existing)
                     thread_data["preview"] = preview
                     thread_data["updated_at"] = updated_at
-                    self.redis.setex(thread_key, self.ttl_seconds, ormsgpack.packb(thread_data))
+                    self.redis.setex(
+                        thread_key, self.ttl_seconds, ormsgpack.packb(thread_data)
+                    )
                 except Exception:
                     pass
             else:
@@ -220,7 +232,9 @@ class RedisCheckpoint(BaseCheckpointSaver):
                     "preview": preview,
                     "updated_at": updated_at,
                 }
-                self.redis.setex(thread_key, self.ttl_seconds, ormsgpack.packb(thread_data))
+                self.redis.setex(
+                    thread_key, self.ttl_seconds, ormsgpack.packb(thread_data)
+                )
 
             # 添加到线程集合
             self.redis.sadd(self.CHAT_THREADS_KEY, thread_id)
@@ -286,25 +300,33 @@ class RedisCheckpoint(BaseCheckpointSaver):
                 return []
 
             for thread_id_bytes in thread_ids:
-                thread_id = thread_id_bytes.decode() if isinstance(thread_id_bytes, bytes) else thread_id_bytes
+                thread_id = (
+                    thread_id_bytes.decode()
+                    if isinstance(thread_id_bytes, bytes)
+                    else thread_id_bytes
+                )
                 thread_key = self._chat_thread_key(thread_id)
                 data = self.redis.get(thread_key)
 
                 if data:
                     try:
                         thread_data = ormsgpack.unpackb(data)
-                        threads.append({
-                            "thread_id": thread_data.get("thread_id", thread_id),
-                            "preview": thread_data.get("preview", "新对话"),
-                            "updated_at": thread_data.get("updated_at"),
-                        })
+                        threads.append(
+                            {
+                                "thread_id": thread_data.get("thread_id", thread_id),
+                                "preview": thread_data.get("preview", "新对话"),
+                                "updated_at": thread_data.get("updated_at"),
+                            }
+                        )
                     except Exception as e:
                         logger.debug(f"Failed to parse thread data: {e}")
-                        threads.append({
-                            "thread_id": thread_id,
-                            "preview": "新对话",
-                            "updated_at": None,
-                        })
+                        threads.append(
+                            {
+                                "thread_id": thread_id,
+                                "preview": "新对话",
+                                "updated_at": None,
+                            }
+                        )
 
                 if len(threads) >= limit:
                     break
@@ -324,6 +346,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
     def get_or_create_thread_id(self, user_key: str | None = None) -> str:
         """获取或创建新的线程ID"""
         import uuid
+
         return user_key or f"thread_{uuid.uuid4().hex[:16]}"
 
     def put_writes(

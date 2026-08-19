@@ -53,7 +53,9 @@ class CategoryService(BackendService):
             logger.error(f"检查分类是否存在失败（未预期）：{e}", exc_info=True)
             return False
 
-    def search_categories(self, category_name: str | None = None, category_code: str | None = None) -> list[dict[str, Any]]:
+    def search_categories(
+        self, category_name: str | None = None, category_code: str | None = None
+    ) -> list[dict[str, Any]]:
         """搜索分类（支持按名称或编码搜索）
 
         Args:
@@ -144,7 +146,10 @@ class CategoryService(BackendService):
                 result = response.json()
                 if result.get("code") == 200:
                     logger.info(f"分类创建成功：{category_name} ({category_code})")
-                    return result.get("data") or {"categoryName": category_name, "code": category_code}
+                    return result.get("data") or {
+                        "categoryName": category_name,
+                        "code": category_code,
+                    }
                 else:
                     logger.warning(f"分类创建失败：{result.get('msg')}")
                     return None
@@ -193,7 +198,10 @@ class CategoryService(BackendService):
                 result = response.json()
                 if result.get("code") == 200:
                     logger.info(f"分类更新成功：{category_name} ({category_code})")
-                    return result.get("data") or {"categoryName": category_name, "code": category_code}
+                    return result.get("data") or {
+                        "categoryName": category_name,
+                        "code": category_code,
+                    }
                 else:
                     logger.warning(f"分类更新失败：{result.get('msg')}")
                     return None

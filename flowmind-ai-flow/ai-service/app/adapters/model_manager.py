@@ -14,6 +14,7 @@ from app.infra.logger import logger
 @dataclass
 class ModelManagerConfig:
     """模型管理器配置"""
+
     enabled: bool = True
     max_retries: int = 3
     retry_interval: float = 1.0
@@ -46,7 +47,9 @@ class ModelManager:
         "intent": {"temperature": 0.0, "max_tokens": 200},
     }
 
-    def create_llm(self, task_name: str | None = None, structured: bool = False) -> "ChatOpenAI":
+    def create_llm(
+        self, task_name: str | None = None, structured: bool = False
+    ) -> "ChatOpenAI":
         """创建 ChatOpenAI 实例，失败时自动降级到下一优先级模型
 
         structured=True 时只选 supports_structured_output 的模型（结构化输出用）。
@@ -54,7 +57,8 @@ class ModelManager:
         candidates = self.get_available_providers()
         if structured:
             candidates = [
-                name for name in candidates
+                name
+                for name in candidates
                 if self._providers.get(name, {}).get("supports_structured_output", True)
             ]
         last_error: Exception | None = None

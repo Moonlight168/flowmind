@@ -67,6 +67,7 @@ def chain(monkeypatch):
 def _mock_llm(monkeypatch, results):
     """mock run_react_agent + discriminate_intent（意图恒为 design）"""
     from app.agents.intent import Intent
+
     queue = list(results)
 
     def _run(**kwargs):
@@ -75,13 +76,26 @@ def _mock_llm(monkeypatch, results):
         return queue.pop(0)
 
     monkeypatch.setattr(react_agent_node, "run_react_agent", _run)
-    monkeypatch.setattr(react_agent_node, "discriminate_intent", lambda *a, **kw: Intent(kind="design"))
+    monkeypatch.setattr(
+        react_agent_node, "discriminate_intent", lambda *a, **kw: Intent(kind="design")
+    )
 
 
 _FLOW_RESULT = {
     "nodes": [
-        {"id": "startEvent", "name": "开始", "type": "START_EVENT", "form_key": "form1"},
-        {"id": "node_approve", "name": "部门经理审批", "type": "USER_TASK", "candidate_groups": ["ROLE1"], "text": "部门经理"},
+        {
+            "id": "startEvent",
+            "name": "开始",
+            "type": "START_EVENT",
+            "form_key": "form1",
+        },
+        {
+            "id": "node_approve",
+            "name": "部门经理审批",
+            "type": "USER_TASK",
+            "candidate_groups": ["ROLE1"],
+            "text": "部门经理",
+        },
         {"id": "endEvent", "name": "结束", "type": "END_EVENT"},
     ],
     "edges": [
@@ -94,10 +108,15 @@ _FLOW_RESULT = {
 def test_stream_design_workflow(chain, monkeypatch):
     """流式：进度事件序列（design→review→format）+ done 事件带完整结果"""
     _mock_llm(monkeypatch, [_FLOW_RESULT])
-    events = list(stream_design_workflow(
-        "flow_design", "设计请假审批流程", thread_id="test-stream-1",
-        current_form_data={"modelName": "请假审批", "code": "leave"}, mode="design",
-    ))
+    events = list(
+        stream_design_workflow(
+            "flow_design",
+            "设计请假审批流程",
+            thread_id="test-stream-1",
+            current_form_data={"modelName": "请假审批", "code": "leave"},
+            mode="design",
+        )
+    )
     assert events[-1]["type"] == "done"
     assert events[-1]["intent"] == "success"
     assert events[-1]["form_data"]["bpmn_xml"]
@@ -128,7 +147,10 @@ def test_flow_design_full_chain(chain, monkeypatch):
 
 def test_flow_design_basic(chain, monkeypatch):
     """flow_design basic 模式：只生成基本信息，不生成 BPMN"""
-    _mock_llm(monkeypatch, [{"flow_name": "报销审批", "code": "expense", "description": "报销流程"}])
+    _mock_llm(
+        monkeypatch,
+        [{"flow_name": "报销审批", "code": "expense", "description": "报销流程"}],
+    )
     result = invoke_design_workflow(
         "flow_design",
         "设计报销流程基本信息",
@@ -137,7 +159,9 @@ def test_flow_design_basic(chain, monkeypatch):
         mode="basic",
     )
     assert result["intent"] == "success"
-    assert "bpmn_xml" not in result["form_data"] or not result["form_data"].get("bpmn_xml")
+    assert "bpmn_xml" not in result["form_data"] or not result["form_data"].get(
+        "bpmn_xml"
+    )
 
 
 def test_form_design_full_chain(chain, monkeypatch):
@@ -145,8 +169,16 @@ def test_form_design_full_chain(chain, monkeypatch):
     form_result = {
         "form_name": "请假申请单",
         "widgetList": [
-            {"type": "input", "formItemFlag": True, "options": {"name": "reason", "label": "请假事由"}},
-            {"type": "date", "formItemFlag": True, "options": {"name": "start_date", "label": "开始日期"}},
+            {
+                "type": "input",
+                "formItemFlag": True,
+                "options": {"name": "reason", "label": "请假事由"},
+            },
+            {
+                "type": "date",
+                "formItemFlag": True,
+                "options": {"name": "start_date", "label": "开始日期"},
+            },
         ],
         "formConfig": {"modelName": "leaveForm", "labelWidth": 100},
     }
@@ -168,7 +200,16 @@ def test_form_design_full_chain(chain, monkeypatch):
 
 def test_category_design_full_chain(chain, monkeypatch):
     """category_design 完整链路：design → review → format"""
-    _mock_llm(monkeypatch, [{"category_name": "请假审批", "code": "leave_approval", "remark": "请假类流程"}])
+    _mock_llm(
+        monkeypatch,
+        [
+            {
+                "category_name": "请假审批",
+                "code": "leave_approval",
+                "remark": "请假类流程",
+            }
+        ],
+    )
     result = invoke_design_workflow(
         "category_design",
         "创建请假审批分类",

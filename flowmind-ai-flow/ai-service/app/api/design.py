@@ -3,6 +3,7 @@ FlowMind 智能流程设计服务 - 设计 API
 
 本模块提供分类设计、流程设计、表单设计等统一的设计接口。
 """
+
 import json
 from typing import Any
 
@@ -36,7 +37,9 @@ def design_category(
     """分类设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id("category_design", current_user.user_key)
+    thread_id = payload.thread_id or _design_thread_id(
+        "category_design", current_user.user_key
+    )
 
     def event_stream():
         try:
@@ -62,7 +65,9 @@ def design_flow(
     """流程设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id("flow_design", current_user.user_key)
+    thread_id = payload.thread_id or _design_thread_id(
+        "flow_design", current_user.user_key
+    )
 
     def event_stream():
         try:
@@ -89,7 +94,9 @@ def design_form(
     """表单设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id("form_design", current_user.user_key)
+    thread_id = payload.thread_id or _design_thread_id(
+        "form_design", current_user.user_key
+    )
 
     def event_stream():
         try:

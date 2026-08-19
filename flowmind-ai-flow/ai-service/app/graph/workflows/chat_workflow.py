@@ -65,7 +65,9 @@ def invoke_chat_workflow(
         "thread_id": thread_id,
     }
 
-    with log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None):
+    with log_context(
+        trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
+    ):
         if settings.app.debug:
             result = None
             for step in chat_workflow.stream(initial_state, config):

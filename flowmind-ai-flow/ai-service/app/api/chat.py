@@ -3,6 +3,7 @@ FlowMind 智能流程设计服务 - 对话 API
 
 本模块提供通用聊天接口和会话历史管理。
 """
+
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -48,7 +49,7 @@ def chat(
             "response": chat_response,
             "thread_id": thread_id,
         },
-        trace_id=trace_id
+        trace_id=trace_id,
     )
 
 

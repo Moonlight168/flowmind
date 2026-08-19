@@ -39,7 +39,9 @@ def format_node(state: AppState) -> AppState:
         # 死循环等：若有半成品草稿则返回让用户手动调整，否则返回错误
         if raw_result.get("nodes") or raw_result.get("widgetList"):
             final_output = _format_partial(
-                design_type, raw_result, design_output.get("review", {}),
+                design_type,
+                raw_result,
+                design_output.get("review", {}),
                 "AI 卡在同一个问题上，建议换个说法或简化需求",
             )
         else:
@@ -58,7 +60,9 @@ def format_node(state: AppState) -> AppState:
         if not review_passed and review_retry_count >= 3:
             # 重试耗尽：返回半成品草稿 + 友好提示，让用户手动调整
             final_output = _format_partial(
-                design_type, raw_result, review_info,
+                design_type,
+                raw_result,
+                review_info,
                 "AI 反复调整了几次，仍有几处需要你确认",
             )
         elif not review_passed:
@@ -73,7 +77,9 @@ def format_node(state: AppState) -> AppState:
             # 成功，格式化业务数据
             mode = state.get("mode", "design")
             current_form_data = state.get("current_form_data") or {}
-            final_output = _format_success_output(design_type, raw_result, mode, current_form_data)
+            final_output = _format_success_output(
+                design_type, raw_result, mode, current_form_data
+            )
 
     else:
         final_output = {
@@ -87,7 +93,9 @@ def format_node(state: AppState) -> AppState:
     return state
 
 
-def _format_partial(design_type: str, raw_result: dict, review_info: dict, reason: str) -> dict:
+def _format_partial(
+    design_type: str, raw_result: dict, review_info: dict, reason: str
+) -> dict:
     """返回半成品草稿 + 友好提示，供用户在前端手动调整"""
     errors = review_info.get("errors", [])
     issues = "\n".join(f"· {e}" for e in errors[:5]) if errors else ""
@@ -95,7 +103,11 @@ def _format_partial(design_type: str, raw_result: dict, review_info: dict, reaso
     form_data.pop("review", None)
     form_data.pop("_category", None)
     # 尽量给完整可导入的成品：保留 review 已生成的 bpmn_xml，没有则兜底生成
-    if design_type == "flow_design" and form_data.get("nodes") and not form_data.get("bpmn_xml"):
+    if (
+        design_type == "flow_design"
+        and form_data.get("nodes")
+        and not form_data.get("bpmn_xml")
+    ):
         category = build_category(raw_result, {})
         try:
             form_data["bpmn_xml"] = generate_bpmn_xml(
@@ -115,15 +127,23 @@ def _format_partial(design_type: str, raw_result: dict, review_info: dict, reaso
     }
 
 
-def _format_success_output(design_type: str, raw_result: dict, mode: str = "design", current_form_data: dict | None = None) -> dict:
+def _format_success_output(
+    design_type: str,
+    raw_result: dict,
+    mode: str = "design",
+    current_form_data: dict | None = None,
+) -> dict:
     """格式化成功输出"""
     if design_type == "category_design":
         category_name = raw_result.get("category_name", "")
         return {
             "form_data": {
-                "category_name": category_name or (current_form_data or {}).get("category_name", ""),
-                "code": raw_result.get("code", "") or (current_form_data or {}).get("code", ""),
-                "remark": raw_result.get("remark", "") or (current_form_data or {}).get("remark", ""),
+                "category_name": category_name
+                or (current_form_data or {}).get("category_name", ""),
+                "code": raw_result.get("code", "")
+                or (current_form_data or {}).get("code", ""),
+                "remark": raw_result.get("remark", "")
+                or (current_form_data or {}).get("remark", ""),
             },
             "message": f"已为您生成【{category_name}】分类",
             "intent": "success",
@@ -136,9 +156,14 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
         if mode == "basic":
             form_data = {
                 **current_form,
-                "flow_name": raw_result.get("flow_name") or current_form.get("flow_name") or current_form.get("modelName", ""),
-                "code": raw_result.get("code") or current_form.get("code") or current_form.get("category", ""),
-                "description": raw_result.get("description") or current_form.get("description", ""),
+                "flow_name": raw_result.get("flow_name")
+                or current_form.get("flow_name")
+                or current_form.get("modelName", ""),
+                "code": raw_result.get("code")
+                or current_form.get("code")
+                or current_form.get("category", ""),
+                "description": raw_result.get("description")
+                or current_form.get("description", ""),
             }
             return {
                 "form_data": form_data,
@@ -163,9 +188,13 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
             bpmn_xml = raw_result.get("bpmn_xml") or ""
             if not bpmn_xml and nodes:
                 try:
-                    bpmn_xml = generate_bpmn_xml({"nodes": nodes, "edges": edges}, category)
+                    bpmn_xml = generate_bpmn_xml(
+                        {"nodes": nodes, "edges": edges}, category
+                    )
                 except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    logger.error(f"[format] generate_bpmn_xml 失败: {e}, nodes={nodes}, category={category}")
+                    logger.error(
+                        f"[format] generate_bpmn_xml 失败: {e}, nodes={nodes}, category={category}"
+                    )
                     bpmn_xml = ""
 
             form_data["bpmn_xml"] = bpmn_xml

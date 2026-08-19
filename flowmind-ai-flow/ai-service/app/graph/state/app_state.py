@@ -18,6 +18,7 @@ class AppState(TypedDict, total=False):
     - design_type/mode 在 initial_state 传入，在节点间传递
     - Checkpoint 自动持久化所有状态字段
     """
+
     # 核心：消息历史（LangGraph add_messages 自动追加，Checkpoint 自动持久化）
     messages: Annotated[list[BaseMessage], add_messages]
 
@@ -41,4 +42,6 @@ class AppState(TypedDict, total=False):
 
     # review 专用
     review_retry_count: int | None  # 审查重试计数
-    review_error_history: list[list[str]] | None  # 最近 3 次错误 rule_id 集合（用于死循环检测）
+    review_error_history: (
+        list[list[str]] | None
+    )  # 最近 3 次错误 rule_id 集合（用于死循环检测）

@@ -57,18 +57,33 @@ ICON_MAP = {
 
 # 字段组件（formItemFlag=True）
 FIELD_TYPES = {
-    "input", "textarea", "rich-editor", "number", "slider",
-    "radio", "checkbox", "select", "cascader",
-    "time", "time-range", "date", "date-range",
-    "switch", "rate", "color",
-    "picture-upload", "file-upload",
+    "input",
+    "textarea",
+    "rich-editor",
+    "number",
+    "slider",
+    "radio",
+    "checkbox",
+    "select",
+    "cascader",
+    "time",
+    "time-range",
+    "date",
+    "date-range",
+    "switch",
+    "rate",
+    "color",
+    "picture-upload",
+    "file-upload",
 }
 
 # 容器组件（formItemFlag=False）
 CONTAINER_TYPES = {"grid", "table", "tab", "card", "grid-col"}
 
 
-def _build_field_options(widget_type: str, ai_options: dict[str, Any]) -> dict[str, Any]:
+def _build_field_options(
+    widget_type: str, ai_options: dict[str, Any]
+) -> dict[str, Any]:
     """构建完整的 field options"""
     name = ai_options.get("name", "")
     label = ai_options.get("label", "")
@@ -269,7 +284,9 @@ def _build_field_options(widget_type: str, ai_options: dict[str, Any]) -> dict[s
         options["showFileList"] = ai_options.get("showFileList", True)
         options["limit"] = ai_options.get("limit", 3)
         options["fileMaxSize"] = ai_options.get("fileMaxSize", 5)
-        options["fileTypes"] = ai_options.get("fileTypes", ["doc", "docx", "xls", "xlsx"])
+        options["fileTypes"] = ai_options.get(
+            "fileTypes", ["doc", "docx", "xls", "xlsx"]
+        )
         options["onBeforeUpload"] = ""
         options["onUploadSuccess"] = ""
         options["onUploadError"] = ""
@@ -310,7 +327,9 @@ def _build_field_options(widget_type: str, ai_options: dict[str, Any]) -> dict[s
     return options
 
 
-def _build_container_options(widget_type: str, ai_options: dict[str, Any]) -> dict[str, Any]:
+def _build_container_options(
+    widget_type: str, ai_options: dict[str, Any]
+) -> dict[str, Any]:
     """构建容器组件的 options"""
     options = {
         "name": ai_options.get("name", ""),
@@ -413,47 +432,54 @@ def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
         elif widget_type == "tab":
             # 处理 tab 的 tabs
             tabs = widget.get("tabs", [])
-            default_tabs = [{
-                "type": "tab-pane",
-                "category": "container",
-                "icon": "tab-pane",
-                "internal": True,
-                "widgetList": [],
-                "options": {
-                    "name": f"tab{i+1}",
-                    "label": f"tab {i+1}",
-                    "hidden": False,
-                    "active": i == 0,
-                    "disabled": False,
-                    "customClass": "",
-                },
-                "id": generate_id("tab-pane-"),
-            } for i in range(len(tabs) if tabs else 1)]
+            default_tabs = [
+                {
+                    "type": "tab-pane",
+                    "category": "container",
+                    "icon": "tab-pane",
+                    "internal": True,
+                    "widgetList": [],
+                    "options": {
+                        "name": f"tab{i + 1}",
+                        "label": f"tab {i + 1}",
+                        "hidden": False,
+                        "active": i == 0,
+                        "disabled": False,
+                        "customClass": "",
+                    },
+                    "id": generate_id("tab-pane-"),
+                }
+                for i in range(len(tabs) if tabs else 1)
+            ]
             result["tabs"] = default_tabs
 
         elif widget_type == "table":
             # 处理 table 的 rows
-            result["rows"] = [{
-                "cols": [{
-                    "type": "table-cell",
-                    "category": "container",
-                    "icon": "table-cell",
-                    "internal": True,
-                    "widgetList": [],
+            result["rows"] = [
+                {
+                    "cols": [
+                        {
+                            "type": "table-cell",
+                            "category": "container",
+                            "icon": "table-cell",
+                            "internal": True,
+                            "widgetList": [],
+                            "merged": False,
+                            "options": {
+                                "name": generate_id("table-cell-"),
+                                "cellWidth": "",
+                                "cellHeight": "",
+                                "colspan": 1,
+                                "rowspan": 1,
+                                "customClass": "",
+                            },
+                            "id": generate_id("table-cell-"),
+                        }
+                    ],
+                    "id": generate_id("table-row-"),
                     "merged": False,
-                    "options": {
-                        "name": generate_id("table-cell-"),
-                        "cellWidth": "",
-                        "cellHeight": "",
-                        "colspan": 1,
-                        "rowspan": 1,
-                        "customClass": "",
-                    },
-                    "id": generate_id("table-cell-"),
-                }],
-                "id": generate_id("table-row-"),
-                "merged": False,
-            }]
+                }
+            ]
 
         return result
 
@@ -495,7 +521,9 @@ def _get_default_value(widget_type: str) -> Any:
     return defaults.get(widget_type)
 
 
-def transform_to_vform3(ai_result: dict[str, Any], current_form_data: dict[str, Any] | None = None) -> dict[str, Any]:
+def transform_to_vform3(
+    ai_result: dict[str, Any], current_form_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """将 AI 生成的简化格式转换为完整的 VForm3 JSON
 
     Args:

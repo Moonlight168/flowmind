@@ -104,10 +104,12 @@ client = get_llm_client()
 text = client.generate("你好")
 
 # 多轮对话
-text = client.generate_messages([
-    {"role": "user", "content": "你好"},
-    {"role": "assistant", "content": "你好，我是AI"},
-])
+text = client.generate_messages(
+    [
+        {"role": "user", "content": "你好"},
+        {"role": "assistant", "content": "你好，我是AI"},
+    ]
+)
 
 # 结构化输出
 data = client.generate_json(

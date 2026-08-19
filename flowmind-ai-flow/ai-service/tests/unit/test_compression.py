@@ -9,7 +9,9 @@ def _msgs(n: int, with_system: bool = True) -> list[dict]:
     """构造 n 条非 system 消息（可选带 system）"""
     msgs = [{"role": "system", "content": "system"}] if with_system else []
     for i in range(n):
-        msgs.append({"role": "user" if i % 2 == 0 else "assistant", "content": f"msg{i}"})
+        msgs.append(
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg{i}"}
+        )
     return msgs
 
 
@@ -59,7 +61,9 @@ def test_llm_summary_replaced(monkeypatch):
 
     from app.adapters.factory import ModelFactory
 
-    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager()))
+    monkeypatch.setattr(
+        ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
+    )
 
     msgs = _msgs(6)
     out = compress_history(msgs)
@@ -83,7 +87,9 @@ def test_llm_summary_fallback_to_trim(monkeypatch):
 
     from app.adapters.factory import ModelFactory
 
-    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager()))
+    monkeypatch.setattr(
+        ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
+    )
 
     msgs = _msgs(6)
     out = compress_history(msgs)

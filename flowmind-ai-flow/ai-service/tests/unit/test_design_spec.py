@@ -7,7 +7,10 @@ from app.agents.design_spec import DESIGN_SPEC, prefetch_summaries
 
 def test_spec_has_three_types():
     assert set(DESIGN_SPEC.keys()) == {"flow_design", "form_design", "category_design"}
-    assert all("schema" in s and "prefetch" in s and "baseline" in s for s in DESIGN_SPEC.values())
+    assert all(
+        "schema" in s and "prefetch" in s and "baseline" in s
+        for s in DESIGN_SPEC.values()
+    )
 
 
 def test_flow_prefetch_four_categories(monkeypatch):

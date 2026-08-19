@@ -35,10 +35,7 @@ class NacosRegistry:
     def _init_client(self) -> None:
         """初始化 Nacos 客户端"""
         if self._client is None:
-            server_addr = os.getenv(
-                "NACOS_SERVER_ADDR",
-                settings.nacos.server_addr
-            )
+            server_addr = os.getenv("NACOS_SERVER_ADDR", settings.nacos.server_addr)
             self._client = nacos.NacosClient(server_addr)
             logger.info(f"Nacos 客户端已初始化 - 地址：{server_addr}")
 
@@ -158,8 +155,7 @@ def register_to_nacos(max_retries: int = 5, retry_interval: int = 5) -> bool:
 
         if attempt < max_retries:
             logger.warning(
-                f"Nacos 注册失败，{retry_interval}秒后重试 "
-                f"({attempt}/{max_retries})..."
+                f"Nacos 注册失败，{retry_interval}秒后重试 ({attempt}/{max_retries})..."
             )
             time.sleep(retry_interval)
 

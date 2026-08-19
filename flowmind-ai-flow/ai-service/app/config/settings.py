@@ -54,7 +54,9 @@ class DatabaseSettings(BaseSettings):
         alias="DATABASE_URL",
     )
 
-    model_config = SettingsConfigDict(env_prefix="DB_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="DB_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 class RedisSettings(BaseSettings):
@@ -66,7 +68,9 @@ class RedisSettings(BaseSettings):
     password: str | None = Field(default=None)
     checkpoint_ttl_hours: int = Field(default=720)  # 30天
 
-    model_config = SettingsConfigDict(env_prefix="REDIS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="REDIS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 class FallbackSettings(BaseSettings):
@@ -76,7 +80,12 @@ class FallbackSettings(BaseSettings):
     max_retries: int = Field(default=3)
     retry_interval: float = Field(default=1.0)
 
-    model_config = SettingsConfigDict(env_prefix="FALLBACK_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="FALLBACK_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class AppSettings(BaseSettings):
@@ -98,7 +107,9 @@ class AppSettings(BaseSettings):
         description="uvicorn worker 进程数（debug 模式强制为 1）",
     )
 
-    model_config = SettingsConfigDict(env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     @field_validator("execution_mode")
     @classmethod
@@ -116,8 +127,9 @@ class LogSettings(BaseSettings):
     format: str = Field(default="chain")  # simple/detailed/chain
     llm_detail: str = Field(default="summary")  # none/summary/full
 
-    model_config = SettingsConfigDict(env_prefix="LOG_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
+    model_config = SettingsConfigDict(
+        env_prefix="LOG_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     @field_validator("format")
     @classmethod
@@ -150,7 +162,12 @@ class BackendSettings(BaseSettings):
     role_api_path: str = Field(default="/system/role")
     timeout: int = Field(default=30)
 
-    model_config = SettingsConfigDict(env_prefix="BACKEND_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="BACKEND_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class NacosSettings(BaseSettings):
@@ -158,7 +175,9 @@ class NacosSettings(BaseSettings):
 
     server_addr: str = Field(default="localhost:8848")
 
-    model_config = SettingsConfigDict(env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 class CompressConfig(BaseSettings):
@@ -166,10 +185,17 @@ class CompressConfig(BaseSettings):
 
     max_messages: int = Field(default=12, description="消息数超过该值才触发压缩")
     keep_recent: int = Field(default=4, description="保留最近 N 条完整消息")
-    enable_llm_summary: bool = Field(default=True, description="True=中间段 LLM 摘要；False=纯裁剪")
+    enable_llm_summary: bool = Field(
+        default=True, description="True=中间段 LLM 摘要；False=纯裁剪"
+    )
     summary_max_tokens: int = Field(default=300, description="LLM 摘要 token 上限")
 
-    model_config = SettingsConfigDict(env_prefix="COMPRESS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="COMPRESS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class ValidationConfig(BaseSettings):
@@ -177,7 +203,12 @@ class ValidationConfig(BaseSettings):
 
     review_max_retry_count: int = Field(default=3, description="review 节点重试预算")
 
-    model_config = SettingsConfigDict(env_prefix="VALIDATION_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="VALIDATION_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class Settings(BaseSettings):
@@ -187,7 +218,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
-        protected_namespaces=('settings_',),  # 禁用 model_ 命名空间保护
+        protected_namespaces=("settings_",),  # 禁用 model_ 命名空间保护
     )
 
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -222,7 +253,11 @@ class Settings(BaseSettings):
         if models_env:
             try:
                 models_list = json.loads(models_env)
-                return {m["name"]: _normalize_model_config(m) for m in models_list if m.get("name")}
+                return {
+                    m["name"]: _normalize_model_config(m)
+                    for m in models_list
+                    if m.get("name")
+                }
             except json.JSONDecodeError:
                 pass  # 解析失败，使用默认配置
 

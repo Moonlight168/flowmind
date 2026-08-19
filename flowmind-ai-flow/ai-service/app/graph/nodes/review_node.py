@@ -53,7 +53,9 @@ def review_node(state: AppState) -> AppState:
     # 死循环检测：连续 2 次错误 rule_id 集合相同 → error
     history = state.get("review_error_history") or []
     if pipeline.detect_loop(result.errors, [frozenset(h) for h in history]):
-        logger.error(f"[review] 检测到死循环，rule_ids={sorted({e.rule_id for e in result.errors})}")
+        logger.error(
+            f"[review] 检测到死循环，rule_ids={sorted({e.rule_id for e in result.errors})}"
+        )
         state["intent"] = "error"
         design_output["review"] = {
             "passed": False,
@@ -85,7 +87,9 @@ def review_node(state: AppState) -> AppState:
             feedback = _build_error_feedback(result.errors, design_output)
             state["messages"].append(AIMessage(content=feedback))
         else:
-            logger.error(f"[review] 校验失败，已达最大重试次数 ({settings.validation.review_max_retry_count})")
+            logger.error(
+                f"[review] 校验失败，已达最大重试次数 ({settings.validation.review_max_retry_count})"
+            )
         state["review_retry_count"] = retry_count
 
     state["design_output"] = design_output
@@ -118,7 +122,9 @@ def _build_pipeline(design_type: str, mode: str) -> ValidatorPipeline:
     if design_type == "flow_design" and mode == "basic":
         return ValidatorPipeline([CategoryValidator()])
     if design_type == "flow_design":
-        return ValidatorPipeline([BaselineValidator(), NodeValidator(), EdgeValidator(), BPMNXMLValidator()])
+        return ValidatorPipeline(
+            [BaselineValidator(), NodeValidator(), EdgeValidator(), BPMNXMLValidator()]
+        )
     if design_type == "form_design":
         return ValidatorPipeline([BaselineValidator(), FormFieldValidator()])
     if design_type == "category_design":
@@ -126,7 +132,9 @@ def _build_pipeline(design_type: str, mode: str) -> ValidatorPipeline:
     return ValidatorPipeline([])
 
 
-def _build_error_feedback(errors: list[ValidationError], design_output: dict | None = None) -> str:
+def _build_error_feedback(
+    errors: list[ValidationError], design_output: dict | None = None
+) -> str:
     """构建错误反馈消息，将 BPMN 术语翻译为 JSON nodes/edges 术语"""
     feedback_lines = ["请修正以下问题后重新生成："]
 
@@ -137,14 +145,18 @@ def _build_error_feedback(errors: list[ValidationError], design_output: dict | N
 
         for err in errors:
             msg = err.message
-            if "出线数量不足" in msg or "出边数量不足" in msg or "缺少 condition" in msg:
+            if (
+                "出线数量不足" in msg
+                or "出边数量不足" in msg
+                or "缺少 condition" in msg
+            ):
                 gw_id = _extract_gateway_id(msg)
                 if gw_id:
                     gw_node = node_map.get(gw_id, {})
                     gw_name = gw_node.get("name", gw_id)
                     outgoing = [e for e in edges if e.get("source") == gw_id]
                     feedback_lines.append(
-                        f"- 排他网关 \"{gw_name}\"(id={gw_id}) 当前只有 {len(outgoing)} 条出边，"
+                        f'- 排他网关 "{gw_name}"(id={gw_id}) 当前只有 {len(outgoing)} 条出边，'
                         f"但排他网关必须有 ≥2 条出边且每条都要有 condition 字段。"
                         f"如果此流程不需要条件分支，请移除该网关节点并直接将前后节点相连。"
                     )

@@ -61,7 +61,9 @@ def _result_router(state: AppState) -> str:
     review_passed = review_info.get("passed", True)
     review_retry_count = state.get("review_retry_count") or 0
 
-    logger.info(f"[router] intent={intent}, review_passed={review_passed}, retry={review_retry_count}")
+    logger.info(
+        f"[router] intent={intent}, review_passed={review_passed}, retry={review_retry_count}"
+    )
 
     # 成功 + 审查通过 = 结束
     if intent == "success" and review_passed:
@@ -88,7 +90,9 @@ def create_design_workflow() -> StateGraph:
     # clarification 和 error 直接进入 format，success 进入 review
     workflow.add_conditional_edges(
         "design",
-        lambda state: "format" if state.get("intent") in ("clarification", "error") else "review",
+        lambda state: (
+            "format" if state.get("intent") in ("clarification", "error") else "review"
+        ),
         {"review": "review", "format": "format"},
     )
 
@@ -153,7 +157,13 @@ def invoke_design_workflow(
 ) -> dict:
     """设计 Workflow 调用入口（同步，返回最终 design_output）"""
     config, trace_id, initial_state = _prepare_design_call(
-        design_type, user_input, thread_id, trace_id, current_form_data, mode, kwargs,
+        design_type,
+        user_input,
+        thread_id,
+        trace_id,
+        current_form_data,
+        mode,
+        kwargs,
     )
 
     lock_key = f"lock:design:{thread_id}"
@@ -166,7 +176,9 @@ def invoke_design_workflow(
     logger.info(f"[invoke] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
     try:
-        with log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None):
+        with log_context(
+            trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
+        ):
             result = design_workflow.invoke(initial_state, config)
 
             # 从最终状态提取 design_output
@@ -176,7 +188,9 @@ def invoke_design_workflow(
                     logger.info(f"[invoke] 完成, intent={result.get('intent')}")
                     return design_output
 
-            logger.warning(f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}")
+            logger.warning(
+                f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}"
+            )
             return result
     finally:
         redis_client.delete(lock_key)
@@ -193,7 +207,13 @@ def stream_design_workflow(
 ):
     """流式设计 Workflow：逐个 yield 进度事件，最后 yield done 事件（含完整 design_output）"""
     config, trace_id, initial_state = _prepare_design_call(
-        design_type, user_input, thread_id, trace_id, current_form_data, mode, kwargs,
+        design_type,
+        user_input,
+        thread_id,
+        trace_id,
+        current_form_data,
+        mode,
+        kwargs,
     )
 
     lock_key = f"lock:design:{thread_id}"
@@ -206,30 +226,60 @@ def stream_design_workflow(
     logger.info(f"[stream] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
     try:
-        with log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None):
+        with log_context(
+            trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
+        ):
             design_count = 0
             last_error_count = 0
-            for step in design_workflow.stream(initial_state, config, stream_mode="updates"):
+            for step in design_workflow.stream(
+                initial_state, config, stream_mode="updates"
+            ):
                 for node_name, node_state in step.items():
                     if node_name == "design":
                         design_count += 1
                         if design_count == 1:
-                            yield {"type": "progress", "phase": "design", "message": "正在理解需求并生成流程结构"}
+                            yield {
+                                "type": "progress",
+                                "phase": "design",
+                                "message": "正在理解需求并生成流程结构",
+                            }
                         else:
                             yield {
-                                "type": "progress", "phase": "design",
+                                "type": "progress",
+                                "phase": "design",
                                 "message": f"发现 {last_error_count} 处问题，正在修正（第 {design_count - 1}/{max_retry} 次）",
                             }
                     elif node_name == "review":
-                        yield {"type": "progress", "phase": "review", "message": "正在校验流程结构"}
-                        review_info = (node_state or {}).get("design_output", {}).get("review", {}) if isinstance(node_state, dict) else {}
+                        yield {
+                            "type": "progress",
+                            "phase": "review",
+                            "message": "正在校验流程结构",
+                        }
+                        review_info = (
+                            (node_state or {})
+                            .get("design_output", {})
+                            .get("review", {})
+                            if isinstance(node_state, dict)
+                            else {}
+                        )
                         last_error_count = len(review_info.get("errors", []))
                     elif node_name == "format":
-                        yield {"type": "progress", "phase": "format", "message": "正在组装结果"}
+                        yield {
+                            "type": "progress",
+                            "phase": "format",
+                            "message": "正在组装结果",
+                        }
 
             final_state = design_workflow.get_state(config)
-            design_output = (final_state.values or {}).get("design_output", {}) if final_state else {}
-            yield {"type": "done", **(design_output if isinstance(design_output, dict) else {})}
+            design_output = (
+                (final_state.values or {}).get("design_output", {})
+                if final_state
+                else {}
+            )
+            yield {
+                "type": "done",
+                **(design_output if isinstance(design_output, dict) else {}),
+            }
     finally:
         redis_client.delete(lock_key)
 

@@ -63,7 +63,14 @@ def chat_node(state: AppState) -> AppState:
 
         return state
 
-    except (RuntimeError, ValueError, KeyError, ConnectionError, TimeoutError, OSError) as e:
+    except (
+        RuntimeError,
+        ValueError,
+        KeyError,
+        ConnectionError,
+        TimeoutError,
+        OSError,
+    ) as e:
         logger.error(f"聊天节点执行失败：{e}")
         ai_response = "抱歉，AI 服务当前不可用，请稍后重试。"
         state["chat_response"] = ai_response

@@ -40,51 +40,86 @@ class EdgeValidator:
             for field in ("source", "target"):
                 ref = edge.get(field)
                 if ref not in valid_refs:
-                    errors.append(ValidationError(
-                        "EDGE_E001", f"连线 {field} 引用不存在的节点: '{ref}'",
-                    ))
+                    errors.append(
+                        ValidationError(
+                            "EDGE_E001",
+                            f"连线 {field} 引用不存在的节点: '{ref}'",
+                        )
+                    )
 
         # EDGE_E002/E003: 网关出边 condition
-        gateway_ids = {n.get("id") for n in nodes if (n.get("type") or "").upper() in GATEWAY_TYPES}
+        gateway_ids = {
+            n.get("id") for n in nodes if (n.get("type") or "").upper() in GATEWAY_TYPES
+        }
         for edge in edges:
             src = edge.get("source")
             if src not in gateway_ids:
                 continue
             src_type = (node_by_id.get(src, {}).get("type") or "").upper()
             if src_type == "EXCLUSIVE_GATEWAY" and not edge.get("condition"):
-                errors.append(ValidationError(
-                    "EDGE_E002", f"排他网关 '{src}' 的出边缺少 condition 表达式",
-                ))
+                errors.append(
+                    ValidationError(
+                        "EDGE_E002",
+                        f"排他网关 '{src}' 的出边缺少 condition 表达式",
+                    )
+                )
             elif src_type == "PARALLEL_GATEWAY" and edge.get("condition"):
-                errors.append(ValidationError(
-                    "EDGE_E003", f"并行网关 '{src}' 的出边不能有 condition（语义冲突）",
-                ))
+                errors.append(
+                    ValidationError(
+                        "EDGE_E003",
+                        f"并行网关 '{src}' 的出边不能有 condition（语义冲突）",
+                    )
+                )
 
         # EDGE_E005: 不允许自环
         for edge in edges:
-            if edge.get("source") == edge.get("target") and edge.get("source") not in (VIRTUAL_START, VIRTUAL_END):
-                errors.append(ValidationError("EDGE_E005", f"不允许自环: '{edge.get('source')}'"))
+            if edge.get("source") == edge.get("target") and edge.get("source") not in (
+                VIRTUAL_START,
+                VIRTUAL_END,
+            ):
+                errors.append(
+                    ValidationError("EDGE_E005", f"不允许自环: '{edge.get('source')}'")
+                )
 
         # EDGE_E006: START_EVENT 只能 1 条出边
-        start_ids = {n.get("id") for n in nodes if (n.get("type") or "").upper() == "START_EVENT"}
-        start_out = [e for e in edges if e.get("source") in (start_ids | {VIRTUAL_START})]
+        start_ids = {
+            n.get("id") for n in nodes if (n.get("type") or "").upper() == "START_EVENT"
+        }
+        start_out = [
+            e for e in edges if e.get("source") in (start_ids | {VIRTUAL_START})
+        ]
         if len(start_out) > 1:
-            errors.append(ValidationError("EDGE_E006", f"START_EVENT 只能有 1 条出边，当前 {len(start_out)} 条"))
+            errors.append(
+                ValidationError(
+                    "EDGE_E006",
+                    f"START_EVENT 只能有 1 条出边，当前 {len(start_out)} 条",
+                )
+            )
 
         # EDGE_E007: END_EVENT 只能 1 条入边
-        end_ids = {n.get("id") for n in nodes if (n.get("type") or "").upper() == "END_EVENT"}
+        end_ids = {
+            n.get("id") for n in nodes if (n.get("type") or "").upper() == "END_EVENT"
+        }
         end_in = [e for e in edges if e.get("target") in (end_ids | {VIRTUAL_END})]
         if len(end_in) > 1:
-            errors.append(ValidationError("EDGE_E007", f"END_EVENT 只能有 1 条入边，当前 {len(end_in)} 条"))
+            errors.append(
+                ValidationError(
+                    "EDGE_E007", f"END_EVENT 只能有 1 条入边，当前 {len(end_in)} 条"
+                )
+            )
 
         # EDGE_E004: 孤立节点（从 start 不可达）WARNING
         reachable = _reachable_from_start(edges)
         for node_id in node_ids:
             if node_id not in reachable and node_id not in (start_ids | end_ids):
-                warnings.append(ValidationError(
-                    "EDGE_E004", f"节点 '{node_id}' 无法从 startEvent 到达",
-                    severity=ValidationSeverity.WARNING, element_id=node_id,
-                ))
+                warnings.append(
+                    ValidationError(
+                        "EDGE_E004",
+                        f"节点 '{node_id}' 无法从 startEvent 到达",
+                        severity=ValidationSeverity.WARNING,
+                        element_id=node_id,
+                    )
+                )
 
         return ValidationResult.from_errors(errors + warnings)
 

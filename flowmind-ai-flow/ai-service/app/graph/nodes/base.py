@@ -71,7 +71,11 @@ def node_handler(node_name: str = ""):
                 # 仅记录本节点新产生的 AI 响应，避免历史状态误导排障
                 chat_response = str(result.get("chat_response", "") or "")
                 if chat_response and chat_response != old_chat_response:
-                    preview = chat_response.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+                    preview = (
+                        chat_response.replace("\r\n", "\n")
+                        .replace("\r", "\n")
+                        .replace("\n", "\\n")
+                    )
                     logger.debug(f"[AI回复] {name} | {preview[:120]}...")
 
                 logger.info(
@@ -93,4 +97,3 @@ def node_handler(node_name: str = ""):
         return wrapper
 
     return decorator
-

@@ -53,7 +53,9 @@ def run_react_agent(
     if not task:
         raise ValueError(f"不支持的设计类型: {design_type}")
 
-    prompt_text = build_prompt(task, variables={"current_form_data": current_form_data or {}})
+    prompt_text = build_prompt(
+        task, variables={"current_form_data": current_form_data or {}}
+    )
     full_messages = [{"role": "system", "content": prompt_text}, *messages]
 
     # 选 schema：basic 模式用 BasicDesign，否则按 DESIGN_SPEC
@@ -64,7 +66,14 @@ def run_react_agent(
             summaries = prefetch_summaries("category_design", auth_token)
             if summaries:
                 full_messages[0]["content"] = _append_summaries(prompt_text, summaries)
-        except (RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
+        except (
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            OSError,
+            AttributeError,
+        ) as e:
             logger.warning(f"[design] 预取失败（置空继续）: {e}")
     else:
         spec = DESIGN_SPEC.get(design_type)
@@ -76,7 +85,14 @@ def run_react_agent(
             summaries = prefetch_summaries(design_type, auth_token)
             if summaries:
                 full_messages[0]["content"] = _append_summaries(prompt_text, summaries)
-        except (RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
+        except (
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            OSError,
+            AttributeError,
+        ) as e:
             logger.warning(f"[design] 预取失败（置空继续）: {e}")
 
     # 结构化输出（重试 ≤3 次）
@@ -89,10 +105,22 @@ def run_react_agent(
                 logger.info("[LLM] 结构化输出成功")
                 return obj.model_dump()
             last_error = ValueError("结构化输出返回 None")
-            logger.warning(f"[LLM] 结构化输出返回 None（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）")
-        except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
+            logger.warning(
+                f"[LLM] 结构化输出返回 None（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）"
+            )
+        except (
+            ValidationError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+            OSError,
+            AttributeError,
+        ) as e:
             last_error = e
-            logger.warning(f"[LLM] 结构化输出失败（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）: {e}")
+            logger.warning(
+                f"[LLM] 结构化输出失败（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）: {e}"
+            )
 
     logger.error(f"[LLM] 结构化输出重试耗尽: {last_error}")
     return {"intent": "error", "message": "AI 服务暂时异常，请稍后重试"}
@@ -101,7 +129,7 @@ def run_react_agent(
 def _append_summaries(prompt_text: str, summaries: dict) -> str:
     """把预取的真实数据摘要拼进 prompt，让 LLM 从真实数据选而非编造"""
     lines = [
-        "\n\n## 可用数据（直接从以下真实数据中选择，禁止编造；忽略上文所有\"调用工具\"的指令）"
+        '\n\n## 可用数据（直接从以下真实数据中选择，禁止编造；忽略上文所有"调用工具"的指令）'
     ]
     for name, rows in summaries.items():
         if rows:

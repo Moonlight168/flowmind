@@ -47,7 +47,11 @@ def prefetch_summaries(design_type: str, auth_token: str | None = None) -> dict:
 def _summary_categories(auth_token):
     rows = CategoryService(auth_token=auth_token).search_categories()
     return [
-        {"categoryId": r.get("categoryId"), "categoryName": r.get("categoryName"), "code": r.get("code")}
+        {
+            "categoryId": r.get("categoryId"),
+            "categoryName": r.get("categoryName"),
+            "code": r.get("code"),
+        }
         for r in rows[:_PREFETCH_LIMIT]
     ]
 
@@ -55,7 +59,11 @@ def _summary_categories(auth_token):
 def _summary_forms(auth_token):
     rows = FormService(auth_token=auth_token).search_forms("")
     return [
-        {"formId": r.get("formId"), "formName": r.get("formName"), "formKey": r.get("formKey")}
+        {
+            "formId": r.get("formId"),
+            "formName": r.get("formName"),
+            "formKey": r.get("formKey"),
+        }
         for r in rows[:_PREFETCH_LIMIT]
     ]
 
@@ -72,7 +80,11 @@ def _summary_roles(auth_token):
 def _summary_models(auth_token):
     rows = FlowService(auth_token=auth_token).search_flow_models()
     return [
-        {"modelId": r.get("modelId"), "modelName": r.get("modelName"), "modelKey": r.get("modelKey")}
+        {
+            "modelId": r.get("modelId"),
+            "modelName": r.get("modelName"),
+            "modelKey": r.get("modelKey"),
+        }
         for r in rows[:_PREFETCH_LIMIT]
     ]
 

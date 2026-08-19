@@ -41,15 +41,18 @@ class BPMNXMLValidator:
         category = build_category(output, context.current_form_data)
         try:
             bpmn_xml = generate_bpmn_xml(
-                {"nodes": output.get("nodes", []) or [], "edges": output.get("edges", []) or []},
+                {
+                    "nodes": output.get("nodes", []) or [],
+                    "edges": output.get("edges", []) or [],
+                },
                 category,
             )
             result = validate_bpmn_xml(bpmn_xml)
         except (ValueError, TypeError, KeyError, AttributeError) as e:
             # 生成失败（如非法节点类型导致 XML 构造异常）
-            return ValidationResult.from_errors([
-                ValidationError("BPMN_V012", f"BPMN XML 生成失败: {e}")
-            ])
+            return ValidationResult.from_errors(
+                [ValidationError("BPMN_V012", f"BPMN XML 生成失败: {e}")]
+            )
 
         # 缓存供 format_node 复用，避免二次生成
         output["bpmn_xml"] = bpmn_xml
@@ -61,7 +64,10 @@ class BPMNXMLValidator:
         ]
         warnings = [
             ValidationError(
-                f"BPMN_{e.rule_id}", e.message, severity=ValidationSeverity.WARNING, element_id=e.element_id,
+                f"BPMN_{e.rule_id}",
+                e.message,
+                severity=ValidationSeverity.WARNING,
+                element_id=e.element_id,
             )
             for e in result.warnings
         ]

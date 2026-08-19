@@ -33,11 +33,15 @@ async def require_auth(
         HTTPException: Token 无效或缺失时返回 403
     """
     if credentials is None:
-        logger.warning(f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Missing authorization header")
+        logger.warning(
+            f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Missing authorization header"
+        )
         raise HTTPException(status_code=403, detail="Missing authorization header")
 
     if credentials.scheme.lower() != "bearer":
-        logger.warning(f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Invalid authentication scheme: {credentials.scheme}")
+        logger.warning(
+            f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Invalid authentication scheme: {credentials.scheme}"
+        )
         raise HTTPException(status_code=403, detail="Invalid authentication scheme")
 
     try:
@@ -53,5 +57,7 @@ async def require_auth(
     except HTTPException:
         raise
     except TokenParseError as e:
-        logger.warning(f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Token validation failed: {e}")
+        logger.warning(
+            f"[{request.state.trace_id if hasattr(request.state, 'trace_id') else 'unknown'}] Token validation failed: {e}"
+        )
         raise HTTPException(status_code=403, detail="Invalid or expired token")

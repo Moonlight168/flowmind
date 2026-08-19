@@ -34,12 +34,14 @@ def compress_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return messages
 
     middle = non_system[: -config.keep_recent]
-    recent = non_system[-config.keep_recent:]
+    recent = non_system[-config.keep_recent :]
 
     if config.enable_llm_summary:
         summary = _llm_summary(middle)
         if summary:
-            logger.info(f"[compress] LLM 摘要 {len(middle)} 条中间消息，保留 {len(recent)} 条")
+            logger.info(
+                f"[compress] LLM 摘要 {len(middle)} 条中间消息，保留 {len(recent)} 条"
+            )
             return [
                 *system,
                 {"role": "assistant", "content": f"[历史摘要] {summary}"},

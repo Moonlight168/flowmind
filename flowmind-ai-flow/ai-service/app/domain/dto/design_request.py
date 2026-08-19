@@ -8,14 +8,9 @@ from pydantic import BaseModel, Field
 class DesignRequestDTO(BaseModel):
     """设计请求 DTO"""
 
-    user_input: str = Field(
-        ...,
-        max_length=2000,
-        description="用户输入文本"
-    )
+    user_input: str = Field(..., max_length=2000, description="用户输入文本")
     current_form_data: dict | None = Field(
-        default=None,
-        description="当前表单数据，用于提供上下文"
+        default=None, description="当前表单数据，用于提供上下文"
     )
     mode: str = Field(
         default="design",

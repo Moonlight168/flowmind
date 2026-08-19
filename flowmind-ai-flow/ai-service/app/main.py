@@ -79,6 +79,7 @@ async def log_context_middleware(request: Request, call_next):
 
     return response
 
+
 # 路由注册（网关层已通过 StripPrefix 去掉 /flowmind-ai，此处直接注册业务路径）
 app.include_router(chat.router, prefix="", tags=["对话"])
 app.include_router(design.router, prefix="", tags=["设计"])

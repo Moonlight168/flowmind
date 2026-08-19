@@ -21,6 +21,7 @@ INTENT_PROMPT = """
 **重要**：以上 JSON 必须作为文本直接输出在 AI 消息中，不要尝试调用任何工具！
 """
 
+
 def build_prompt(task: "Task | str", variables: dict[str, Any]) -> str:
     """构建 Prompt（分层组装）"""
     if isinstance(task, str):
@@ -111,13 +112,16 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
         lines.append("现有流程结构（完整，必须在此基础上增量修改）：")
         lines.append(f"nodes: {json.dumps(nodes, ensure_ascii=False)}")
         lines.append(f"edges: {json.dumps(edges or [], ensure_ascii=False)}")
-        lines.append("- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回")
+        lines.append(
+            "- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回"
+        )
         lines.append("- 完整返回 nodes + edges（含保留的节点，不是只返回改动部分）")
     elif bpmn_xml:
         lines.append("- 已有流程编排，用户正在修改现有流程")
         # 尝试从 bpmnXml 中提取节点信息供 AI 参考（无 nodes 时的 fallback）
         try:
             import re
+
             # 提取 userTask 节点名称
             task_names = re.findall(r'<bpmn2?:userTask[^>]*name="([^"]*)"', bpmn_xml)
             if task_names:

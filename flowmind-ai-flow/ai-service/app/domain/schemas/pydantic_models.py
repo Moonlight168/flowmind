@@ -75,6 +75,7 @@ class CategoryDesign(BaseModel):
 
 class BasicDesign(BaseModel):
     """flow_design basic 模式：仅流程基本信息"""
+
     model_config = ConfigDict(extra="forbid")
 
     flow_name: str

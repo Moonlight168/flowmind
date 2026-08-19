@@ -49,7 +49,10 @@ def discriminate_intent(
     """
     if llm is None:
         from app.adapters.factory import ModelFactory
-        llm = ModelFactory.get_model_manager().create_llm(task_name="intent", structured=True)
+
+        llm = ModelFactory.get_model_manager().create_llm(
+            task_name="intent", structured=True
+        )
 
     prompt = INTENT_SYSTEM_PROMPT
     if baseline_summary:
@@ -65,6 +68,13 @@ def discriminate_intent(
         if result is None:
             return Intent(kind="design")
         return result
-    except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
+    except (
+        ValidationError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        OSError,
+    ) as e:
         logger.warning(f"[intent] 判别失败，默认 design: {e}")
         return Intent(kind="design")

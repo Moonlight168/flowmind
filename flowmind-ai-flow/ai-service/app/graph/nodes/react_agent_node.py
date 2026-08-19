@@ -32,7 +32,9 @@ def react_agent_node(state: AppState) -> AppState:
             break
     current_form_data = state.get("current_form_data", {})
 
-    logger.info(f"[design] 进入, design_type={design_type}, user_input={user_input[:30]}...")
+    logger.info(
+        f"[design] 进入, design_type={design_type}, user_input={user_input[:30]}..."
+    )
 
     if not design_type:
         state["intent"] = "clarification"
@@ -60,14 +62,20 @@ def react_agent_node(state: AppState) -> AppState:
     if intent.kind == "rollback":
         state["intent"] = "clarification"  # 走 format 跳过 review
         state["design_output"] = {
-            "intent": "clarification", "kind": "rollback",
-            "target": intent.target or "start", "message": "已回到指定版本",
+            "intent": "clarification",
+            "kind": "rollback",
+            "target": intent.target or "start",
+            "message": "已回到指定版本",
         }
         state["messages"].append(AIMessage(content="已回到指定版本"))
         return state
     if intent.kind == "reset":
         state["intent"] = "clarification"
-        state["design_output"] = {"intent": "clarification", "kind": "reset", "message": "已清空，重新开始"}
+        state["design_output"] = {
+            "intent": "clarification",
+            "kind": "reset",
+            "message": "已清空，重新开始",
+        }
         state["messages"].append(AIMessage(content="已清空，重新开始"))
         return state
 

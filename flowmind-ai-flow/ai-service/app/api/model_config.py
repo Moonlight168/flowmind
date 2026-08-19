@@ -60,7 +60,9 @@ class FallbackConfigInput(BaseModel):
 
     enabled: bool | None = Field(None, description="是否启用降级")
     max_retries: int | None = Field(None, description="最大重试次数", ge=0, le=10)
-    retry_interval: float | None = Field(None, description="重试间隔（秒）", ge=0.0, le=10.0)
+    retry_interval: float | None = Field(
+        None, description="重试间隔（秒）", ge=0.0, le=10.0
+    )
 
 
 class AddModelInput(BaseModel):
@@ -148,12 +150,14 @@ async def add_model(
 
         logger.info(f"已添加自定义模型：{input_data.name}")
 
-        return ResponseVO.success(ModelConfigResponse(
-            name=input_data.name,
-            model=input_data.config.model,
-            base_url=input_data.config.base_url,
-            is_custom=True,
-        ))
+        return ResponseVO.success(
+            ModelConfigResponse(
+                name=input_data.name,
+                model=input_data.config.model,
+                base_url=input_data.config.base_url,
+                is_custom=True,
+            )
+        )
 
     except ValidationException:
         raise
@@ -196,7 +200,9 @@ async def remove_model(
 
         logger.info(f"已删除自定义模型：{model_name}")
 
-        return ResponseVO.success({"success": True, "message": f"已删除模型：{model_name}"})
+        return ResponseVO.success(
+            {"success": True, "message": f"已删除模型：{model_name}"}
+        )
 
     except (ResourceNotFoundException, ValidationException):
         raise
@@ -228,11 +234,13 @@ async def update_priority(
 
         logger.info(f"已更新模型优先级：{input_data.priority}")
 
-        return ResponseVO.success({
-            "success": True,
-            "message": "优先级已更新",
-            "priority": input_data.priority,
-        })
+        return ResponseVO.success(
+            {
+                "success": True,
+                "message": "优先级已更新",
+                "priority": input_data.priority,
+            }
+        )
 
     except ResourceNotFoundException:
         raise
@@ -265,11 +273,13 @@ async def update_fallback_config(
 
         logger.info(f"已更新降级配置：enabled={input_data.enabled}")
 
-        return ResponseVO.success({
-            "success": True,
-            "message": "降级配置已更新",
-            "config": new_config,
-        })
+        return ResponseVO.success(
+            {
+                "success": True,
+                "message": "降级配置已更新",
+                "config": new_config,
+            }
+        )
 
     except Exception as e:
         logger.error(f"更新降级配置失败：{e}")

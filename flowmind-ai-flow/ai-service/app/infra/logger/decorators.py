@@ -14,6 +14,7 @@ from .logger_config import generate_request_id, generate_trace_id, logger
 
 def log_api_endpoint(skip_paths: list[str] | None = None):
     """API 接口装饰器 - 自动绑定 trace_id、request_id 并记录请求信息"""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -46,31 +47,55 @@ def log_api_endpoint(skip_paths: list[str] | None = None):
             try:
                 result = await func(*args, **kwargs)
                 status = getattr(result, "status_code", 200)
-                logger.info("请求完成", path=path, status=status, elapsed_ms=int((time.time() - start_time) * 1000))
+                logger.info(
+                    "请求完成",
+                    path=path,
+                    status=status,
+                    elapsed_ms=int((time.time() - start_time) * 1000),
+                )
                 return result
             except Exception as e:
-                logger.error("请求失败", path=path, error=str(e), elapsed_ms=int((time.time() - start_time) * 1000))
+                logger.error(
+                    "请求失败",
+                    path=path,
+                    error=str(e),
+                    elapsed_ms=int((time.time() - start_time) * 1000),
+                )
                 raise
             finally:
                 clear_contextvars()
+
         return wrapper
+
     return decorator
 
 
 def log_node_execution(node: str):
     """节点执行装饰器 - 自动绑定 node 名称并记录执行信息"""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
-                logger.info("节点执行完成", node=node, elapsed_ms=int((time.time() - start_time) * 1000))
+                logger.info(
+                    "节点执行完成",
+                    node=node,
+                    elapsed_ms=int((time.time() - start_time) * 1000),
+                )
                 return result
             except Exception as e:
-                logger.error("节点执行失败", node=node, error=str(e), elapsed_ms=int((time.time() - start_time) * 1000))
+                logger.error(
+                    "节点执行失败",
+                    node=node,
+                    error=str(e),
+                    elapsed_ms=int((time.time() - start_time) * 1000),
+                )
                 raise
+
         return wrapper
+
     return decorator
 
 

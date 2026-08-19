@@ -4,7 +4,6 @@ FlowMind 智能审批服务 - BPMN XML 生成器
 本模块提供将 nodes 结构转换为 BPMN XML 的功能。
 """
 
-
 import lxml.etree as etree
 
 GENERATE_BPMN_XML_SCHEMA = {
@@ -66,7 +65,9 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
     # 生成 BPMNDI 画布布局
     _create_bpmn_diagram(definitions, ns, process_id, nodes, node_ids, custom_edges)
 
-    return etree.tostring(definitions, encoding="utf-8", xml_declaration=True, pretty_print=True).decode("utf-8")
+    return etree.tostring(
+        definitions, encoding="utf-8", xml_declaration=True, pretty_print=True
+    ).decode("utf-8")
 
 
 def _get_bpmn_namespaces() -> dict[str, str]:
@@ -100,8 +101,11 @@ def _create_process_element(
 ) -> etree._Element:
     """创建 BPMN process 元素"""
     return etree.SubElement(
-        definitions, "{%s}process" % ns["bpmn2"], id=process_id, name=process_name,
-        isExecutable="true"
+        definitions,
+        "{%s}process" % ns["bpmn2"],
+        id=process_id,
+        name=process_name,
+        isExecutable="true",
     )
 
 
@@ -118,7 +122,13 @@ def _assign_node_ids(nodes: list[dict]) -> list[str]:
     gw_counter = 1
     event_counter = 1
 
-    gateway_types = {"EXCLUSIVE_GATEWAY", "PARALLEL_GATEWAY", "INCLUSIVE_GATEWAY", "COMPLEX_GATEWAY", "EVENT_GATEWAY"}
+    gateway_types = {
+        "EXCLUSIVE_GATEWAY",
+        "PARALLEL_GATEWAY",
+        "INCLUSIVE_GATEWAY",
+        "COMPLEX_GATEWAY",
+        "EVENT_GATEWAY",
+    }
 
     for node in nodes:
         if node.get("id"):
@@ -185,12 +195,16 @@ def _create_node_elements(
             if node.get("candidate_groups"):
                 # 转为逗号分隔的字符串
                 groups = node["candidate_groups"]
-                attrs[f"{{{fl}}}candidateGroups"] = ",".join(groups) if isinstance(groups, list) else str(groups)
+                attrs[f"{{{fl}}}candidateGroups"] = (
+                    ",".join(groups) if isinstance(groups, list) else str(groups)
+                )
             if node.get("text"):
                 attrs[f"{{{fl}}}text"] = node["text"]
             if node.get("candidate_users"):
                 users = node["candidate_users"]
-                attrs[f"{{{fl}}}candidateUsers"] = ",".join(users) if isinstance(users, list) else str(users)
+                attrs[f"{{{fl}}}candidateUsers"] = (
+                    ",".join(users) if isinstance(users, list) else str(users)
+                )
             if node.get("data_type"):
                 attrs[f"{{{fl}}}dataType"] = node["data_type"]
 
@@ -313,8 +327,11 @@ def _create_auto_edges(
 
     if not nodes:
         etree.SubElement(
-            process, f"{{{bpmn}}}sequenceFlow",
-            id="Flow_End", sourceRef=start_id, targetRef=end_id
+            process,
+            f"{{{bpmn}}}sequenceFlow",
+            id="Flow_End",
+            sourceRef=start_id,
+            targetRef=end_id,
         )
         return
 
@@ -332,21 +349,30 @@ def _create_auto_edges(
 
     # 开始 -> 第一个节点
     etree.SubElement(
-        process, f"{{{bpmn}}}sequenceFlow",
-        id="Flow_1", sourceRef=start_id, targetRef=node_ids[0]
+        process,
+        f"{{{bpmn}}}sequenceFlow",
+        id="Flow_1",
+        sourceRef=start_id,
+        targetRef=node_ids[0],
     )
 
     # 节点之间
     for i in range(len(node_ids) - 1):
         etree.SubElement(
-            process, f"{{{bpmn}}}sequenceFlow",
-            id=f"Flow_{i + 2}", sourceRef=node_ids[i], targetRef=node_ids[i + 1]
+            process,
+            f"{{{bpmn}}}sequenceFlow",
+            id=f"Flow_{i + 2}",
+            sourceRef=node_ids[i],
+            targetRef=node_ids[i + 1],
         )
 
     # 最后一个节点 -> 结束
     etree.SubElement(
-        process, f"{{{bpmn}}}sequenceFlow",
-        id="Flow_End", sourceRef=node_ids[-1], targetRef=end_id
+        process,
+        f"{{{bpmn}}}sequenceFlow",
+        id="Flow_End",
+        sourceRef=node_ids[-1],
+        targetRef=end_id,
     )
 
 
@@ -422,9 +448,14 @@ def _create_custom_edges(
             condition_expr = etree.SubElement(
                 process, f"{{{bpmn}}}sequenceFlow", **flow_attrs
             )
-            condition_elem = etree.SubElement(condition_expr, f"{{{bpmn}}}conditionExpression")
+            condition_elem = etree.SubElement(
+                condition_expr, f"{{{bpmn}}}conditionExpression"
+            )
             condition_elem.text = edge["condition"]
-            condition_elem.set("{http://www.w3.org/2001/XMLSchema-instance}type", "bpmn2:tFormalExpression")
+            condition_elem.set(
+                "{http://www.w3.org/2001/XMLSchema-instance}type",
+                "bpmn2:tFormalExpression",
+            )
         else:
             etree.SubElement(process, f"{{{bpmn}}}sequenceFlow", **flow_attrs)
 
@@ -455,8 +486,12 @@ def _create_bpmn_diagram(
     dc = ns["dc"]
     di = ns["di"]
 
-    diagram = etree.SubElement(definitions, f"{{{bpmndi}}}BPMNDiagram", id="BPMNDiagram_1")
-    plane = etree.SubElement(diagram, f"{{{bpmndi}}}BPMNPlane", id="BPMNPlane_1", bpmnElement=process_id)
+    diagram = etree.SubElement(
+        definitions, f"{{{bpmndi}}}BPMNDiagram", id="BPMNDiagram_1"
+    )
+    plane = etree.SubElement(
+        diagram, f"{{{bpmndi}}}BPMNPlane", id="BPMNPlane_1", bpmnElement=process_id
+    )
 
     # 节点布局参数
     start_x = 180
@@ -468,12 +503,18 @@ def _create_bpmn_diagram(
 
     # 开始事件
     start_shape = etree.SubElement(
-        plane, f"{{{bpmndi}}}BPMNShape",
-        id="StartEvent_1_di", bpmnElement="StartEvent_1"
+        plane,
+        f"{{{bpmndi}}}BPMNShape",
+        id="StartEvent_1_di",
+        bpmnElement="StartEvent_1",
     )
-    etree.SubElement(start_shape, f"{{{dc}}}Bounds",
-        x=str(start_x), y=str(start_y + (node_height - event_size) // 2),
-        width=str(event_size), height=str(event_size)
+    etree.SubElement(
+        start_shape,
+        f"{{{dc}}}Bounds",
+        x=str(start_x),
+        y=str(start_y + (node_height - event_size) // 2),
+        width=str(event_size),
+        height=str(event_size),
     )
 
     # 节点（跳过 START_EVENT/END_EVENT，它们由上方固定的 StartEvent_1/EndEvent_1 shape 表示，
@@ -485,76 +526,135 @@ def _create_bpmn_diagram(
         node_x = start_x + (i + 1) * gap_x
 
         shape = etree.SubElement(
-            plane, f"{{{bpmndi}}}BPMNShape",
-            id=f"{node_id}_di", bpmnElement=node_id
+            plane, f"{{{bpmndi}}}BPMNShape", id=f"{node_id}_di", bpmnElement=node_id
         )
 
         if node_type == "USER_TASK":
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x), y=str(start_y),
-                width=str(node_width), height=str(node_height)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x),
+                y=str(start_y),
+                width=str(node_width),
+                height=str(node_height),
             )
-        elif node_type in ("EXCLUSIVE_GATEWAY", "PARALLEL_GATEWAY", "INCLUSIVE_GATEWAY", "COMPLEX_GATEWAY", "EVENT_GATEWAY"):
+        elif node_type in (
+            "EXCLUSIVE_GATEWAY",
+            "PARALLEL_GATEWAY",
+            "INCLUSIVE_GATEWAY",
+            "COMPLEX_GATEWAY",
+            "EVENT_GATEWAY",
+        ):
             gw_size = 50
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x + (node_width - gw_size) // 2), y=str(start_y + (node_height - gw_size) // 2),
-                width=str(gw_size), height=str(gw_size)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x + (node_width - gw_size) // 2),
+                y=str(start_y + (node_height - gw_size) // 2),
+                width=str(gw_size),
+                height=str(gw_size),
             )
         elif node_type == "SUB_PROCESS":
             sub_width = 300
             sub_height = 200
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x), y=str(start_y - (sub_height - node_height) // 2),
-                width=str(sub_width), height=str(sub_height)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x),
+                y=str(start_y - (sub_height - node_height) // 2),
+                width=str(sub_width),
+                height=str(sub_height),
             )
         elif node_type in ("DATA_OBJECT", "DATA_STORE"):
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x), y=str(start_y),
-                width=str(50), height=str(60)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x),
+                y=str(start_y),
+                width=str(50),
+                height=str(60),
             )
         elif node_type == "PARTICIPANT":
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x), y=str(start_y - 20),
-                width=str(node_width + 20), height=str(node_height + 40)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x),
+                y=str(start_y - 20),
+                width=str(node_width + 20),
+                height=str(node_height + 40),
             )
         elif node_type == "GROUP":
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x - 10), y=str(start_y - 10),
-                width=str(node_width + 20), height=str(node_height + 20)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x - 10),
+                y=str(start_y - 10),
+                width=str(node_width + 20),
+                height=str(node_height + 20),
             )
         else:
-            etree.SubElement(shape, f"{{{dc}}}Bounds",
-                x=str(node_x), y=str(start_y + (node_height - event_size) // 2),
-                width=str(event_size), height=str(event_size)
+            etree.SubElement(
+                shape,
+                f"{{{dc}}}Bounds",
+                x=str(node_x),
+                y=str(start_y + (node_height - event_size) // 2),
+                width=str(event_size),
+                height=str(event_size),
             )
 
     # 结束事件
     end_x = start_x + (len(nodes) + 1) * gap_x
     end_shape = etree.SubElement(
-        plane, f"{{{bpmndi}}}BPMNShape",
-        id="EndEvent_1_di", bpmnElement="EndEvent_1"
+        plane, f"{{{bpmndi}}}BPMNShape", id="EndEvent_1_di", bpmnElement="EndEvent_1"
     )
-    etree.SubElement(end_shape, f"{{{dc}}}Bounds",
-        x=str(end_x), y=str(start_y + (node_height - event_size) // 2),
-        width=str(event_size), height=str(event_size)
+    etree.SubElement(
+        end_shape,
+        f"{{{dc}}}Bounds",
+        x=str(end_x),
+        y=str(start_y + (node_height - event_size) // 2),
+        width=str(event_size),
+        height=str(event_size),
     )
 
     # 连线布局
-    edges_to_draw = custom_edges if custom_edges else _build_auto_edges_list(nodes, node_ids)
+    edges_to_draw = (
+        custom_edges if custom_edges else _build_auto_edges_list(nodes, node_ids)
+    )
     for i, edge in enumerate(edges_to_draw):
         flow_id = edge.get("flow_id", f"Flow_{i + 1}")
         source = edge["source"]
         target = edge["target"]
 
-        source_x, source_y = _get_node_position(source, start_x, start_y, node_width, node_height, gap_x, node_ids, event_size)
-        target_x, target_y = _get_node_position(target, start_x, start_y, node_width, node_height, gap_x, node_ids, event_size)
+        source_x, source_y = _get_node_position(
+            source,
+            start_x,
+            start_y,
+            node_width,
+            node_height,
+            gap_x,
+            node_ids,
+            event_size,
+        )
+        target_x, target_y = _get_node_position(
+            target,
+            start_x,
+            start_y,
+            node_width,
+            node_height,
+            gap_x,
+            node_ids,
+            event_size,
+        )
 
         bpmn_edge = etree.SubElement(
-            plane, f"{{{bpmndi}}}BPMNEdge",
-            id=f"{flow_id}_di", bpmnElement=flow_id
+            plane, f"{{{bpmndi}}}BPMNEdge", id=f"{flow_id}_di", bpmnElement=flow_id
         )
-        etree.SubElement(bpmn_edge, f"{{{di}}}waypoint", x=str(source_x), y=str(source_y))
-        etree.SubElement(bpmn_edge, f"{{{di}}}waypoint", x=str(target_x), y=str(target_y))
+        etree.SubElement(
+            bpmn_edge, f"{{{di}}}waypoint", x=str(source_x), y=str(source_y)
+        )
+        etree.SubElement(
+            bpmn_edge, f"{{{di}}}waypoint", x=str(target_x), y=str(target_y)
+        )
 
 
 def _build_auto_edges_list(nodes: list[dict], node_ids: list[str]) -> list[dict]:
@@ -563,7 +663,13 @@ def _build_auto_edges_list(nodes: list[dict], node_ids: list[str]) -> list[dict]
     if nodes:
         edges.append({"flow_id": "Flow_1", "source": "start", "target": node_ids[0]})
         for i in range(len(node_ids) - 1):
-            edges.append({"flow_id": f"Flow_{i + 2}", "source": node_ids[i], "target": node_ids[i + 1]})
+            edges.append(
+                {
+                    "flow_id": f"Flow_{i + 2}",
+                    "source": node_ids[i],
+                    "target": node_ids[i + 1],
+                }
+            )
         edges.append({"flow_id": "Flow_End", "source": node_ids[-1], "target": "end"})
     else:
         edges.append({"flow_id": "Flow_End", "source": "start", "target": "end"})
@@ -572,8 +678,10 @@ def _build_auto_edges_list(nodes: list[dict], node_ids: list[str]) -> list[dict]
 
 def _get_node_position(
     node_ref: str,
-    start_x: int, start_y: int,
-    node_width: int, node_height: int,
+    start_x: int,
+    start_y: int,
+    node_width: int,
+    node_height: int,
     gap_x: int,
     node_ids: list[str],
     event_size: int,

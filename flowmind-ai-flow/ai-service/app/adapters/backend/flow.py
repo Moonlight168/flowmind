@@ -24,7 +24,9 @@ class FlowService(BackendService):
         """获取流程模型 API 路径"""
         return settings.backend.flow_model_api_path
 
-    def search_flow_models(self, model_name: str | None = None, model_key: str | None = None) -> list[dict[str, Any]]:
+    def search_flow_models(
+        self, model_name: str | None = None, model_key: str | None = None
+    ) -> list[dict[str, Any]]:
         """搜索流程模型（支持按名称或key搜索）
 
         Args:
@@ -122,7 +124,10 @@ class FlowService(BackendService):
                 result = response.json()
                 if result.get("code") == 200:
                     logger.info(f"流程模型创建成功：{model_name} ({model_key})")
-                    return result.get("data") or {"modelName": model_name, "modelKey": model_key}
+                    return result.get("data") or {
+                        "modelName": model_name,
+                        "modelKey": model_key,
+                    }
                 else:
                     logger.warning(f"流程模型创建失败：{result.get('msg')}")
                     return None
@@ -178,7 +183,10 @@ class FlowService(BackendService):
                 result = response.json()
                 if result.get("code") == 200:
                     logger.info(f"流程模型更新成功：{model_name} ({model_key})")
-                    return result.get("data") or {"modelName": model_name, "modelKey": model_key}
+                    return result.get("data") or {
+                        "modelName": model_name,
+                        "modelKey": model_key,
+                    }
                 else:
                     logger.warning(f"流程模型更新失败：{result.get('msg')}")
                     return None

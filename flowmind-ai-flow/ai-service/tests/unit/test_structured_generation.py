@@ -17,8 +17,12 @@ def _mock_manager(monkeypatch, llm):
             return llm
 
     manager = _Manager()
-    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: manager))
-    monkeypatch.setattr("app.agents.react_agent.prefetch_summaries", lambda *a, **kw: {})
+    monkeypatch.setattr(
+        ModelFactory, "get_model_manager", classmethod(lambda cls: manager)
+    )
+    monkeypatch.setattr(
+        "app.agents.react_agent.prefetch_summaries", lambda *a, **kw: {}
+    )
     return manager
 
 
@@ -26,8 +30,18 @@ def test_structured_output_success(monkeypatch):
     """结构化输出成功 → model_dump"""
     obj = FlowDesign(
         nodes=[
-            {"type": "START_EVENT", "id": "startEvent", "name": "开始", "form_key": "form1"},
-            {"type": "USER_TASK", "id": "node_approve", "name": "审批", "candidate_groups": ["ROLE1"]},
+            {
+                "type": "START_EVENT",
+                "id": "startEvent",
+                "name": "开始",
+                "form_key": "form1",
+            },
+            {
+                "type": "USER_TASK",
+                "id": "node_approve",
+                "name": "审批",
+                "candidate_groups": ["ROLE1"],
+            },
             {"type": "END_EVENT", "id": "endEvent", "name": "结束"},
         ],
         edges=[{"source": "start", "target": "node_approve"}],
@@ -75,6 +89,8 @@ def test_basic_mode_uses_basic_schema(monkeypatch):
             return obj
 
     _mock_manager(monkeypatch, _LLM())
-    result = run_react_agent("flow_design", [], auth_token="", current_form_data={}, mode="basic")
+    result = run_react_agent(
+        "flow_design", [], auth_token="", current_form_data={}, mode="basic"
+    )
     assert result["flow_name"] == "报销审批"
     assert result["code"] == "expense"
