@@ -59,6 +59,13 @@ def run_react_agent(
     # 选 schema：basic 模式用 BasicDesign，否则按 DESIGN_SPEC
     if mode == "basic":
         schema = BasicDesign
+        # basic 模式也预取分类（code 从分类选，避免编造）
+        try:
+            summaries = prefetch_summaries("category_design", auth_token)
+            if summaries:
+                full_messages[0]["content"] = _append_summaries(prompt_text, summaries)
+        except (RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
+            logger.warning(f"[design] 预取失败（置空继续）: {e}")
     else:
         spec = DESIGN_SPEC.get(design_type)
         if not spec:
@@ -81,6 +88,8 @@ def run_react_agent(
             if obj is not None:
                 logger.info("[LLM] 结构化输出成功")
                 return obj.model_dump()
+            last_error = ValueError("结构化输出返回 None")
+            logger.warning(f"[LLM] 结构化输出返回 None（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）")
         except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
             last_error = e
             logger.warning(f"[LLM] 结构化输出失败（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）: {e}")

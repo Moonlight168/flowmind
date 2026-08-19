@@ -23,9 +23,13 @@ from app.infra.logger import logger
 def react_agent_node(state: AppState) -> AppState:
     """ReAct Agent 节点"""
     design_type = state.get("design_type", "")
-    # 直接从 messages 获取最后一条用户消息
+    # 用户原始输入：取最后一条 HumanMessage（重试时最后一条是 feedback AIMessage，不能取 messages[-1]）
     messages = state.get("messages")
-    user_input = messages[-1].content if messages else ""
+    user_input = ""
+    for msg in reversed(messages or []):
+        if isinstance(msg, HumanMessage):
+            user_input = msg.content or ""
+            break
     current_form_data = state.get("current_form_data", {})
 
     logger.info(f"[design] 进入, design_type={design_type}, user_input={user_input[:30]}...")
@@ -48,9 +52,10 @@ def react_agent_node(state: AppState) -> AppState:
         baseline_summary=_baseline_summary(current_form_data, design_type),
     )
     if intent.kind == "clarification":
+        msg = intent.message or "请更具体地描述您的需求"
         state["intent"] = "clarification"
-        state["design_output"] = {"intent": "clarification", "message": "请更具体地描述您的需求"}
-        state["messages"].append(AIMessage(content="请更具体地描述您的需求"))
+        state["design_output"] = {"intent": "clarification", "message": msg}
+        state["messages"].append(AIMessage(content=msg))
         return state
     if intent.kind == "rollback":
         state["intent"] = "clarification"  # 走 format 跳过 review

@@ -80,3 +80,4 @@ class BasicDesign(BaseModel):
     flow_name: str
     code: str
     description: str | None = None
+    flow_key: str | None = None

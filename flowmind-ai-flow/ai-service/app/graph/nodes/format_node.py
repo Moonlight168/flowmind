@@ -130,17 +130,29 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
         }
 
     elif design_type == "flow_design":
+        current_form = dict(current_form_data or {})
+
+        # basic 模式：AI 生成基本信息（flow_name/code/description），无 nodes/edges
+        if mode == "basic":
+            form_data = {
+                **current_form,
+                "flow_name": raw_result.get("flow_name") or current_form.get("flow_name") or current_form.get("modelName", ""),
+                "code": raw_result.get("code") or current_form.get("code") or current_form.get("category", ""),
+                "description": raw_result.get("description") or current_form.get("description", ""),
+            }
+            return {
+                "form_data": form_data,
+                "message": f"已为您生成流程【{form_data.get('flow_name', '')}】",
+                "intent": "success",
+            }
+
+        # design 模式：完全保留前端传递的基本信息，AI 只生成流程编排
         nodes = raw_result.get("nodes", [])
         edges = raw_result.get("edges", [])
         category = build_category(raw_result, current_form_data or {})
         logger.info(f"[format] flow_design raw_result keys: {list(raw_result.keys())}")
-        logger.info(f"[format] nodes type: {type(nodes)}, category: {category}, mode: {mode}")
-
-        # design 模式：完全保留前端传递的基本信息，AI 只生成流程编排
-        current_form = dict(current_form_data or {})
         form_data = {
             **current_form,  # 保留前端所有字段（modelId, modelName, modelKey, category, description 等）
-            # AI 生成的流程编排数据
             "nodes": nodes,
             "edges": edges,
         }

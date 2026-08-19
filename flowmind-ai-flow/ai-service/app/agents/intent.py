@@ -17,11 +17,12 @@ class Intent(BaseModel):
 
     kind: Literal["design", "clarification", "rollback", "reset"]
     target: str | None = None  # rollback 时："start"(一开始) / "prev"(上一步)
+    message: str | None = None  # clarification 时的追问内容
 
 
 INTENT_SYSTEM_PROMPT = """判断用户输入的意图，输出以下四种之一：
 - design：用户要设计或修改流程/表单/分类（含"加节点"、"改成总监"、"设计请假流程"等增量或全新指令）
-- clarification：输入无意义或需求完全不明确（如"你好"、"随便"）
+- clarification：输入无意义或需求不明确（如"你好"、"随便"），或信息不足无法设计（如只说"设计流程"但没说是什么流程）——此时在 message 字段给出具体追问内容
 - rollback：用户要回到历史版本（"回到一开始/最初的版本"→target="start"，"上一步/撤销"→target="prev"）
 - reset：用户要清空重新开始
 

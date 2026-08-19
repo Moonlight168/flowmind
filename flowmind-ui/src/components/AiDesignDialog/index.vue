@@ -145,10 +145,13 @@ function renderMarkdown(content) {
   return DOMPurify.sanitize(md.render(formattedContent))
 }
 
-// 流程标识：优先用 formData 里的业务标识（区分不同流程），否则 sessionId，否则 'new'
+// 新建对象无业务标识时生成临时会话 id，保证不同对象会话/版本历史不串扰
+const localSessionId = ref('')
+
+// 流程标识：优先用 formData 业务标识，否则 sessionId，否则临时 id，否则 'new'
 const flowKey = computed(() => {
   const fd = props.formData || {}
-  return fd.modelId || fd.modelKey || fd.formId || fd.code || props.sessionId || 'new'
+  return fd.modelId || fd.modelKey || fd.formId || fd.code || props.sessionId || localSessionId.value || 'new'
 })
 
 const storageKey = computed(() => {
@@ -192,6 +195,7 @@ function rollbackTo(target) {
 }
 
 onMounted(() => {
+  localSessionId.value = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
     try {
@@ -256,7 +260,8 @@ async function handleSend() {
     await designStream(props.designType, {
       user_input: userInput,
       current_form_data: currentFormData.value,
-      mode: props.mode
+      mode: props.mode,
+      thread_id: flowKey.value
     }, (event) => {
       if (event.type === 'progress') {
         progressText.value = event.message
@@ -285,7 +290,7 @@ async function handleSend() {
             visible.value = false
           }
         }
-        if (data.message && data.kind !== 'rollback') {
+        if (data.message && data.kind !== 'rollback' && data.kind !== 'reset') {
           messages.value.push({ role: 'assistant', content: data.message })
           scrollToBottom()
         }
