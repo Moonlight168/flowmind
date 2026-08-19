@@ -120,9 +120,9 @@ def _build_pipeline(design_type: str, mode: str) -> ValidatorPipeline:
     if design_type == "flow_design":
         return ValidatorPipeline([BaselineValidator(), NodeValidator(), EdgeValidator(), BPMNXMLValidator()])
     if design_type == "form_design":
-        return ValidatorPipeline([FormFieldValidator()])
+        return ValidatorPipeline([BaselineValidator(), FormFieldValidator()])
     if design_type == "category_design":
-        return ValidatorPipeline([CategoryValidator()])
+        return ValidatorPipeline([BaselineValidator(), CategoryValidator()])
     return ValidatorPipeline([])
 
 

@@ -50,3 +50,48 @@ def test_silent_delete_blocked():
     result = BaselineValidator().validate(output, _ctx(baseline, "加个审批节点"))
     assert not result.is_valid
     assert any(e.rule_id == "BASE_B001" for e in result.errors)
+
+
+def test_edge_silent_delete_blocked():
+    """静默删连线 → 拦截"""
+    ctx = ValidatorContext(
+        design_type="flow_design", mode="design",
+        current_form_data={
+            "nodes": [{"id": "a", "name": "x", "type": "START_EVENT"}, {"id": "b", "name": "y", "type": "END_EVENT"}],
+            "edges": [{"source": "a", "target": "b"}],
+        },
+        user_input="改个名字",
+    )
+    output = {
+        "nodes": [{"id": "a", "name": "x", "type": "START_EVENT"}, {"id": "b", "name": "y", "type": "END_EVENT"}],
+        "edges": [],  # 删了连线
+    }
+    result = BaselineValidator().validate(output, ctx)
+    assert not result.is_valid
+    assert any(e.rule_id == "BASE_B002" for e in result.errors)
+
+
+def test_form_widget_silent_delete_blocked():
+    """静默删表单字段 → 拦截"""
+    ctx = ValidatorContext(
+        design_type="form_design", mode="design",
+        current_form_data={"widgetList": [{"options": {"name": "field1"}}, {"options": {"name": "field2"}}]},
+        user_input="改个标签",
+    )
+    output = {"widgetList": [{"options": {"name": "field1"}}]}
+    result = BaselineValidator().validate(output, ctx)
+    assert not result.is_valid
+    assert any(e.rule_id == "BASE_B003" for e in result.errors)
+
+
+def test_category_code_change_blocked():
+    """静默改分类 code → 拦截"""
+    ctx = ValidatorContext(
+        design_type="category_design", mode="design",
+        current_form_data={"category_name": "请假", "code": "leave_approval"},
+        user_input="改个备注",
+    )
+    output = {"category_name": "请假", "code": "changed_code"}
+    result = BaselineValidator().validate(output, ctx)
+    assert not result.is_valid
+    assert any(e.rule_id == "BASE_B004" for e in result.errors)

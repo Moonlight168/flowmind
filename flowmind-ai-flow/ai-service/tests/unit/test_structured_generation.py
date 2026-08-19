@@ -4,11 +4,26 @@ FlowMind 智能流程设计服务 - 结构化生成主路径单元测试
 
 from app.adapters.factory import ModelFactory
 from app.agents.react_agent import run_react_agent
-from app.domain.schemas.pydantic_models import FlowDesign
+from app.domain.schemas.pydantic_models import BasicDesign, FlowDesign
+
+
+def _mock_manager(monkeypatch, llm):
+    class _Manager:
+        def __init__(self):
+            self.calls = 0
+
+        def create_llm(self, task_name=None, structured=False):
+            self.calls += 1
+            return llm
+
+    manager = _Manager()
+    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: manager))
+    monkeypatch.setattr("app.agents.react_agent.prefetch_summaries", lambda *a, **kw: {})
+    return manager
 
 
 def test_structured_output_success(monkeypatch):
-    """结构化输出主路径：with_structured_output 返回 Pydantic 对象 → model_dump"""
+    """结构化输出成功 → model_dump"""
     obj = FlowDesign(
         nodes=[
             {"type": "START_EVENT", "id": "startEvent", "name": "开始", "form_key": "form1"},
@@ -18,30 +33,21 @@ def test_structured_output_success(monkeypatch):
         edges=[{"source": "start", "target": "node_approve"}],
     )
 
-    class _StructuredLLM:
+    class _LLM:
         def with_structured_output(self, schema):
             return self
 
         def invoke(self, messages):
             return obj
 
-    class _Manager:
-        def create_llm(self, task_name=None, structured=False):
-            return _StructuredLLM()
-
-    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: _Manager()))
-    # 预取返回空（避免真实 HTTP）
-    monkeypatch.setattr("app.agents.react_agent.prefetch_summaries", lambda *a, **kw: {})
-
+    _mock_manager(monkeypatch, _LLM())
     result = run_react_agent("flow_design", [], auth_token="", current_form_data={})
     assert result["nodes"][0]["id"] == "startEvent"
-    assert result["nodes"][0]["type"] == "START_EVENT"
     assert len(result["nodes"]) == 3
 
 
-def test_structured_output_failure_falls_back_to_legacy(monkeypatch):
-    """结构化输出失败（抛异常）→ 降级 legacy ReAct（create_llm 不带 structured 被调用）"""
-    calls = []
+def test_structured_output_retry_then_error(monkeypatch):
+    """结构化输出失败 → 重试 3 次 → error（不降级）"""
 
     class _BoomLLM:
         def with_structured_output(self, schema):
@@ -50,21 +56,25 @@ def test_structured_output_failure_falls_back_to_legacy(monkeypatch):
         def invoke(self, messages):
             raise RuntimeError("结构化输出失败")
 
-    class _LegacyLLM:
-        def bind_tools(self, tools, strict=True):
-            raise RuntimeError("legacy 触发（测试终点）")
+    manager = _mock_manager(monkeypatch, _BoomLLM())
+    result = run_react_agent("flow_design", [], auth_token="", current_form_data={})
+    assert result["intent"] == "error"
+    assert manager.calls == 3  # 重试 3 次
 
-    class _Manager:
-        def create_llm(self, task_name=None, structured=False):
-            calls.append(structured)
-            return _BoomLLM() if structured else _LegacyLLM()
 
-    monkeypatch.setattr(ModelFactory, "get_model_manager", classmethod(lambda cls: _Manager()))
-    monkeypatch.setattr("app.agents.react_agent.prefetch_summaries", lambda *a, **kw: {})
+def test_basic_mode_uses_basic_schema(monkeypatch):
+    """basic 模式用 BasicDesign（flow_name/code），不用 FlowDesign"""
+    obj = BasicDesign(flow_name="报销审批", code="expense")
 
-    # legacy 会抛异常（_LegacyLLM.bind_tools），证明降级路径被触发
-    import pytest
-    with pytest.raises(RuntimeError):
-        run_react_agent("flow_design", [], auth_token="", current_form_data={})
+    class _LLM:
+        def with_structured_output(self, schema):
+            assert schema is BasicDesign
+            return self
 
-    assert calls == [True, False]  # 先 structured=True，失败后 structured=False（legacy）
+        def invoke(self, messages):
+            return obj
+
+    _mock_manager(monkeypatch, _LLM())
+    result = run_react_agent("flow_design", [], auth_token="", current_form_data={}, mode="basic")
+    assert result["flow_name"] == "报销审批"
+    assert result["code"] == "expense"

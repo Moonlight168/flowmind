@@ -95,6 +95,10 @@ def react_agent_node(state: AppState) -> AppState:
         state["intent"] = "clarification"
         state["design_output"] = result
         ai_message = result.get("message", "请明确您的需求")
+    elif result.get("intent") == "error":
+        state["intent"] = "error"
+        state["design_output"] = result
+        ai_message = result.get("message", "AI 服务暂时异常")
     else:
         state["intent"] = "success"
         state["design_output"] = result

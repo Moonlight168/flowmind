@@ -175,12 +175,13 @@ function saveVersion(formData) {
 
 function rollbackTo(target) {
   const versions = getVersions()
-  const version = target === 'start'
-    ? versions[0]
-    : versions[versions.length - 2]  // "上一步"
+  const idx = target === 'start' ? 0 : versions.length - 2  // "prev" = 倒数第二
+  const version = versions[idx]
   if (version) {
     currentFormData.value = version
     emit('fill', version)
+    // 截断到目标版本（丢弃之后的），这样连续"上一步"能逐级回退
+    sessionStorage.setItem(versionKey.value, JSON.stringify(versions.slice(0, idx + 1)))
     return true
   }
   return false

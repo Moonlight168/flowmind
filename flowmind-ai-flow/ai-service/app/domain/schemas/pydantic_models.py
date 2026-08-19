@@ -71,3 +71,12 @@ class CategoryDesign(BaseModel):
     category_name: str
     code: str
     remark: str | None = None
+
+
+class BasicDesign(BaseModel):
+    """flow_design basic 模式：仅流程基本信息"""
+    model_config = ConfigDict(extra="forbid")
+
+    flow_name: str
+    code: str
+    description: str | None = None
