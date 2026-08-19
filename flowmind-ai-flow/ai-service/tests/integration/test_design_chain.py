@@ -21,6 +21,7 @@ review_node = importlib.import_module("app.graph.nodes.review_node")
 dw = importlib.import_module("app.graph.workflows.design_workflow")
 
 invoke_design_workflow = dw.invoke_design_workflow
+stream_design_workflow = dw.stream_design_workflow
 
 
 class _FakeRedis:
@@ -86,6 +87,20 @@ _FLOW_RESULT = {
         {"source": "node_approve", "target": "end"},
     ],
 }
+
+
+def test_stream_design_workflow(chain, monkeypatch):
+    """流式：进度事件序列（design→review→format）+ done 事件带完整结果"""
+    _mock_llm(monkeypatch, [_FLOW_RESULT])
+    events = list(stream_design_workflow(
+        "flow_design", "设计请假审批流程", thread_id="test-stream-1",
+        current_form_data={"modelName": "请假审批", "code": "leave"}, mode="design",
+    ))
+    assert events[-1]["type"] == "done"
+    assert events[-1]["intent"] == "success"
+    assert events[-1]["form_data"]["bpmn_xml"]
+    phases = [e.get("phase") for e in events if e["type"] == "progress"]
+    assert phases == ["design", "review", "format"]
 
 
 def test_flow_design_full_chain(chain, monkeypatch):
@@ -207,4 +222,4 @@ def test_review_dead_loop(chain, monkeypatch):
     # 死循环检测触发，返回半成品草稿供手动调整
     assert result["partial"] is True
     assert result["form_data"] is not None
-    assert result["form_data"]["bpmn_xml"] == ""
+    assert result["form_data"]["bpmn_xml"]  # 兜底生成可导入的 XML（非空）
