@@ -287,6 +287,7 @@ def _normalize_model_config(model: dict) -> dict:
         "top_p": model.get("top_p", DEFAULT_TOP_P),
         "timeout": model.get("timeout", 60),
         "thinking": model.get("thinking", False),
+        "supports_structured_output": model.get("supports_structured_output", True),
     }
 
 

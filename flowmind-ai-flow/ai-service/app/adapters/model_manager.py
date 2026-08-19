@@ -45,9 +45,17 @@ class ModelManager:
         "compress": {"temperature": 0.0, "max_tokens": 300},
     }
 
-    def create_llm(self, task_name: str | None = None) -> "ChatOpenAI":
-        """创建 ChatOpenAI 实例，失败时自动降级到下一优先级模型"""
+    def create_llm(self, task_name: str | None = None, structured: bool = False) -> "ChatOpenAI":
+        """创建 ChatOpenAI 实例，失败时自动降级到下一优先级模型
+
+        structured=True 时只选 supports_structured_output 的模型（结构化输出用）。
+        """
         candidates = self.get_available_providers()
+        if structured:
+            candidates = [
+                name for name in candidates
+                if self._providers.get(name, {}).get("supports_structured_output", True)
+            ]
         last_error: Exception | None = None
 
         for name in candidates:
