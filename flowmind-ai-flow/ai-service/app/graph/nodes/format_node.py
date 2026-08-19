@@ -172,7 +172,7 @@ def _format_success_output(design_type: str, raw_result: dict, mode: str = "desi
 
         return {
             "form_data": form_data,
-            "message": f"已为您生成流程编排",
+            "message": "已为您生成流程编排",
             "intent": "success",
         }
 

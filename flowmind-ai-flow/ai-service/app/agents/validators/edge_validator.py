@@ -10,10 +10,8 @@ from app.agents.validators.base import (
     ValidationError,
     ValidationResult,
     ValidationSeverity,
-    Validator,
     ValidatorContext,
 )
-
 from app.agents.validators.node_validator import GATEWAY_TYPES
 
 VIRTUAL_START = "start"

@@ -45,7 +45,7 @@ def compress_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 {"role": "assistant", "content": f"[历史摘要] {summary}"},
                 *recent,
             ]
-        logger.info(f"[compress] LLM 摘要失败，回退纯裁剪")
+        logger.info("[compress] LLM 摘要失败，回退纯裁剪")
 
     # 纯裁剪：中间段直接丢弃
     logger.info(f"[compress] 裁剪 {len(middle)} 条中间消息，保留 {len(recent)} 条")

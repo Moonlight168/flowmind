@@ -9,7 +9,6 @@ from app.agents.validators.base import (
     ValidationError,
     ValidationResult,
     ValidationSeverity,
-    Validator,
     ValidatorContext,
 )
 from app.utils.bpmn_generator import generate_bpmn_xml

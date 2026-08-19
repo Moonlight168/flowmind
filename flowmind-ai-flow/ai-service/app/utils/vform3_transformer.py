@@ -342,7 +342,6 @@ def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
     """转换单个 widget 为完整 VForm3 格式"""
     widget_type = widget.get("type", "")
     ai_options = widget.get("options", {})
-    form_item_flag = widget.get("formItemFlag", widget_type in FIELD_TYPES)
 
     icon = ICON_MAP.get(widget_type, f"{widget_type}-field")
 

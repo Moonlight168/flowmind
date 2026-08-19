@@ -16,7 +16,7 @@ from app.infra.logger import get_trace_id, logger
 
 # ============== 异常基类 ==============
 
-class AIApprovalException(Exception):
+class AIApprovalException(Exception):  # noqa: N818 - 既有命名，改 Error 后缀会影响继承类与调用方
     """AI 智能流程设计服务业务异常基类
 
     所有业务异常都应继承此类，以便统一处理。

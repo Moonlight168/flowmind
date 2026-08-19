@@ -52,7 +52,7 @@ class FormWidget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: str
-    formItemFlag: bool
+    formItemFlag: bool  # noqa: N815 - VForm3 字段名必须 camelCase
     options: dict  # options 字段过多，内部不逐个锁，用 dict
 
 
@@ -61,8 +61,8 @@ class FormDesign(BaseModel):
 
     form_name: str
     node_role: Literal["applicant", "approver", "cc"] | None = None
-    widgetList: list[FormWidget]
-    formConfig: dict | None = None
+    widgetList: list[FormWidget]  # noqa: N815 - VForm3 字段名必须 camelCase
+    formConfig: dict | None = None  # noqa: N815 - VForm3 字段名必须 camelCase
 
 
 class CategoryDesign(BaseModel):

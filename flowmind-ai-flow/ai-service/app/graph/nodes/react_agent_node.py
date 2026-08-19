@@ -10,9 +10,9 @@ FlowMind 智能审批服务 - ReAct Agent 节点
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.agents.react_agent import run_react_agent
 from app.agents.compression import compress_history
 from app.agents.intent import discriminate_intent
+from app.agents.react_agent import run_react_agent
 from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState

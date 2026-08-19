@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Set
 
 from lxml import etree
 
@@ -27,7 +26,7 @@ BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
 NSMAP = {"bpmn": BPMN_NS}
 
 # 需要检查连通性的活动节点标签集合
-ACTIVITY_TAGS: Set[str] = {
+ACTIVITY_TAGS: set[str] = {
     f"{{{BPMN_NS}}}userTask",
     f"{{{BPMN_NS}}}exclusiveGateway",
     f"{{{BPMN_NS}}}parallelGateway",
@@ -90,7 +89,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
             nodes_by_id[eid] = elem
 
     # ---- V002: startEvent 存在 ----
-    start_events = process.findall(f"bpmn:startEvent", NSMAP)
+    start_events = process.findall("bpmn:startEvent", NSMAP)
     if not start_events:
         errors.append(ValidationError(
             rule_id="V002",
@@ -98,7 +97,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
         ))
 
     # ---- V003: endEvent 存在 ----
-    end_events = process.findall(f"bpmn:endEvent", NSMAP)
+    end_events = process.findall("bpmn:endEvent", NSMAP)
     if not end_events:
         errors.append(ValidationError(
             rule_id="V003",
@@ -137,7 +136,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
         if eid is not None:
             all_ids.add(eid)
 
-    sequence_flows = process.findall(f"bpmn:sequenceFlow", NSMAP)
+    sequence_flows = process.findall("bpmn:sequenceFlow", NSMAP)
     flows_from: dict[str, list[str]] = {}  # node_id -> [flow_id]
     flows_to: dict[str, list[str]] = {}
 
@@ -166,7 +165,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
             flows_to.setdefault(target, []).append(flow_id)
 
     # ---- V008 / V009: 排他网关检查 ----
-    exclusive_gateways = process.findall(f"bpmn:exclusiveGateway", NSMAP)
+    exclusive_gateways = process.findall("bpmn:exclusiveGateway", NSMAP)
     for gw in exclusive_gateways:
         gw_id = gw.get("id", "<unknown>")
         out_flows = flows_from.get(gw_id, [])
@@ -182,7 +181,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
         for flow_id in out_flows:
             flow_elem = process.find(f"bpmn:sequenceFlow[@id='{flow_id}']", NSMAP)
             if flow_elem is not None:
-                cond = flow_elem.find(f"bpmn:conditionExpression", NSMAP)
+                cond = flow_elem.find("bpmn:conditionExpression", NSMAP)
                 if cond is None:
                     errors.append(ValidationError(
                         rule_id="V009",
@@ -255,7 +254,7 @@ def _try_parse_and_get_process(
         return None
 
     # 在 definitions 下查找 process
-    process = root.find(f"bpmn:process", NSMAP)
+    process = root.find("bpmn:process", NSMAP)
     if process is None:
         # 尝试直接作为 process
         if root.tag == f"{{{BPMN_NS}}}process":
@@ -277,7 +276,7 @@ def _find_reachable(
 ) -> set[str]:
     """从 start_id 出发进行正向 BFS，返回所有可达节点 ID"""
     adj: dict[str, list[str]] = {}
-    for flow in process.findall(f"bpmn:sequenceFlow", NSMAP):
+    for flow in process.findall("bpmn:sequenceFlow", NSMAP):
         src = flow.get("sourceRef")
         tgt = flow.get("targetRef")
         if src and tgt:
@@ -303,7 +302,7 @@ def _find_reachable_reverse(
 ) -> set[str]:
     """从 end_id 出发进行反向 BFS，返回所有能到达 end_id 的节点 ID"""
     rev_adj: dict[str, list[str]] = {}
-    for flow in process.findall(f"bpmn:sequenceFlow", NSMAP):
+    for flow in process.findall("bpmn:sequenceFlow", NSMAP):
         src = flow.get("sourceRef")
         tgt = flow.get("targetRef")
         if src and tgt:

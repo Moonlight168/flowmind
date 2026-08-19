@@ -8,7 +8,6 @@ from app.agents.validators.base import (
     ValidationError,
     ValidationResult,
     ValidationSeverity,
-    Validator,
     ValidatorContext,
 )
 
@@ -101,7 +100,6 @@ class NodeValidator:
                 ))
 
         # NODE_N006: GATEWAY 类节点必须有 ≥2 出边
-        node_ids = {n.get("id") for n in nodes if n.get("id")}
         for node in nodes:
             if (node.get("type") or "").upper() not in GATEWAY_TYPES:
                 continue

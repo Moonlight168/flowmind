@@ -16,8 +16,8 @@ from app.adapters.backend.category import CategoryService
 from app.adapters.backend.flow import FlowService
 from app.adapters.backend.form import FormService
 from app.agents.validators import (
-    BPMNXMLValidator,
     BaselineValidator,
+    BPMNXMLValidator,
     CategoryValidator,
     EdgeValidator,
     FormFieldValidator,
@@ -65,7 +65,7 @@ def review_node(state: AppState) -> AppState:
         return state
 
     current_rule_set = sorted({e.rule_id for e in result.errors})
-    state["review_error_history"] = (history + [current_rule_set])[-3:]
+    state["review_error_history"] = [*history, current_rule_set][-3:]
 
     if result.is_valid:
         logger.info("[review] 校验通过")

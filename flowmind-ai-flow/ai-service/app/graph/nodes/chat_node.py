@@ -59,7 +59,7 @@ def chat_node(state: AppState) -> AppState:
         state["chat_response"] = ai_response
 
         # 将 AI 回复追加到 messages
-        state["messages"] = list(state["messages"]) + [AIMessage(content=ai_response)]
+        state["messages"] = [*state["messages"], AIMessage(content=ai_response)]
 
         return state
 
@@ -67,7 +67,5 @@ def chat_node(state: AppState) -> AppState:
         logger.error(f"聊天节点执行失败：{e}")
         ai_response = "抱歉，AI 服务当前不可用，请稍后重试。"
         state["chat_response"] = ai_response
-        state["messages"] = list(state.get("messages", [])) + [
-            AIMessage(content=ai_response)
-        ]
+        state["messages"] = [*state.get("messages", []), AIMessage(content=ai_response)]
         return state

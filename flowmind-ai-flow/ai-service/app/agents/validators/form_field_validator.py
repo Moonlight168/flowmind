@@ -10,7 +10,6 @@ from app.agents.validators.base import (
     ValidationError,
     ValidationResult,
     ValidationSeverity,
-    Validator,
     ValidatorContext,
 )
 
