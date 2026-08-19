@@ -10,13 +10,14 @@ FlowMind 智能审批服务 - 审查节点
 
 import re
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.adapters.backend.category import CategoryService
 from app.adapters.backend.flow import FlowService
 from app.adapters.backend.form import FormService
 from app.agents.validators import (
     BPMNXMLValidator,
+    BaselineValidator,
     CategoryValidator,
     EdgeValidator,
     FormFieldValidator,
@@ -94,6 +95,12 @@ def review_node(state: AppState) -> AppState:
 def _build_context(state: AppState) -> ValidatorContext:
     """构建校验上下文（后端查询失败时 service 内部兜底返回空列表，相关规则自动跳过）"""
     auth_token = get_auth_token()
+    # 提取用户最近一次输入（用于基线删除意图判断）
+    user_input = ""
+    for msg in reversed(state.get("messages", []) or []):
+        if isinstance(msg, HumanMessage):
+            user_input = msg.content or ""
+            break
     return ValidatorContext(
         design_type=state.get("design_type", ""),
         mode=state.get("mode", "design"),
@@ -102,6 +109,7 @@ def _build_context(state: AppState) -> ValidatorContext:
         available_categories=CategoryService(auth_token=auth_token).search_categories(),
         existing_models=FlowService(auth_token=auth_token).search_flow_models(),
         auth_token=auth_token,
+        user_input=user_input,
     )
 
 
@@ -110,7 +118,7 @@ def _build_pipeline(design_type: str, mode: str) -> ValidatorPipeline:
     if design_type == "flow_design" and mode == "basic":
         return ValidatorPipeline([CategoryValidator()])
     if design_type == "flow_design":
-        return ValidatorPipeline([NodeValidator(), EdgeValidator(), BPMNXMLValidator()])
+        return ValidatorPipeline([BaselineValidator(), NodeValidator(), EdgeValidator(), BPMNXMLValidator()])
     if design_type == "form_design":
         return ValidatorPipeline([FormFieldValidator()])
     if design_type == "category_design":

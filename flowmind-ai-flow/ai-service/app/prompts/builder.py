@@ -3,6 +3,7 @@ FlowMind 智能流程设计服务 - Prompt 构建器
 """
 
 import importlib
+import json
 from typing import Any
 
 from app.config.llm_task import Task, get_task_config
@@ -117,11 +118,12 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
         except Exception:
             pass
     elif nodes:
-        # 如果有 nodes 数据（来自 AI 之前的返回）
-        node_names = [n.get("name", "") for n in nodes if n.get("name")]
-        if node_names:
-            lines.append(f"- 现有节点：{', '.join(node_names)}")
-        lines.append("- 用户正在修改现有流程，**必须保留原有节点**")
+        # 传完整结构（而非节点名），让 LLM 在完整结构上增量修改，保留用户手动改的审批人/表单绑定
+        lines.append("现有流程结构（完整，必须在此基础上增量修改）：")
+        lines.append(f"nodes: {json.dumps(nodes, ensure_ascii=False)}")
+        lines.append(f"edges: {json.dumps(edges or [], ensure_ascii=False)}")
+        lines.append("- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回")
+        lines.append("- 完整返回 nodes + edges（含保留的节点，不是只返回改动部分）")
     else:
         lines.append("- 尚无流程编排，将全新生成")
 

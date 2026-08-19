@@ -11,6 +11,7 @@ from app.agents.validators.base import (
     Validator,
     ValidatorContext,
 )
+from app.agents.validators.baseline_validator import BaselineValidator
 from app.agents.validators.bpmn_xml_validator import BPMNXMLValidator, build_category
 from app.agents.validators.category_validator import CategoryValidator
 from app.agents.validators.edge_validator import EdgeValidator
@@ -20,6 +21,7 @@ from app.agents.validators.pipeline import ValidatorPipeline
 
 __all__ = [
     "BPMNXMLValidator",
+    "BaselineValidator",
     "CategoryValidator",
     "EdgeValidator",
     "FormFieldValidator",

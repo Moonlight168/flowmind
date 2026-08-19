@@ -57,6 +57,7 @@ class ValidatorContext:
     existing_models: list[dict] = field(default_factory=list)
     auth_token: str | None = None
     thread_id: str | None = None
+    user_input: str = ""
 
 
 class Validator(Protocol):
