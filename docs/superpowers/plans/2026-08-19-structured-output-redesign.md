@@ -1,6 +1,6 @@
 # AI 流程设计重构方案（结构化输出 + 增量修改 + 版本管理）
 
-> 状态：已实施 Commit 1-6 + workflow review 修复；Commit 7（删 ReAct/json-repair）待结构化输出真实 LLM 验证稳定后
+> 状态：已实施全部 7 个 Commit（含 review 修复）
 > 日期：2026-08-19
 > 关联：`2026-08-17-validation-and-compression-design.md`（已落地的校验层 + 压缩）
 
@@ -232,10 +232,10 @@ Commit 7 ─── 依赖 6
 | 4 | 意图判别 | ✅ 已实施（含 review 修复：接入 react_agent_node） |
 | 5 | DESIGN_SPEC + 预取摘要 + 模型能力分流 | ✅ 已实施 |
 | 6 | 结构化生成主路径 | ✅ 已实施（含 review 修复：basic 模式走 legacy、异常元组加宽） |
-| 7 | 删 ReAct + json-repair | ⏳ 待结构化输出真实 LLM 验证稳定后 |
+| 7 | 删 ReAct + json-repair | ✅ 已实施（结构化失败重试≤3→error，不再降级） |
 
-**review 发现的遗留问题（未修，记录在案）**：
-- BaselineValidator 只校验 flow_design 的 nodes 删除，form/category 基线保留未覆盖，edges 删除未校验
-- 前端 versionKey 不含流程标识（sessionId 为空时不同流程共用版本库）
-- rollbackTo('prev') 无游标，连续回退不会逐级回退
-- 预取失败与结构化失败在同一 try 块（预取失败会误降级 ReAct）
+**review 发现的问题（已全部修复）**：
+- ✅ BaselineValidator 覆盖 flow(nodes+edges)/form(字段)/category(code)
+- ✅ rollbackTo('prev') 截断版本历史，连续回退逐级生效
+- ✅ 预取失败与结构化失败分离（预取单独 try 置空，不误降级）
+- ⚠️ 前端 versionKey 不含流程标识（sessionId 为空时不同流程共用版本库，属调用方职责，需父组件传 sessionId）
