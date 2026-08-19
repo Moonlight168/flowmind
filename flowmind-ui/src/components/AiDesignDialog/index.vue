@@ -38,9 +38,12 @@
           <el-icon :size="20"><ChatDotRound /></el-icon>
         </div>
         <div class="message-text px-3.5 py-2.5 rounded-3xl text-sm bg-white">
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
-          <span class="typing-dot"></span>
+          <span v-if="progressText" class="text-gray-600">{{ progressText }}</span>
+          <template v-else>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </template>
         </div>
       </div>
     </div>
@@ -66,7 +69,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { designCategory, designFlow, designForm, clearDesignState } from '@/api/workflow/design'
+import { designStream, clearDesignState } from '@/api/workflow/design'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import useUserStore from '@/store/modules/user'
 import MarkdownIt from 'markdown-it'
@@ -110,11 +113,10 @@ const title = computed(() => ({
 const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
+const progressText = ref('')
 const messagesContainer = ref(null)
 // 统一维护当前表单数据：AI 更新和外部修改都同步到这里
 const currentFormData = ref({})
-
-const designApi = { category: designCategory, flow: designFlow, form: designForm }
 
 // 监听外部 formData 变化，同步到 currentFormData
 watch(() => props.formData, (newVal) => {
@@ -207,41 +209,48 @@ async function handleSend() {
   scrollToBottom()
 
   loading.value = true
+  progressText.value = ''
 
   try {
-    const api = designApi[props.designType]
-    const res = await api({
+    await designStream(props.designType, {
       user_input: userInput,
       current_form_data: currentFormData.value,
       mode: props.mode
-    })
-
-    const data = res.data || res
-
-    // 有 form_data 则更新 currentFormData 并通知父组件
-    if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
-      currentFormData.value = data.form_data
-      emit('fill', data.form_data)
-      // intent 为 success 时关闭对话框
-      if (data.intent === 'success') {
-        visible.value = false
+    }, (event) => {
+      if (event.type === 'progress') {
+        progressText.value = event.message
+      } else if (event.type === 'done') {
+        const data = event
+        // 有 form_data 则更新 currentFormData 并通知父组件
+        if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
+          currentFormData.value = data.form_data
+          emit('fill', data.form_data)
+          // 完整成功才关闭；半成品草稿（partial）保持打开让用户看到提示
+          if (data.intent === 'success' && !data.partial) {
+            visible.value = false
+          }
+        }
+        if (data.message) {
+          messages.value.push({ role: 'assistant', content: data.message })
+          scrollToBottom()
+        }
+      } else if (event.type === 'error') {
+        messages.value.push({ role: 'assistant', content: event.message || '服务暂时不可用，请稍后重试。' })
+        scrollToBottom()
       }
-    }
-    if (data.message) {
-      messages.value.push({ role: 'assistant', content: data.message })
-      scrollToBottom()
-    }
 
-    sessionStorage.setItem(storageKey.value, JSON.stringify({
-      messages: messages.value,
-      currentFormData: currentFormData.value
-    }))
+      sessionStorage.setItem(storageKey.value, JSON.stringify({
+        messages: messages.value,
+        currentFormData: currentFormData.value
+      }))
+    })
   } catch (error) {
     console.error('AI 设计失败:', error)
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
     scrollToBottom()
   } finally {
     loading.value = false
+    progressText.value = ''
   }
 }
 
