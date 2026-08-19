@@ -27,7 +27,7 @@ def _design_thread_id(design_type: str, user_key: str) -> str:
 
 
 @router.post("/category", response_model=ResponseVO[dict[str, Any]])
-async def design_category(
+def design_category(
     payload: DesignRequestDTO,
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
@@ -52,7 +52,7 @@ async def design_category(
 
 
 @router.post("/flow", response_model=ResponseVO[dict[str, Any]])
-async def design_flow(
+def design_flow(
     payload: DesignRequestDTO,
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
@@ -78,7 +78,7 @@ async def design_flow(
 
 
 @router.post("/form", response_model=ResponseVO[dict[str, Any]])
-async def design_form(
+def design_form(
     payload: DesignRequestDTO,
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:

@@ -24,7 +24,7 @@ router = APIRouter(
 
 
 @router.post("", response_model=ResponseVO[dict[str, Any]])
-async def chat(
+def chat(
     payload: ChatRequestDTO,
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:

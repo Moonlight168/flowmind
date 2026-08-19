@@ -187,7 +187,7 @@ def test_review_rejects_invalid_then_retry(chain, monkeypatch):
 
 
 def test_review_dead_loop(chain, monkeypatch):
-    """连续相同错误 → 死循环检测 → intent=error"""
+    """连续相同错误 → 死循环检测 → 返回半成品草稿（友好降级，不再冷冰冰 error）"""
     invalid = {
         "nodes": [
             {"id": "startEvent", "name": "开始", "type": "START_EVENT"},  # 缺 form_key
@@ -204,4 +204,7 @@ def test_review_dead_loop(chain, monkeypatch):
         current_form_data={"modelName": "请假审批", "code": "leave"},
         mode="design",
     )
-    assert result["intent"] == "error"
+    # 死循环检测触发，返回半成品草稿供手动调整
+    assert result["partial"] is True
+    assert result["form_data"] is not None
+    assert result["form_data"]["bpmn_xml"] == ""

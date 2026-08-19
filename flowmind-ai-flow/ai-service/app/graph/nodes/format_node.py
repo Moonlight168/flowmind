@@ -33,13 +33,19 @@ def format_node(state: AppState) -> AppState:
         }
 
     elif intent == "error":
-        # 处理系统错误（如输出截断）
-        final_output = {
-            "form_data": None,
-            "message": design_output.get("message") or "系统错误，请重试",
-            "intent": "error",
-            "error_type": design_output.get("error_type", "unknown"),
-        }
+        # 死循环等：若有半成品草稿则返回让用户手动调整，否则返回错误
+        if raw_result.get("nodes") or raw_result.get("widgetList"):
+            final_output = _format_partial(
+                design_type, raw_result, design_output.get("review", {}),
+                "AI 卡在同一个问题上，建议换个说法或简化需求",
+            )
+        else:
+            final_output = {
+                "form_data": None,
+                "message": design_output.get("message") or "系统错误，请重试",
+                "intent": "error",
+                "error_type": design_output.get("error_type", "unknown"),
+            }
 
     elif intent == "success":
         review_info = design_output.get("review", {})
@@ -47,12 +53,11 @@ def format_node(state: AppState) -> AppState:
         review_retry_count = state.get("review_retry_count") or 0
 
         if not review_passed and review_retry_count >= 3:
-            # 超重试次数
-            final_output = {
-                "form_data": None,
-                "message": f"审查失败：{', '.join(review_info.get('errors', []))}",
-                "intent": "error",
-            }
+            # 重试耗尽：返回半成品草稿 + 友好提示，让用户手动调整
+            final_output = _format_partial(
+                design_type, raw_result, review_info,
+                "AI 反复调整了几次，仍有几处需要你确认",
+            )
         elif not review_passed:
             # 审查未通过但还有重试机会（不应该到达这里，但做防御）
             errors = review_info.get("errors", [])
@@ -77,6 +82,25 @@ def format_node(state: AppState) -> AppState:
     state["design_output"] = final_output
     logger.info(f"[format] 完成, intent={final_output['intent']}")
     return state
+
+
+def _format_partial(design_type: str, raw_result: dict, review_info: dict, reason: str) -> dict:
+    """返回半成品草稿（无 bpmn_xml）+ 友好提示，供用户在前端手动调整"""
+    errors = review_info.get("errors", [])
+    issues = "\n".join(f"· {e}" for e in errors[:5]) if errors else ""
+    form_data = dict(raw_result)
+    form_data.pop("review", None)
+    form_data.pop("_category", None)
+    form_data["bpmn_xml"] = ""
+    message = f"{reason}。已为你保留草稿，可以直接在设计器里手动调整。"
+    if issues:
+        message += f"\n需要关注的地方：\n{issues}"
+    return {
+        "form_data": form_data,
+        "message": message,
+        "intent": "success",
+        "partial": True,
+    }
 
 
 def _format_success_output(design_type: str, raw_result: dict, mode: str = "design", current_form_data: dict | None = None) -> dict:

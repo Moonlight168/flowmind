@@ -104,5 +104,5 @@ if __name__ == "__main__":
         host=settings.app.host,
         port=settings.app.port,
         reload=settings.app.debug,
-        workers=1,
+        workers=1 if settings.app.debug else settings.app.workers,
     )

@@ -93,6 +93,10 @@ class AppSettings(BaseSettings):
         default="invoke",
         description="工作流执行模式: stream(分步执行,调试用) / invoke(同步执行,生产用)",
     )
+    workers: int = Field(
+        default=4,
+        description="uvicorn worker 进程数（debug 模式强制为 1）",
+    )
 
     model_config = SettingsConfigDict(env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
