@@ -150,6 +150,42 @@ const storageKey = computed(() => {
   return `ai_design_${props.designType}_${id}`
 })
 
+// 版本历史：每轮 AI 生成成功后存一个版本，用于"回到一开始/上一步"
+const VERSION_LIMIT = 20
+const versionKey = computed(() => {
+  const id = props.sessionId || 'new'
+  return `ai_design_versions_${props.designType}_${id}`
+})
+
+function getVersions() {
+  const saved = sessionStorage.getItem(versionKey.value)
+  try {
+    return saved ? JSON.parse(saved) : []
+  } catch (e) {
+    return []
+  }
+}
+
+function saveVersion(formData) {
+  const versions = getVersions()
+  versions.push(formData)
+  if (versions.length > VERSION_LIMIT) versions.shift()
+  sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
+}
+
+function rollbackTo(target) {
+  const versions = getVersions()
+  const version = target === 'start'
+    ? versions[0]
+    : versions[versions.length - 2]  // "上一步"
+  if (version) {
+    currentFormData.value = version
+    emit('fill', version)
+    return true
+  }
+  return false
+}
+
 onMounted(() => {
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
@@ -221,16 +257,24 @@ async function handleSend() {
         progressText.value = event.message
       } else if (event.type === 'done') {
         const data = event
-        // 有 form_data 则更新 currentFormData 并通知父组件
-        if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
+        // 回退指令：恢复到目标版本（后端判别返回 rollback）
+        if (data.kind === 'rollback') {
+          if (rollbackTo(data.target)) {
+            messages.value.push({ role: 'assistant', content: data.message || '已回退到指定版本' })
+          } else {
+            messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
+          }
+          scrollToBottom()
+        } else if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
           currentFormData.value = data.form_data
           emit('fill', data.form_data)
-          // 完整成功才关闭；半成品草稿（partial）保持打开让用户看到提示
+          // 完整成功才存版本 + 关闭；半成品草稿（partial）保持打开
           if (data.intent === 'success' && !data.partial) {
+            saveVersion(data.form_data)
             visible.value = false
           }
         }
-        if (data.message) {
+        if (data.message && data.kind !== 'rollback') {
           messages.value.push({ role: 'assistant', content: data.message })
           scrollToBottom()
         }
