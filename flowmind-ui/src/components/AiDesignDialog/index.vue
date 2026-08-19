@@ -145,16 +145,20 @@ function renderMarkdown(content) {
   return DOMPurify.sanitize(md.render(formattedContent))
 }
 
+// 流程标识：优先用 formData 里的业务标识（区分不同流程），否则 sessionId，否则 'new'
+const flowKey = computed(() => {
+  const fd = props.formData || {}
+  return fd.modelId || fd.modelKey || fd.formId || fd.code || props.sessionId || 'new'
+})
+
 const storageKey = computed(() => {
-  const id = props.sessionId || 'new'
-  return `ai_design_${props.designType}_${id}`
+  return `ai_design_${props.designType}_${flowKey.value}`
 })
 
 // 版本历史：每轮 AI 生成成功后存一个版本，用于"回到一开始/上一步"
 const VERSION_LIMIT = 20
 const versionKey = computed(() => {
-  const id = props.sessionId || 'new'
-  return `ai_design_versions_${props.designType}_${id}`
+  return `ai_design_versions_${props.designType}_${flowKey.value}`
 })
 
 function getVersions() {
