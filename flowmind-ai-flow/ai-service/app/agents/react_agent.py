@@ -11,8 +11,10 @@ from typing import Any
 
 from json_repair import loads as repair_loads
 from langgraph.prebuilt import create_react_agent
+from pydantic import ValidationError
 
 from app.adapters.factory import ModelFactory
+from app.agents.design_spec import DESIGN_SPEC, prefetch_summaries
 from app.agents.tools.react_tools import create_tools
 from app.config import Task
 from app.infra.logger import logger
@@ -27,7 +29,7 @@ def run_react_agent(
     task_name: str | None = None,
     mode: str = "design",
 ) -> dict[str, Any]:
-    """运行 ReAct Agent 并返回 LLM 输出的业务 JSON
+    """运行设计 Agent：结构化输出为主路径，失败降级 ReAct
 
     Args:
         design_type: 设计类型 (category_design/flow_design/form_design)
@@ -41,8 +43,6 @@ def run_react_agent(
         LLM 输出的业务 JSON
     """
     manager = ModelFactory.get_model_manager()
-    llm = manager.create_llm(task_name=task_name)
-    tools = create_tools(design_type, auth_token)
 
     # 构建系统提示词并添加到消息列表
     # 根据 mode 选择 Task
@@ -58,25 +58,59 @@ def run_react_agent(
     prompt_text = build_prompt(task, variables={"current_form_data": current_form_data or {}})
     full_messages = [{"role": "system", "content": prompt_text}, *messages]
 
+    # 结构化输出主路径：预取真实数据 + with_structured_output
+    spec = DESIGN_SPEC.get(design_type)
+    if spec:
+        try:
+            summaries = prefetch_summaries(design_type, auth_token)
+            if summaries:
+                full_messages[0]["content"] = _append_summaries(prompt_text, summaries)
+
+            llm = manager.create_llm(task_name=task_name, structured=True)
+            obj = llm.with_structured_output(spec["schema"]).invoke(full_messages)
+            if obj is not None:
+                logger.info("[LLM] 结构化输出成功")
+                return obj.model_dump()
+        except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
+            logger.warning(f"[LLM] 结构化输出失败，降级 ReAct: {e}")
+
+    # 降级：现状 ReAct（Commit 7 删除）
+    return _run_legacy_react_agent(design_type, full_messages, auth_token, task_name)
+
+
+def _append_summaries(prompt_text: str, summaries: dict) -> str:
+    """把预取的真实数据摘要拼进 prompt，让 LLM 从真实数据选而非编造"""
+    lines = [
+        "\n\n## 可用数据（直接从以下真实数据中选择，禁止编造；忽略上文所有\"调用工具\"的指令）"
+    ]
+    for name, rows in summaries.items():
+        lines.append(f"- {name}: {json.dumps(rows, ensure_ascii=False)}")
+    return prompt_text + "\n".join(lines)
+
+
+def _run_legacy_react_agent(
+    design_type: str,
+    full_messages: list[dict],
+    auth_token: str,
+    task_name: str | None,
+) -> dict[str, Any]:
+    """现状 ReAct + json-repair（降级路径，Commit 7 删除）"""
+    manager = ModelFactory.get_model_manager()
+    llm = manager.create_llm(task_name=task_name)
+    tools = create_tools(design_type, auth_token)
+
     llm_with_strict_tools = llm.bind_tools(tools, strict=True)
     agent = create_react_agent(llm_with_strict_tools, tools)
 
-    logger.info(f"[LLM] 调用前: {len(full_messages)} 条消息, tools={len(tools)}, tool_names={[t.name for t in tools]}")
+    logger.info(f"[LLM] ReAct 降级: {len(full_messages)} 条消息, tools={len(tools)}")
 
     result = agent.invoke(
         {"messages": full_messages},
         config={"recursion_limit": 15},
     )
 
-    # 详细日志：打印所有消息
-    for i, msg in enumerate(result["messages"]):
-        msg_type = type(msg).__name__
-        content_preview = str(msg.content)[:100] if hasattr(msg, 'content') else "N/A"
-        tool_calls = getattr(msg, 'tool_calls', None)
-        logger.info(f"[AGENT] msg[{i}] {msg_type}: {content_preview} | tool_calls={tool_calls}")
-
     final_content = result["messages"][-1].content
-    logger.info(f"[LLM] 最终输出: {len(final_content)} 字符")
+    logger.info(f"[LLM] ReAct 最终输出: {len(final_content)} 字符")
 
     return _parse_json_response(final_content)
 
