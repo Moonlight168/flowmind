@@ -43,6 +43,7 @@ class ModelManager:
         "form_design": {"temperature": 0.3},
         "chat": {"temperature": 0.8},
         "compress": {"temperature": 0.0, "max_tokens": 300},
+        "intent": {"temperature": 0.0, "max_tokens": 200},
     }
 
     def create_llm(self, task_name: str | None = None, structured: bool = False) -> "ChatOpenAI":

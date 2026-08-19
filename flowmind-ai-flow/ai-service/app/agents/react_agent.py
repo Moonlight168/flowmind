@@ -59,8 +59,9 @@ def run_react_agent(
     full_messages = [{"role": "system", "content": prompt_text}, *messages]
 
     # 结构化输出主路径：预取真实数据 + with_structured_output
+    # basic 模式（生成 flow_name/code/description）不走结构化，直接 legacy
     spec = DESIGN_SPEC.get(design_type)
-    if spec:
+    if spec and mode != "basic":
         try:
             summaries = prefetch_summaries(design_type, auth_token)
             if summaries:
@@ -71,7 +72,7 @@ def run_react_agent(
             if obj is not None:
                 logger.info("[LLM] 结构化输出成功")
                 return obj.model_dump()
-        except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError) as e:
+        except (ValidationError, RuntimeError, ValueError, TypeError, KeyError, OSError, AttributeError) as e:
             logger.warning(f"[LLM] 结构化输出失败，降级 ReAct: {e}")
 
     # 降级：现状 ReAct（Commit 7 删除）

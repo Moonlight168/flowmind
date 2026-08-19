@@ -12,8 +12,8 @@ from app.agents.validators.base import (
 )
 from app.infra.logger import logger
 
-# 用户指令中表示"删除节点"意图的关键词
-DELETE_KEYWORDS = ("删", "去掉", "移除", "不要", "取消")
+# 用户指令中表示"删除节点"意图的关键词（避免"不要/取消"误报："不要财务审批改成总监"是修改非删除）
+DELETE_KEYWORDS = ("删", "去掉", "移除")
 
 
 class BaselineValidator:

@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.react_agent import run_react_agent
 from app.agents.compression import compress_history
+from app.agents.intent import discriminate_intent
 from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
@@ -40,6 +41,30 @@ def react_agent_node(state: AppState) -> AppState:
         return state
 
     auth_token = get_auth_token()
+
+    # 阶段1：意图判别（clarification/rollback/reset 提前分流，不调生成）
+    intent = discriminate_intent(
+        user_input,
+        baseline_summary=_baseline_summary(current_form_data, design_type),
+    )
+    if intent.kind == "clarification":
+        state["intent"] = "clarification"
+        state["design_output"] = {"intent": "clarification", "message": "请更具体地描述您的需求"}
+        state["messages"].append(AIMessage(content="请更具体地描述您的需求"))
+        return state
+    if intent.kind == "rollback":
+        state["intent"] = "clarification"  # 走 format 跳过 review
+        state["design_output"] = {
+            "intent": "clarification", "kind": "rollback",
+            "target": intent.target or "start", "message": "已回到指定版本",
+        }
+        state["messages"].append(AIMessage(content="已回到指定版本"))
+        return state
+    if intent.kind == "reset":
+        state["intent"] = "clarification"
+        state["design_output"] = {"intent": "clarification", "kind": "reset", "message": "已清空，重新开始"}
+        state["messages"].append(AIMessage(content="已清空，重新开始"))
+        return state
 
     # 构建对话历史（从 messages 提取，移除 system 和 最后一条 user）
     conversation_history = []
@@ -80,3 +105,19 @@ def react_agent_node(state: AppState) -> AppState:
 
     logger.info(f"[design] 完成, intent={state['intent']}")
     return state
+
+
+def _baseline_summary(current_form_data: dict, design_type: str) -> str:
+    """生成基线摘要（供意图判别用），无基线返回空串"""
+    if not current_form_data:
+        return ""
+    if design_type == "flow_design":
+        nodes = current_form_data.get("nodes") or []
+        return f"{len(nodes)} 个节点" if nodes else ""
+    if design_type == "form_design":
+        widgets = current_form_data.get("widgetList") or []
+        return f"{len(widgets)} 个字段" if widgets else ""
+    if design_type == "category_design":
+        name = current_form_data.get("category_name")
+        return f"分类 {name}" if name else ""
+    return ""

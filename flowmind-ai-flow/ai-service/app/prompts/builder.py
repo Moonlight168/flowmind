@@ -106,9 +106,16 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
     if description:
         lines.append(f"- 流程描述：{description}")
 
-    if bpmn_xml:
+    if nodes:
+        # nodes 优先：传完整结构（而非节点名），让 LLM 在完整结构上增量修改，保留用户手动改的审批人/表单绑定
+        lines.append("现有流程结构（完整，必须在此基础上增量修改）：")
+        lines.append(f"nodes: {json.dumps(nodes, ensure_ascii=False)}")
+        lines.append(f"edges: {json.dumps(edges or [], ensure_ascii=False)}")
+        lines.append("- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回")
+        lines.append("- 完整返回 nodes + edges（含保留的节点，不是只返回改动部分）")
+    elif bpmn_xml:
         lines.append("- 已有流程编排，用户正在修改现有流程")
-        # 尝试从 bpmnXml 中提取节点信息供 AI 参考
+        # 尝试从 bpmnXml 中提取节点信息供 AI 参考（无 nodes 时的 fallback）
         try:
             import re
             # 提取 userTask 节点名称
@@ -117,13 +124,6 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
                 lines.append(f"- 现有审批节点：{', '.join(task_names)}")
         except Exception:
             pass
-    elif nodes:
-        # 传完整结构（而非节点名），让 LLM 在完整结构上增量修改，保留用户手动改的审批人/表单绑定
-        lines.append("现有流程结构（完整，必须在此基础上增量修改）：")
-        lines.append(f"nodes: {json.dumps(nodes, ensure_ascii=False)}")
-        lines.append(f"edges: {json.dumps(edges or [], ensure_ascii=False)}")
-        lines.append("- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回")
-        lines.append("- 完整返回 nodes + edges（含保留的节点，不是只返回改动部分）")
     else:
         lines.append("- 尚无流程编排，将全新生成")
 

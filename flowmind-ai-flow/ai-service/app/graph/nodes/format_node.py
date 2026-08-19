@@ -30,6 +30,9 @@ def format_node(state: AppState) -> AppState:
             "form_data": None,
             "message": design_output.get("message") or "请明确您的需求",
             "intent": "clarification",
+            # 透传 rollback/reset 指令（若阶段1判别返回）
+            "kind": design_output.get("kind"),
+            "target": design_output.get("target"),
         }
 
     elif intent == "error":
@@ -85,13 +88,22 @@ def format_node(state: AppState) -> AppState:
 
 
 def _format_partial(design_type: str, raw_result: dict, review_info: dict, reason: str) -> dict:
-    """返回半成品草稿（无 bpmn_xml）+ 友好提示，供用户在前端手动调整"""
+    """返回半成品草稿 + 友好提示，供用户在前端手动调整"""
     errors = review_info.get("errors", [])
     issues = "\n".join(f"· {e}" for e in errors[:5]) if errors else ""
     form_data = dict(raw_result)
     form_data.pop("review", None)
     form_data.pop("_category", None)
-    form_data["bpmn_xml"] = ""
+    # 尽量给完整可导入的成品：保留 review 已生成的 bpmn_xml，没有则兜底生成
+    if design_type == "flow_design" and form_data.get("nodes") and not form_data.get("bpmn_xml"):
+        category = build_category(raw_result, {})
+        try:
+            form_data["bpmn_xml"] = generate_bpmn_xml(
+                {"nodes": form_data["nodes"], "edges": form_data.get("edges", [])},
+                category,
+            )
+        except (ValueError, TypeError, KeyError, AttributeError):
+            form_data["bpmn_xml"] = ""
     message = f"{reason}。已为你保留草稿，可以直接在设计器里手动调整。"
     if issues:
         message += f"\n需要关注的地方：\n{issues}"

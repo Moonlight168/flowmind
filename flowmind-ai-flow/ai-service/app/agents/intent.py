@@ -48,7 +48,7 @@ def discriminate_intent(
     """
     if llm is None:
         from app.adapters.factory import ModelFactory
-        llm = ModelFactory.get_model_manager().create_llm(task_name="intent")
+        llm = ModelFactory.get_model_manager().create_llm(task_name="intent", structured=True)
 
     prompt = INTENT_SYSTEM_PROMPT
     if baseline_summary:

@@ -65,7 +65,8 @@ def chain(monkeypatch):
 
 
 def _mock_llm(monkeypatch, results):
-    """mock run_react_agent：按调用顺序弹出结果"""
+    """mock run_react_agent + discriminate_intent（意图恒为 design）"""
+    from app.agents.intent import Intent
     queue = list(results)
 
     def _run(**kwargs):
@@ -74,6 +75,7 @@ def _mock_llm(monkeypatch, results):
         return queue.pop(0)
 
     monkeypatch.setattr(react_agent_node, "run_react_agent", _run)
+    monkeypatch.setattr(react_agent_node, "discriminate_intent", lambda *a, **kw: Intent(kind="design"))
 
 
 _FLOW_RESULT = {

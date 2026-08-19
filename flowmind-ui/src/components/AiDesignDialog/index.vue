@@ -265,6 +265,12 @@ async function handleSend() {
             messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
           }
           scrollToBottom()
+        } else if (data.kind === 'reset') {
+          currentFormData.value = { ...props.formData }
+          emit('fill', currentFormData.value)
+          sessionStorage.removeItem(versionKey.value)
+          messages.value.push({ role: 'assistant', content: data.message || '已清空，重新开始' })
+          scrollToBottom()
         } else if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
           currentFormData.value = data.form_data
           emit('fill', data.form_data)
@@ -313,6 +319,7 @@ function clearMessages() {
   // 只清空 AI 生成的数据
   currentFormData.value = { ...props.formData }
   sessionStorage.removeItem(storageKey.value)
+  sessionStorage.removeItem(versionKey.value)
   // 同步清除后端 Redis 中的对话历史
   clearDesignState(props.designType)
 }
