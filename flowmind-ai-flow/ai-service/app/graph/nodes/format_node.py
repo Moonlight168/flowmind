@@ -30,8 +30,6 @@ def format_node(state: AppState) -> AppState:
     design_output = state.get("design_output") or {}
     raw_result = dict(design_output)
 
-    logger.info(f"[format] 进入, design_type={design_type}, intent={intent}")
-
     # 根据 intent 生成响应
     if intent == "clarification":
         final_output = {
@@ -97,7 +95,6 @@ def format_node(state: AppState) -> AppState:
         }
 
     state["design_output"] = final_output
-    logger.info(f"[format] 完成, intent={final_output['intent']}")
     return state
 
 

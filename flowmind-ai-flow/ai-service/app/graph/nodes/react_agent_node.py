@@ -31,10 +31,6 @@ def react_agent_node(state: AppState) -> AppState:
             break
     current_form_data = state.get("current_form_data", {})
 
-    logger.info(
-        f"[design] 进入, design_type={design_type}, user_input={user_input[:30]}..."
-    )
-
     if not design_type:
         state["intent"] = "clarification"
         state["design_output"] = {"message": "请告诉我您想设计什么？"}
@@ -116,7 +112,6 @@ def react_agent_node(state: AppState) -> AppState:
     # 将 AI 回复追加到 messages
     state["messages"].append(AIMessage(content=ai_message))
 
-    logger.info(f"[design] 完成, intent={state['intent']}")
     return state
 
 

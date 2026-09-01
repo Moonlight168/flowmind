@@ -8,7 +8,14 @@ FlowMind 智能流程设计服务 - 节点基类
 import time
 from collections.abc import Callable
 from functools import wraps
-from typing import TypeVar
+
+import httpx
+import redis
+import requests
+from langchain_core.messages import AIMessage
+from langgraph.errors import GraphInterrupt
+from openai import OpenAIError
+from pydantic import ValidationError
 
 from app.graph.state.app_state import AppState
 from app.infra.logger import (
@@ -17,15 +24,56 @@ from app.infra.logger import (
     logger,
 )
 
-T = TypeVar("T", bound=AppState)
+NodeFunction = Callable[[AppState], AppState]
+NODE_EXECUTION_ERRORS = (
+    OpenAIError,
+    httpx.HTTPError,
+    redis.RedisError,
+    requests.RequestException,
+    ValidationError,
+    RuntimeError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
+DESIGN_ERROR_MESSAGE = "AI 服务暂时异常，请稍后重试"
+CHAT_ERROR_MESSAGE = "抱歉，AI 服务当前不可用，请稍后重试。"
 
 
-def node_handler(node_name: str = ""):
-    """节点处理器装饰器。"""
+def design_error_fallback(state: AppState) -> AppState:
+    """将设计节点异常转换为工作流可路由的错误状态。"""
+    state["intent"] = "error"
+    state["design_output"] = {
+        "intent": "error",
+        "message": DESIGN_ERROR_MESSAGE,
+        "error_type": "internal",
+    }
+    return state
 
-    def decorator(func: Callable[[T], T]) -> Callable[[T], T]:
+
+def chat_error_fallback(state: AppState) -> AppState:
+    """将聊天节点异常转换为稳定回复并保留消息历史。"""
+    state["chat_response"] = CHAT_ERROR_MESSAGE
+    state["messages"] = [
+        *state.get("messages", []),
+        AIMessage(content=CHAT_ERROR_MESSAGE),
+    ]
+    return state
+
+
+def node_handler(
+    node_name: str = "",
+    fallback: NodeFunction = design_error_fallback,
+) -> Callable[[NodeFunction], NodeFunction]:
+    """统一记录节点耗时、异常，并返回对应工作流的兜底状态。"""
+
+    def decorator(func: NodeFunction) -> NodeFunction:
         @wraps(func)
-        def wrapper(state: T) -> T:
+        def wrapper(state: AppState) -> AppState:
             name = node_name or func.__name__
             start_time = time.time()
 
@@ -54,16 +102,14 @@ def node_handler(node_name: str = ""):
                 )
 
                 return result
-            except Exception as e:
-                # LangGraph interrupt() 在首次命中时会抛 GraphInterrupt 触发暂停，不能吞掉
-                if e.__class__.__name__ == "GraphInterrupt":
-                    raise
-
+            except GraphInterrupt:
+                raise
+            except NODE_EXECUTION_ERRORS as e:
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 logger.error(
                     f"[{name}] 执行失败: {e!s}, 耗时{elapsed_ms}ms [{get_request_id()}] [{session_id}]"
                 )
-                return state
+                return fallback(state)
 
         return wrapper
 
