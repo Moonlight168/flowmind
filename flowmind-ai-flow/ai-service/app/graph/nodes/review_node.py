@@ -32,6 +32,7 @@ from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
+from app.prompts.loader import render_prompt
 
 
 @node_handler("review")
@@ -146,7 +147,7 @@ def _build_error_feedback(
     errors: list[ValidationError], design_output: dict | None = None
 ) -> str:
     """构建错误反馈消息，将 BPMN 术语翻译为 JSON nodes/edges 术语"""
-    feedback_lines = ["请修正以下问题后重新生成："]
+    error_lines = []
 
     if design_output:
         nodes = design_output.get("nodes", [])
@@ -165,20 +166,28 @@ def _build_error_feedback(
                     gw_node = node_map.get(gw_id, {})
                     gw_name = gw_node.get("name", gw_id)
                     outgoing = [e for e in edges if e.get("source") == gw_id]
-                    feedback_lines.append(
-                        f'- 排他网关 "{gw_name}"(id={gw_id}) 当前只有 {len(outgoing)} 条出边，'
-                        f"但排他网关必须有 ≥2 条出边且每条都要有 condition 字段。"
-                        f"如果此流程不需要条件分支，请移除该网关节点并直接将前后节点相连。"
+                    error_lines.append(
+                        render_prompt(
+                            "agents/gateway_feedback.md",
+                            {
+                                "gateway_name": gw_name,
+                                "gateway_id": gw_id,
+                                "outgoing_count": len(outgoing),
+                            },
+                        )
                     )
                 else:
-                    feedback_lines.append(f"- {msg}")
+                    error_lines.append(f"- {msg}")
             else:
-                feedback_lines.append(f"- {msg}")
+                error_lines.append(f"- {msg}")
     else:
         for err in errors:
-            feedback_lines.append(f"- {err.message}")
+            error_lines.append(f"- {err.message}")
 
-    return "\n".join(feedback_lines)
+    return render_prompt(
+        "agents/review_feedback.md",
+        {"errors": "\n".join(error_lines)},
+    )
 
 
 def _extract_gateway_id(error_message: str) -> str | None:

@@ -13,13 +13,13 @@ from app.adapters.backend.form import FormService
 from app.adapters.backend.role import RoleService
 from app.core import request_cache
 from app.core.auth_context import get_auth_token
+from app.prompts.loader import load_prompt
 
 _LIMIT = 50
 
 
-@tool
+@tool(description=load_prompt("tools/search_categories.md"))
 def search_categories(name: str = "") -> list[dict]:
-    """搜索流程分类，返回 categoryId/categoryName/code。name 为空返回全部。"""
     rows = request_cache.get(
         f"backend:categories:{name}",
         lambda: CategoryService(auth_token=get_auth_token()).search_categories(name),
@@ -34,9 +34,8 @@ def search_categories(name: str = "") -> list[dict]:
     ]
 
 
-@tool
+@tool(description=load_prompt("tools/search_forms.md"))
 def search_forms(name: str = "") -> list[dict]:
-    """搜索表单，返回 formId/formName/formKey。name 为空返回全部。"""
     rows = request_cache.get(
         f"backend:forms:{name}",
         lambda: FormService(auth_token=get_auth_token()).search_forms(name),
@@ -51,9 +50,8 @@ def search_forms(name: str = "") -> list[dict]:
     ]
 
 
-@tool
+@tool(description=load_prompt("tools/search_roles.md"))
 def search_roles(name: str = "") -> list[dict]:
-    """搜索审批角色，返回 name/key。name 为空返回全部。"""
     rows = request_cache.get(
         f"backend:roles:{name}",
         lambda: RoleService(auth_token=get_auth_token()).search_roles(name),
@@ -65,9 +63,8 @@ def search_roles(name: str = "") -> list[dict]:
     ]
 
 
-@tool
+@tool(description=load_prompt("tools/search_flow_models.md"))
 def search_flow_models(name: str = "") -> list[dict]:
-    """搜索已有流程模型，返回 modelId/modelName/modelKey。name 为空返回全部。"""
     rows = request_cache.get(
         f"backend:models:{name}",
         lambda: FlowService(auth_token=get_auth_token()).search_flow_models(name),

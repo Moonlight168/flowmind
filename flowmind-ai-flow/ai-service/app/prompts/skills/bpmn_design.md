@@ -1,15 +1,3 @@
-"""
-FlowMind 智能流程设计服务 - BPMN 设计知识文档
-
-本模块定义 BPMN_DESIGN_SKILL 常量，覆盖前端 bpmn-js 设计器支持的全部 10 种节点类型，
-以及连线规则、常见流程模式和常见错误，用于注入流程设计 Agent 的 system prompt。
-"""
-
-# ─────────────────────────────────────────────────────────────────────
-# BPMN 设计知识文档（覆盖 10 种节点类型）
-# ─────────────────────────────────────────────────────────────────────
-
-BPMN_DESIGN_SKILL: str = """
 # BPMN 流程设计规范
 
 你是 BPMN 流程设计专家。请严格遵循以下规范设计流程，确保输出的 JSON 可直接被前端 bpmn-js 设计器解析。
@@ -437,4 +425,3 @@ ${变量名 运算符 值}
 6. 条件表达式仅在 EXCLUSIVE_GATEWAY 和 INCLUSIVE_GATEWAY 出边中使用
 7. PARALLEL_GATEWAY 必须成对出现（fork + join）
 8. EXCLUSIVE_GATEWAY 和 INCLUSIVE_GATEWAY 必须有 ≥2 条出边，每条都要有 condition
-"""

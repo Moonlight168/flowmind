@@ -1,11 +1,4 @@
-"""
-FlowMind 智能流程设计服务 - 流程表单设计任务
-
-使用vform3根据流程分类和节点角色生成表单JSON
-"""
-
-# 任务指令
-TASK = """使用vform3生成表单JSON。AI只需生成type+options核心字段，其他由前端自动补全。
+使用vform3生成表单JSON。AI只需生成type+options核心字段，其他由前端自动补全。
 
 ## 当前表单基本信息
 
@@ -63,4 +56,3 @@ grid 嵌套 cols：{"type": "grid", "cols": [{"type": "grid-col", "options": {"n
 
 - 需要追问时，输出：`{"intent": "clarification", "message": "追问内容"}`
 - 信息充足：`{"form_name": "...", "node_role": "...", "widgetList": [...], "formConfig": {...}}`
-"""

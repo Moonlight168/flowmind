@@ -2,24 +2,13 @@
 FlowMind 智能流程设计服务 - Prompt 构建器
 """
 
-import importlib
 import json
+import re
 from typing import Any
 
 from app.config.llm_task import Task, get_task_config
+from app.prompts.loader import load_prompt, render_prompt
 from app.prompts.roles import get_role
-from app.prompts.skills.bpmn_design import BPMN_DESIGN_SKILL
-
-# 通用意图识别提示词
-INTENT_PROMPT = """
-## 意图识别
-
-根据用户输入判断设计意图：
-- 输入可提取有效设计参数 → 返回 intent: "success" 及对应的设计内容
-- 输入无法提取有效参数 → 返回 intent: "clarification" 及 message 字段的追问内容
-
-**重要**：以上 JSON 必须作为文本直接输出在 AI 消息中，不要尝试调用任何工具！
-"""
 
 
 def build_prompt(task: "Task | str", variables: dict[str, Any]) -> str:
@@ -32,28 +21,25 @@ def build_prompt(task: "Task | str", variables: dict[str, Any]) -> str:
         raise ValueError(f"任务 {task} 未找到配置")
 
     role = get_role(config.role)
-    task_module = _import_task_module(config.module)
-
     # 格式化 current_form_data 为 flow_basic_info
     current_form_data = variables.get("current_form_data", {})
     flow_basic_info = _format_flow_basic_info(current_form_data)
 
     # 使用手动替换避免 ${initiator} 等被误解析
-    task_text = task_module.TASK.replace("{flow_basic_info}", flow_basic_info)
+    task_text = render_prompt(
+        config.prompt,
+        {"flow_basic_info": flow_basic_info},
+    )
 
     # 根据任务类型注入领域知识 skill
     skill_text = _load_task_skill(task)
 
-    parts = [f"{role}。", task_text]
+    parts = [role, task_text]
     if skill_text:
         parts.append(skill_text)
-    parts.append(INTENT_PROMPT)
+    parts.append(load_prompt("shared/design_intent.md"))
 
     return "\n\n".join(parts)
-
-
-def _import_task_module(module_path: str):
-    return importlib.import_module(module_path)
 
 
 def _format_variables(variables: dict[str, Any]) -> str:
@@ -120,13 +106,11 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
         lines.append("- 已有流程编排，用户正在修改现有流程")
         # 尝试从 bpmnXml 中提取节点信息供 AI 参考（无 nodes 时的 fallback）
         try:
-            import re
-
             # 提取 userTask 节点名称
             task_names = re.findall(r'<bpmn2?:userTask[^>]*name="([^"]*)"', bpmn_xml)
             if task_names:
                 lines.append(f"- 现有审批节点：{', '.join(task_names)}")
-        except Exception:
+        except TypeError:
             pass
     else:
         lines.append("- 尚无流程编排，将全新生成")
@@ -141,10 +125,11 @@ def _format_default(value: Any) -> str:
 
 
 _TASK_SKILL_MAP: dict[str, str] = {
-    Task.FLOW_DESIGN.value: BPMN_DESIGN_SKILL,
+    Task.FLOW_DESIGN.value: "skills/bpmn_design.md",
 }
 
 
 def _load_task_skill(task: "Task") -> str:
     """根据任务类型加载对应的 skill 知识文档"""
-    return _TASK_SKILL_MAP.get(task.value, "")
+    prompt_path = _TASK_SKILL_MAP.get(task.value)
+    return load_prompt(prompt_path) if prompt_path else ""

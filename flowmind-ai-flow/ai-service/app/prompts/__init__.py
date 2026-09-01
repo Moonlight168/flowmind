@@ -5,7 +5,10 @@ FlowMind 智能流程设计服务 - 提示词管理模块
 """
 
 from app.prompts.builder import build_prompt
+from app.prompts.loader import load_prompt, render_prompt
 
 __all__ = [
     "build_prompt",
+    "load_prompt",
+    "render_prompt",
 ]

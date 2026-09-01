@@ -14,6 +14,7 @@ from app.adapters.factory import ModelFactory
 from app.config.settings import settings
 from app.infra.logger import logger
 from app.infra.observability import langchain_config
+from app.prompts.loader import render_prompt
 
 
 def compress_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -76,7 +77,4 @@ def _build_summary_prompt(messages: list[dict[str, Any]]) -> str:
         f"{'[用户]' if m.get('role') == 'user' else '[助手]'}: {str(m.get('content', ''))[:200]}"
         for m in messages
     )
-    return (
-        "请为以下对话历史生成简洁摘要，保留关键信息（用户意图、分类/流程/表单实体、"
-        f"关键参数）。直接输出摘要，不超过 200 字。\n\n{history_text}"
-    )
+    return render_prompt("agents/compression.md", {"history": history_text})
