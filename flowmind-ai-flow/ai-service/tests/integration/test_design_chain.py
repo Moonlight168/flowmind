@@ -11,11 +11,14 @@ mock 点：
 """
 
 import importlib
+from typing import Any
 
+import httpx
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.intent import Intent
+from app.evaluation.golden_dataset import evaluate_contract, load_golden_cases
 
 # 用 importlib 获取真实模块（避免模块名与变量名冲突导致拿到编译图对象）
 react_agent_node = importlib.import_module("app.graph.nodes.react_agent_node")
@@ -81,6 +84,10 @@ def _mock_llm(monkeypatch, results):
     )
 
 
+def _raise_model_unavailable(**kwargs: object) -> dict:
+    raise httpx.ConnectError("unavailable")
+
+
 _FLOW_RESULT = {
     "nodes": [
         {
@@ -143,6 +150,33 @@ def test_flow_design_full_chain(chain, monkeypatch):
     # DI 图不应残留重映射前的 startEvent/endEvent shape
     assert 'bpmnElement="startEvent"' not in form_data["bpmn_xml"]
     assert 'bpmnElement="endEvent"' not in form_data["bpmn_xml"]
+
+
+def test_model_failure_reaches_golden_fallback_score(
+    chain: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """生产节点兜底经 format 后仍满足黄金集的备用契约。"""
+    monkeypatch.setattr(
+        react_agent_node,
+        "discriminate_intent",
+        lambda *args, **kwargs: Intent(kind="design"),
+    )
+    monkeypatch.setattr(
+        react_agent_node,
+        "run_react_agent",
+        _raise_model_unavailable,
+    )
+    result = invoke_design_workflow(
+        "flow_design", "设计请假审批流程", thread_id="test-eval-fallback"
+    )
+    cases = load_golden_cases("evals/golden_dataset.jsonl")
+    expected = next(case for case in cases if case.id == "flow-linear-leave")
+    scores = evaluate_contract(
+        output=result, expected_output=expected.expected_output.model_dump()
+    )
+
+    assert result["error_type"] == "internal"
+    assert {score.name: score.value for score in scores}["fallback_contract"] == 1
 
 
 def test_flow_design_basic(chain, monkeypatch):

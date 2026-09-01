@@ -11,6 +11,7 @@
 | **AI 设计表单** | 自动生成 v-form-designer 表单 JSON |
 | **多轮对话**    | LangGraph 工作流持续优化设计       |
 | **多模型支持**  | OpenAI 兼容接口                    |
+| **黄金集评估**  | 全量/单条执行并上报 Langfuse     |
 
 ## 系统架构
 
@@ -119,6 +120,20 @@ flowmind-ai-flow/
   "review_passed": true
 }
 ```
+
+## 黄金数据集评估
+
+在 `ai-service` 目录配置 Langfuse 密钥和专用测试账号的 `FLOWMIND_AUTH_TOKEN`，然后执行：
+
+```bash
+# 执行全部用例
+python -m scripts.run_golden_eval
+
+# 精确执行某一条用例
+python -m scripts.run_golden_eval --case-id flow-linear-leave
+```
+
+脚本会幂等同步 `evals/golden_dataset.jsonl`，并在 Langfuse Dataset Run 中记录真实工作流链路、输出和契约评分。单条运行失败会转换为可评分的兜底结果，不中断同批其他用例。
 
 ---
 

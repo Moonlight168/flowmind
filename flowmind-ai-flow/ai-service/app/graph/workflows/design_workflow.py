@@ -24,6 +24,7 @@ from langgraph.graph import END, StateGraph
 from app.config.settings import settings
 from app.core import request_cache
 from app.core.checkpoint import checkpointer, thread_exists
+from app.core.exceptions import FlowDesignException
 from app.graph.nodes.format_node import format_node
 from app.graph.nodes.react_agent_node import react_agent_node
 from app.graph.nodes.review_node import review_node
@@ -69,9 +70,11 @@ def _thread_lock(thread_id: str) -> Iterator[None]:
     try:
         acquired = redis_client.set(lock_key, lock_token, nx=True, ex=LOCK_TTL_SECONDS)
     except redis.RedisError as exc:
-        raise RuntimeError("会话锁服务暂时不可用，请稍后重试") from exc
+        raise FlowDesignException(
+            "会话锁服务暂时不可用，请稍后重试", stage="lock"
+        ) from exc
     if not acquired:
-        raise RuntimeError("请等待上一个请求完成后再发起新请求")
+        raise FlowDesignException("请等待上一个请求完成后再发起新请求", stage="lock")
     try:
         yield
     finally:
