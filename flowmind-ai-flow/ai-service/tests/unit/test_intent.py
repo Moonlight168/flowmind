@@ -13,7 +13,7 @@ class _FakeLLM:
     def with_structured_output(self, schema):
         return self
 
-    def invoke(self, messages):
+    def invoke(self, messages, config=None):
         if self._exc:
             raise self._exc
         return self._result

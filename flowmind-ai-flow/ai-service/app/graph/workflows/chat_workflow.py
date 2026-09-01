@@ -11,6 +11,11 @@ from app.core.checkpoint import checkpointer, save_preview, thread_exists
 from app.graph.nodes.chat_node import chat_node
 from app.graph.state.app_state import AppState
 from app.infra.logger import generate_trace_id, log_context
+from app.infra.observability import (
+    langchain_config,
+    observe_workflow,
+    record_observation_output,
+)
 
 
 def create_chat_workflow() -> StateGraph:
@@ -51,10 +56,27 @@ def invoke_chat_workflow(
         "messages": [HumanMessage(content=user_input)],
     }
 
-    with log_context(
-        trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
+    with (
+        log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
+        observe_workflow(
+            "flowmind.chat",
+            input={"user_input": user_input},
+            session_id=thread_id,
+            trace_id=trace_id,
+            metadata={"stream": False},
+            tags=["chat"],
+        ) as observation,
     ):
-        return chat_workflow.invoke(initial_state, config)
+        result = chat_workflow.invoke(initial_state, langchain_config(config))
+        record_observation_output(
+            observation,
+            {
+                "chat_response": result.get("chat_response")
+                if isinstance(result, dict)
+                else result
+            },
+        )
+        return result
 
 
 def get_chat_workflow_state(thread_id: str) -> dict | None:

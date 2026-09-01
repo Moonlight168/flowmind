@@ -13,6 +13,7 @@ from typing import Any
 from app.adapters.factory import ModelFactory
 from app.config.settings import settings
 from app.infra.logger import logger
+from app.infra.observability import langchain_config
 
 
 def compress_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -58,7 +59,10 @@ def _llm_summary(middle: list[dict[str, Any]]) -> str:
     """用 LLM 摘要中间段，失败返回空串（回退纯裁剪）"""
     try:
         llm = ModelFactory.get_model_manager().create_llm(task_name="compress")
-        resp = llm.invoke([{"role": "user", "content": _build_summary_prompt(middle)}])
+        resp = llm.invoke(
+            [{"role": "user", "content": _build_summary_prompt(middle)}],
+            config=langchain_config(),
+        )
         summary = (resp.content or "").strip() if hasattr(resp, "content") else ""
         return summary
     except (RuntimeError, ValueError, KeyError, OSError) as e:

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.adapters.factory import ModelFactory
 from app.infra.logger import logger
+from app.infra.observability import langchain_config
 
 
 class Intent(BaseModel):
@@ -62,7 +63,7 @@ def discriminate_intent(
 
     try:
         result = llm.with_structured_output(Intent).invoke(
-            [{"role": "system", "content": prompt}]
+            [{"role": "system", "content": prompt}], config=langchain_config()
         )
         if result is None:
             return Intent(kind="design")

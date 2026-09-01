@@ -28,10 +28,12 @@ cryptography==43.0.3
 langchain>=0.3.7
 langchain-core>=0.3.17
 langchain-community>=0.3.7
+langchain-openai>=0.3.35,<0.4.0
 langgraph>=1.0.0
+langfuse==4.15.1
 
 # OpenAI 客户端
-openai==1.48.0
+openai>=1.104.2,<2.0.0
 
 # 其他依赖
 pyjwt==2.10.1
@@ -50,4 +52,4 @@ nacos-sdk-python==2.0.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
 pytest-cov==5.0.0
-ruff==0.8.0
+ruff==0.16.3

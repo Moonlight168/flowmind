@@ -16,6 +16,7 @@ from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.infra.logger import generate_request_id, logger, set_request_id, setup_logging
 from app.infra.nacos_registry import deregister_from_nacos, register_to_nacos
+from app.infra.observability import shutdown_observability
 
 setup_logging()
 
@@ -31,10 +32,14 @@ async def lifespan(app: FastAPI):
         logger.error("Nacos 注册失败，服务启动中止")
         raise RuntimeError("Nacos 注册失败，请检查 Nacos 服务是否正常运行")
 
-    yield
-
-    # 关闭时释放资源
-    deregister_from_nacos()
+    try:
+        yield
+    finally:
+        # 关闭时释放资源，并确保批量观测数据完整上报
+        try:
+            deregister_from_nacos()
+        finally:
+            shutdown_observability()
 
 
 app = FastAPI(

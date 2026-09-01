@@ -16,7 +16,7 @@ class _FakeAgent:
     def __init__(self, response):
         self._response = response
 
-    def invoke(self, messages):
+    def invoke(self, messages, config=None):
         if isinstance(self._response, Exception):
             raise self._response
         return {"structured_response": self._response}

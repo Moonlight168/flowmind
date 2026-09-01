@@ -19,6 +19,7 @@ from app.agents.tools import search_categories
 from app.config import Task
 from app.domain.schemas.pydantic_models import BasicDesign
 from app.infra.logger import logger
+from app.infra.observability import langchain_config
 from app.prompts.builder import build_prompt
 
 MAX_STRUCTURED_RETRY = 3
@@ -81,7 +82,9 @@ def run_react_agent(
                 excluded_providers=failed_providers,
             )
             agent = create_react_agent(llm, tools, response_format=schema)
-            result = agent.invoke({"messages": full_messages})
+            result = agent.invoke(
+                {"messages": full_messages}, config=langchain_config()
+            )
             obj = result.get("structured_response")
             if obj is not None:
                 logger.info("[LLM] ReAct 结构化输出成功")

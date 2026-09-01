@@ -15,6 +15,7 @@ FlowMind 智能审批服务 - 设计 Workflow
 from collections.abc import Iterator
 from contextlib import contextmanager
 from secrets import token_hex
+from typing import Any
 
 import redis
 from langchain_core.messages import HumanMessage
@@ -28,6 +29,11 @@ from app.graph.nodes.react_agent_node import react_agent_node
 from app.graph.nodes.review_node import review_node
 from app.graph.state.app_state import AppState
 from app.infra.logger import generate_trace_id, log_context, logger
+from app.infra.observability import (
+    langchain_config,
+    observe_workflow,
+    record_observation_output,
+)
 
 LOCK_TTL_SECONDS = 600
 _RELEASE_LOCK_SCRIPT = """
@@ -199,16 +205,31 @@ def invoke_design_workflow(
         request_cache.scope(),
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
+        observe_workflow(
+            "flowmind.design",
+            input={
+                "design_type": design_type,
+                "mode": mode,
+                "user_input": user_input,
+                "current_form_data": current_form_data or {},
+            },
+            session_id=thread_id,
+            trace_id=trace_id,
+            metadata={"design_type": design_type, "mode": mode, "stream": False},
+            tags=["design", design_type, mode],
+        ) as observation,
     ):
-        result = design_workflow.invoke(initial_state, config)
+        result = design_workflow.invoke(initial_state, langchain_config(config))
 
         # 从最终状态提取 design_output
         if isinstance(result, dict):
             design_output = result.get("design_output", {})
             if design_output:
+                record_observation_output(observation, design_output)
                 logger.info(f"[invoke] 完成, intent={result.get('intent')}")
                 return design_output
 
+        record_observation_output(observation, result)
         logger.warning(
             f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}"
         )
@@ -223,7 +244,7 @@ def stream_design_workflow(
     current_form_data: dict | None = None,
     mode: str = "design",
     **kwargs,
-):
+) -> Iterator[dict[str, Any]]:
     """流式设计 Workflow：逐个 yield 进度事件，最后 yield done 事件（含完整 design_output）"""
     config, trace_id, initial_state = _prepare_design_call(
         design_type,
@@ -242,11 +263,24 @@ def stream_design_workflow(
         request_cache.scope(),
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
+        observe_workflow(
+            "flowmind.design",
+            input={
+                "design_type": design_type,
+                "mode": mode,
+                "user_input": user_input,
+                "current_form_data": current_form_data or {},
+            },
+            session_id=thread_id,
+            trace_id=trace_id,
+            metadata={"design_type": design_type, "mode": mode, "stream": True},
+            tags=["design", design_type, mode, "stream"],
+        ) as observation,
     ):
         design_count = 0
         last_error_count = 0
         for step in design_workflow.stream(
-            initial_state, config, stream_mode="updates"
+            initial_state, langchain_config(config), stream_mode="updates"
         ):
             for node_name, node_state in step.items():
                 if node_name == "design":
@@ -286,6 +320,7 @@ def stream_design_workflow(
         design_output = (
             (final_state.values or {}).get("design_output", {}) if final_state else {}
         )
+        record_observation_output(observation, design_output)
         yield {
             "type": "done",
             **(design_output if isinstance(design_output, dict) else {}),

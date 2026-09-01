@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from app.adapters.factory import ModelFactory
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
+from app.infra.observability import langchain_config
 
 
 def chat_node(state: AppState) -> AppState:
@@ -47,7 +48,9 @@ def chat_node(state: AppState) -> AppState:
         # 添加当前用户输入
         messages.append({"role": "user", "content": user_input})
 
-        result = manager.create_llm(task_name="chat").invoke(messages)
+        result = manager.create_llm(task_name="chat").invoke(
+            messages, config=langchain_config()
+        )
 
         # LLM 服务不可用时，返回错误信息
         if result is None:

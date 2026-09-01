@@ -45,7 +45,7 @@ def test_llm_summary_replaced(monkeypatch):
         class _Resp:
             content = "这是摘要"
 
-        def invoke(self, messages):
+        def invoke(self, messages, config=None):
             return self._Resp()
 
     class _FakeManager:
