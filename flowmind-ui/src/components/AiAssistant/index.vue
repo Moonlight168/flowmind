@@ -121,7 +121,7 @@
           @control-intent="handleControlIntent($event, index)"
         />
         <!-- 加载状态 -->
-        <div v-if="isLoading" class="message assistant flex gap-3 mb-4">
+        <div v-if="isLoading && !hasStreamingContent" class="message assistant flex gap-3 mb-4">
           <div class="message-avatar flex-shrink-0 flex items-center justify-center text-blue-500">
             <el-icon :size="20"><ChatDotRound /></el-icon>
           </div>
@@ -174,7 +174,7 @@
 import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ChatDotRound, Close, Delete, Plus, List, MoreFilled, Check } from '@element-plus/icons-vue'
-import { aiFormChat, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
+import { aiFormChat, aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
 import MessageItem from './MessageItem.vue'
@@ -193,6 +193,7 @@ const aiSession = useAiSessionStore()
 const MAX_INPUT_LENGTH = 2000
 const isVisible = ref(false)
 const isLoading = ref(false)
+const hasStreamingContent = ref(false)
 const inputMessage = ref('')
 const messages = ref([])
 const messagesContainer = ref(null)
@@ -549,49 +550,57 @@ async function sendMessage() {
 
   inputMessage.value = ''
   isLoading.value = true
+  hasStreamingContent.value = false
   scrollToBottom()
+  let aiMessageIndex = -1
 
   try {
-    const response = await aiFormChat({
+    await aiFormChatStream({
       user_input: content,
       thread_id: aiSession.threadId
+    }, (event) => {
+      if (event.type === 'meta' && event.thread_id) {
+        aiSession.initializeSession({
+          threadId: event.thread_id,
+          targetPageType: null
+        })
+      } else if (event.type === 'delta' && event.content) {
+        if (aiMessageIndex === -1) {
+          messages.value.push(createMessage({ role: 'assistant', content: '' }))
+          aiMessageIndex = messages.value.length - 1
+          hasStreamingContent.value = true
+        }
+        messages.value[aiMessageIndex].content += event.content
+        scrollToBottom()
+      } else if (event.type === 'done') {
+        if (aiMessageIndex === -1) {
+          messages.value.push(createMessage({
+            role: 'assistant',
+            content: event.response || '服务未返回有效响应,请稍后重试。'
+          }))
+          aiMessageIndex = messages.value.length - 1
+        } else if (event.response && messages.value[aiMessageIndex].content !== event.response) {
+          messages.value[aiMessageIndex].content = event.response
+        }
+        scrollToBottom()
+      } else if (event.type === 'error') {
+        throw new Error(event.message || '流式响应失败')
+      }
     })
-
-    // 保存 threadId 用于后续对话（thread_id 在 response.data 中）
-    const resultData = response.data || response
-    if (resultData.thread_id) {
-      aiSession.initializeSession({
-        threadId: resultData.thread_id,
-        targetPageType: null
-      })
-    }
-
-    // 直接显示 AI 回复消息
-    const aiMessage = createMessage({
-      role: 'assistant',
-      content: resultData.response || '服务未返回有效响应,请稍后重试。',
-      redirect: resultData.redirect,
-      bpmnXml: resultData.bpmn_xml,
-      modelName: resultData.model_name,
-      category: resultData.category,
-      formJson: resultData.form_json,
-      formName: resultData.form_name,
-      workflow_status: resultData.workflow_status,
-      confirmation: resultData.confirmation,  // 前端渲染按钮的指令
-      confirmation_id: resultData.confirmation_id || resultData.confirmation?.confirmation_id || null
-    })
-
-    messages.value.push(aiMessage)
-    scrollToBottom()
 
   } catch (error) {
     console.error('AI 对话失败:', error)
-    messages.value.push(createMessage({
-      role: 'assistant',
-      content: '抱歉，处理您的请求时出现问题，请稍后重试。'
-    }))
+    if (aiMessageIndex === -1) {
+      messages.value.push(createMessage({
+        role: 'assistant',
+        content: '抱歉，处理您的请求时出现问题，请稍后重试。'
+      }))
+    } else {
+      messages.value[aiMessageIndex].content += '\n\n（响应中断，请稍后重试。）'
+    }
     scrollToBottom()
   } finally {
+    hasStreamingContent.value = false
     isLoading.value = false
   }
 }

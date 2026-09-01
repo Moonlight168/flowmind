@@ -5,6 +5,12 @@ FlowMind 智能流程设计服务 - 工作流 Langfuse 接入测试
 from contextlib import contextmanager
 from importlib import import_module
 from types import SimpleNamespace
+from uuid import uuid4
+
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from langchain_core.messages import AIMessageChunk
+
+from app.adapters.factory import ModelFactory
 
 chat_module = import_module("app.graph.workflows.chat_workflow")
 design_module = import_module("app.graph.workflows.design_workflow")
@@ -65,6 +71,78 @@ def test_chat_entry_attaches_callback_and_records_output(monkeypatch):
     assert captured["observation_name"] == "flowmind.chat"
     assert captured["graph_config"]["callbacks"] == ["langfuse"]
     assert observation.output == {"chat_response": "ok"}
+
+
+def test_stream_chat_entry_yields_tokens_and_records_final_output(monkeypatch):
+    """流式聊天入口应逐 token 输出，并用最终状态完成根观测。"""
+    captured = {}
+    observation = _Observation()
+
+    class _Graph:
+        def stream(self, state, config, stream_mode):
+            captured["graph_config"] = config
+            captured["stream_mode"] = stream_mode
+            yield (
+                "messages",
+                (AIMessageChunk(content="你"), {"langgraph_node": "chat"}),
+            )
+            yield (
+                "messages",
+                (AIMessageChunk(content="好"), {"langgraph_node": "chat"}),
+            )
+            yield "updates", {"chat": {"chat_response": "你好"}}
+
+        def get_state(self, config):
+            raise AssertionError("updates 已包含最终结果，不应再次读取状态")
+
+    monkeypatch.setattr(
+        chat_module,
+        "_prepare_chat_call",
+        lambda *args: ({"configurable": {"thread_id": "thread-1"}}, "trace-1", {}),
+    )
+    monkeypatch.setattr(chat_module, "log_context", _empty_scope)
+    monkeypatch.setattr(
+        chat_module, "observe_workflow", _observed_scope(captured, observation)
+    )
+    monkeypatch.setattr(chat_module, "langchain_config", _traced_config(captured))
+    monkeypatch.setattr(chat_module, "chat_workflow", _Graph())
+
+    events = list(chat_module.stream_chat_workflow("hello", "thread-1", "trace-1"))
+
+    assert events == [
+        {"type": "delta", "content": "你"},
+        {"type": "delta", "content": "好"},
+        {"type": "done", "response": "你好"},
+    ]
+    assert captured["stream_mode"] == ["messages", "updates"]
+    assert captured["graph_config"]["callbacks"] == ["langfuse"]
+    assert observation.output == {"chat_response": "你好"}
+
+
+def test_real_chat_graph_emits_model_tokens(monkeypatch):
+    """真实 LangGraph 编排应保留 messages 回调并产出模型 token。"""
+    model = FakeListChatModel(responses=["你好"])
+
+    class _Manager:
+        def create_llm(self, task_name=None):
+            return model
+
+    monkeypatch.setattr(chat_module, "thread_exists", lambda thread_id: True)
+    monkeypatch.setattr(
+        ModelFactory, "get_model_manager", classmethod(lambda cls: _Manager())
+    )
+
+    events = list(
+        chat_module.stream_chat_workflow(
+            "hello", f"stream-test-{uuid4().hex}", "trace-1"
+        )
+    )
+
+    streamed_text = "".join(
+        event["content"] for event in events if event["type"] == "delta"
+    )
+    assert streamed_text == "你好"
+    assert events[-1] == {"type": "done", "response": "你好"}
 
 
 def test_design_entry_attaches_callback_and_records_output(monkeypatch):

@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { getToken } from '@/utils/auth'
+import { postSse } from '@/utils/sse'
 
 export function designCategory(data) {
   return request({
@@ -44,43 +44,5 @@ export function clearDesignState(designType, threadId) {
  *   错误事件：{ type: 'error', message }
  */
 export async function designStream(designType, data, onEvent) {
-  const url = `${import.meta.env.VITE_APP_BASE_API}/flowmind-ai/design/${designType}`
-  const token = getToken()
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: 'Bearer ' + token } : {})
-    },
-    body: JSON.stringify(data)
-  })
-
-  if (!response.ok) {
-    throw new Error(`请求失败: ${response.status}`)
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    // SSE：每个事件以 \n\n 分隔，格式 "data: {...}"
-    let sepIndex
-    while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
-      const chunk = buffer.slice(0, sepIndex).trim()
-      buffer = buffer.slice(sepIndex + 2)
-      if (chunk.startsWith('data: ')) {
-        try {
-          onEvent(JSON.parse(chunk.slice(6)))
-        } catch (e) {
-          console.warn('SSE 事件解析失败:', chunk, e)
-        }
-      }
-    }
-  }
+  return postSse(`/flowmind-ai/design/${designType}`, data, onEvent)
 }

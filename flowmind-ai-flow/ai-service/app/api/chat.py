@@ -4,9 +4,15 @@ FlowMind 智能流程设计服务 - 对话 API
 本模块提供通用聊天接口和会话历史管理。
 """
 
+import json
+from collections.abc import Iterator
 from typing import Any
 
+import httpx
+import redis
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from openai import OpenAIError
 
 from app.api.deps import require_auth
 from app.domain.dto import ChatRequestDTO, ResponseVO
@@ -14,8 +20,9 @@ from app.graph.workflows.chat_workflow import (
     chat_workflow,
     get_chat_workflow_state,
     invoke_chat_workflow,
+    stream_chat_workflow,
 )
-from app.infra.logger import generate_trace_id, set_trace_id
+from app.infra.logger import generate_trace_id, logger, set_trace_id
 from app.utils.auth import TokenUser
 
 router = APIRouter(
@@ -50,6 +57,45 @@ def chat(
             "thread_id": thread_id,
         },
         trace_id=trace_id,
+    )
+
+
+@router.post("/stream")
+def chat_stream(
+    payload: ChatRequestDTO,
+    current_user: TokenUser = Depends(require_auth),
+) -> StreamingResponse:
+    """通用聊天流式接口（SSE：meta + delta + done）。"""
+    trace_id = generate_trace_id()
+    set_trace_id(trace_id)
+    thread_id = payload.thread_id or current_user.user_key or "default"
+
+    def event_stream() -> Iterator[str]:
+        meta = {"type": "meta", "thread_id": thread_id, "trace_id": trace_id}
+        yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
+        try:
+            for event in stream_chat_workflow(
+                user_input=payload.user_input,
+                thread_id=thread_id,
+                trace_id=trace_id,
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except (
+            OpenAIError,
+            httpx.HTTPError,
+            redis.RedisError,
+            RuntimeError,
+            ValueError,
+            OSError,
+        ) as exc:
+            logger.error(f"[chat-stream] 流式调用失败: {exc}")
+            error = {"type": "error", "message": "AI 服务暂时异常，请稍后重试"}
+            yield f"data: {json.dumps(error, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

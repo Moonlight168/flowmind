@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { postSse } from '@/utils/sse'
 
 function normalizeChatRequest(data = {}) {
   return {
@@ -16,6 +17,11 @@ export function aiFormChat(data) {
     method: 'post',
     data: normalizeChatRequest(data)
   })
+}
+
+// AI 对话流式输出（SSE）
+export function aiFormChatStream(data, onEvent) {
+  return postSse('/flowmind-ai/chat/stream', normalizeChatRequest(data), onEvent)
 }
 
 // 获取 AI 状态
