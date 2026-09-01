@@ -6,11 +6,19 @@ FlowMind 智能审批服务 - 格式化节点
 2. 统一返回格式：{ form_data, message, intent }
 """
 
-from app.agents.validators import build_category
+from collections import deque
+
+from app.agents.validators import (
+    EdgeValidator,
+    NodeValidator,
+    ValidatorContext,
+    build_category,
+)
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
 from app.utils.bpmn_generator import generate_bpmn_xml
+from app.utils.bpmn_validator import validate_bpmn_xml
 from app.utils.vform3_transformer import transform_to_vform3
 
 
@@ -102,21 +110,32 @@ def _format_partial(
     form_data = dict(raw_result)
     form_data.pop("review", None)
     form_data.pop("_category", None)
-    # 尽量给完整可导入的成品：保留 review 已生成的 bpmn_xml，没有则兜底生成
+    # 半成品只做删除式安全化：去掉坏连线、自环和不可达节点，不猜测业务数据。
+    if design_type == "flow_design":
+        form_data = _sanitize_flow_draft(form_data)
+
+    # 仅在重新生成并校验通过后，才把半成品标为可导入 BPMN。
     if (
         design_type == "flow_design"
         and form_data.get("nodes")
-        and not form_data.get("bpmn_xml")
+        and _flow_draft_is_valid(form_data)
     ):
         category = build_category(raw_result, {})
         try:
-            form_data["bpmn_xml"] = generate_bpmn_xml(
+            bpmn_xml = generate_bpmn_xml(
                 {"nodes": form_data["nodes"], "edges": form_data.get("edges", [])},
                 category,
             )
+            form_data["bpmn_xml"] = (
+                bpmn_xml if validate_bpmn_xml(bpmn_xml).is_valid else ""
+            )
         except (ValueError, TypeError, KeyError, AttributeError):
             form_data["bpmn_xml"] = ""
-    message = f"{reason}。已为你保留草稿，可以直接在设计器里手动调整。"
+    importable = (
+        bool(form_data.get("bpmn_xml")) if design_type == "flow_design" else True
+    )
+    action = "可以直接在设计器里手动调整" if importable else "请按提示补全后再导入"
+    message = f"{reason}。已为你保留草稿，{action}。"
     if issues:
         message += f"\n需要关注的地方：\n{issues}"
     return {
@@ -125,6 +144,77 @@ def _format_partial(
         "intent": "success",
         "partial": True,
     }
+
+
+def _sanitize_flow_draft(form_data: dict) -> dict:
+    """仅通过删除不安全结构，把 flow 草稿收敛到可生成范围。"""
+    draft = dict(form_data)
+    nodes = [node for node in draft.get("nodes", []) if isinstance(node, dict)]
+    node_ids = {node.get("id") for node in nodes if node.get("id")}
+    node_types = {node.get("id"): (node.get("type") or "").upper() for node in nodes}
+    edges = _safe_edges(draft.get("edges", []), node_ids, node_types)
+    reachable = _reachable_node_ids(edges)
+    event_ids = {
+        node_id
+        for node_id, node_type in node_types.items()
+        if node_type in {"START_EVENT", "END_EVENT"}
+    }
+    kept_ids = reachable | event_ids
+    draft["nodes"] = [node for node in nodes if node.get("id") in kept_ids]
+    draft["edges"] = [
+        edge
+        for edge in edges
+        if edge["source"] in kept_ids | {"start"}
+        and edge["target"] in kept_ids | {"end"}
+    ]
+    draft.pop("bpmn_xml", None)
+    return draft
+
+
+def _flow_draft_is_valid(form_data: dict) -> bool:
+    """半成品必须重新通过 JSON 节点/连线校验，才允许生成可导入 XML。"""
+    context = ValidatorContext(design_type="flow_design")
+    return all(
+        validator.validate(form_data, context).is_valid
+        for validator in (NodeValidator(), EdgeValidator())
+    )
+
+
+def _safe_edges(
+    edges: list, node_ids: set[str], node_types: dict[str, str]
+) -> list[dict]:
+    """删除引用不存在、自环或网关条件语义冲突的连线。"""
+    valid_refs = node_ids | {"start", "end"}
+    safe: list[dict] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source, target = edge.get("source"), edge.get("target")
+        if source not in valid_refs or target not in valid_refs or source == target:
+            continue
+        source_type = node_types.get(source)
+        if source_type == "EXCLUSIVE_GATEWAY" and not edge.get("condition"):
+            continue
+        if source_type == "PARALLEL_GATEWAY" and edge.get("condition"):
+            continue
+        safe.append(dict(edge))
+    return safe
+
+
+def _reachable_node_ids(edges: list[dict]) -> set[str]:
+    """返回从虚拟 start 可达的引用。"""
+    adjacency: dict[str, list[str]] = {}
+    for edge in edges:
+        adjacency.setdefault(edge["source"], []).append(edge["target"])
+    reachable: set[str] = set()
+    queue = deque(["start"])
+    while queue:
+        current = queue.popleft()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        queue.extend(adjacency.get(current, []))
+    return reachable - {"start", "end"}
 
 
 def _format_success_output(

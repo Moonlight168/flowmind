@@ -25,19 +25,13 @@ class AppState(TypedDict, total=False):
     # design workflow 必须字段
     design_type: str | None
     mode: str | None
-    user_input: str | None
     current_form_data: dict | None
 
     # chat 专用
     chat_response: str | None
 
     # design 专用
-    needs_clarification: bool | None
-    clarification_message: str | None
     design_output: dict | None
-    raw_result: dict | None
-    design_error: str | None
-    design_success: bool | None
     intent: str | None  # 标识 clarification/success
 
     # review 专用

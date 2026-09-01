@@ -15,6 +15,8 @@ import importlib
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
+from app.agents.intent import Intent
+
 # 用 importlib 获取真实模块（避免模块名与变量名冲突导致拿到编译图对象）
 react_agent_node = importlib.import_module("app.graph.nodes.react_agent_node")
 review_node = importlib.import_module("app.graph.nodes.review_node")
@@ -27,11 +29,11 @@ stream_design_workflow = dw.stream_design_workflow
 class _FakeRedis:
     """替代 redis lock 的假客户端"""
 
-    def set(self, *args, **kwargs):
+    def set(self, *args, **kwargs) -> bool:
         return True
 
-    def delete(self, *args, **kwargs):
-        return True
+    def eval(self, *args, **kwargs) -> int:
+        return 1
 
 
 class _FakeBackendService:
@@ -54,8 +56,8 @@ class _FakeBackendService:
 def chain(monkeypatch):
     """准备完整链路：MemorySaver checkpoint + fake redis lock + 空后端"""
     mem = MemorySaver()
-    mem.thread_exists = lambda thread_id: False  # 首次调用
     monkeypatch.setattr(dw, "checkpointer", mem)
+    monkeypatch.setattr(dw, "thread_exists", lambda thread_id: False)
     monkeypatch.setattr(dw, "design_workflow", dw.create_design_workflow())
     monkeypatch.setattr(dw, "_get_redis_client", lambda: _FakeRedis())
     monkeypatch.setattr(review_node, "FormService", _FakeBackendService)
@@ -66,8 +68,6 @@ def chain(monkeypatch):
 
 def _mock_llm(monkeypatch, results):
     """mock run_react_agent + discriminate_intent（意图恒为 design）"""
-    from app.agents.intent import Intent
-
     queue = list(results)
 
     def _run(**kwargs):
@@ -227,9 +227,26 @@ def test_review_rejects_invalid_then_retry(chain, monkeypatch):
     invalid = {
         "nodes": [
             {"id": "startEvent", "name": "开始", "type": "START_EVENT"},  # 缺 form_key
+            {
+                "id": "node_approve",
+                "name": "审批",
+                "type": "USER_TASK",
+                "candidate_groups": ["ROLE1"],
+            },
+            {
+                "id": "orphan",
+                "name": "孤立审批",
+                "type": "USER_TASK",
+                "candidate_groups": ["ROLE1"],
+            },
             {"id": "endEvent", "name": "结束", "type": "END_EVENT"},
         ],
-        "edges": [{"source": "start", "target": "end"}],
+        "edges": [
+            {"source": "start", "target": "node_approve"},
+            {"source": "node_approve", "target": "end"},
+            {"source": "missing", "target": "end"},
+            {"source": "orphan", "target": "orphan"},
+        ],
     }
     _mock_llm(monkeypatch, [invalid, _FLOW_RESULT])
     result = invoke_design_workflow(
@@ -249,9 +266,26 @@ def test_review_dead_loop(chain, monkeypatch):
     invalid = {
         "nodes": [
             {"id": "startEvent", "name": "开始", "type": "START_EVENT"},  # 缺 form_key
+            {
+                "id": "node_approve",
+                "name": "审批",
+                "type": "USER_TASK",
+                "candidate_groups": ["ROLE1"],
+            },
+            {
+                "id": "orphan",
+                "name": "孤立审批",
+                "type": "USER_TASK",
+                "candidate_groups": ["ROLE1"],
+            },
             {"id": "endEvent", "name": "结束", "type": "END_EVENT"},
         ],
-        "edges": [{"source": "start", "target": "end"}],
+        "edges": [
+            {"source": "start", "target": "node_approve"},
+            {"source": "node_approve", "target": "end"},
+            {"source": "missing", "target": "end"},
+            {"source": "orphan", "target": "orphan"},
+        ],
     }
     # 始终返回相同非法结果，触发死循环检测
     _mock_llm(monkeypatch, [invalid, invalid, invalid, invalid])
@@ -265,4 +299,7 @@ def test_review_dead_loop(chain, monkeypatch):
     # 死循环检测触发，返回半成品草稿供手动调整
     assert result["partial"] is True
     assert result["form_data"] is not None
-    assert result["form_data"]["bpmn_xml"]  # 兜底生成可导入的 XML（非空）
+    assert not result["form_data"].get("bpmn_xml")  # 缺 form_key，不得标为可导入
+    assert "补全后再导入" in result["message"]
+    assert all(node["id"] != "orphan" for node in result["form_data"]["nodes"])
+    assert all(edge["source"] != "missing" for edge in result["form_data"]["edges"])

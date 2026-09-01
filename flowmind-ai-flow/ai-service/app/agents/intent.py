@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app.adapters.factory import ModelFactory
 from app.infra.logger import logger
 
 
@@ -48,8 +49,6 @@ def discriminate_intent(
         llm: 可注入的 LLM（测试用），None 时从 ModelFactory 取
     """
     if llm is None:
-        from app.adapters.factory import ModelFactory
-
         llm = ModelFactory.get_model_manager().create_llm(
             task_name="intent", structured=True
         )

@@ -1,13 +1,12 @@
 """
 FlowMind 智能流程设计服务 - 节点基类
 
-本模块提供节点装饰器和基类，用于统一错误处理和日志记录。
+本模块提供节点装饰器，用于统一错误处理和日志记录。
 日志采用三级级别（DEBUG/INFO/ERROR），通过LOG_LEVEL环境变量配置。
 """
 
 import time
 from collections.abc import Callable
-from datetime import datetime
 from functools import wraps
 from typing import TypeVar
 
@@ -30,18 +29,7 @@ def node_handler(node_name: str = ""):
             name = node_name or func.__name__
             start_time = time.time()
 
-            # 循环检测逻辑
-            last_node = state.get("last_node", "")
-            node_execution_count = state.get("node_execution_count", 1)
-
-            if last_node == name:
-                node_execution_count += 1
-                if node_execution_count > 3:
-                    raise RuntimeError(f"节点 {name} 执行次数超过3次，检测到循环执行")
-            else:
-                node_execution_count = 1
-
-            # session_id 从 context 读取，不从 state（避免 LastValue channel 冲突）
+            # session_id 从 context 读取，不从 state
             session_id = get_session_id()
 
             # 记录进入节点前的 chat_response，避免打印历史残留回复
@@ -49,24 +37,7 @@ def node_handler(node_name: str = ""):
 
             try:
                 result = func(state)
-
-                # 持久化循环检测状态
-                result["last_node"] = name
-                result["node_execution_count"] = node_execution_count
                 elapsed_ms = int((time.time() - start_time) * 1000)
-
-                # 自动更新 task_context.last_action
-                if "task_context" not in result:
-                    result["task_context"] = {
-                        "last_action": "",
-                        "last_action_time": "",
-                        "pending_confirm": None,
-                    }
-
-                result["task_context"]["last_action"] = name
-                result["task_context"]["last_action_time"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
 
                 # 仅记录本节点新产生的 AI 响应，避免历史状态误导排障
                 chat_response = str(result.get("chat_response", "") or "")

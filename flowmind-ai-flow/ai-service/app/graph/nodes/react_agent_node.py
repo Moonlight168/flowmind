@@ -13,7 +13,6 @@ from langchain_core.messages import AIMessage, HumanMessage
 from app.agents.compression import compress_history
 from app.agents.intent import discriminate_intent
 from app.agents.react_agent import run_react_agent
-from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
 from app.infra.logger import logger
@@ -45,8 +44,6 @@ def react_agent_node(state: AppState) -> AppState:
         state["intent"] = "clarification"
         state["design_output"] = {"message": "请明确您的需求"}
         return state
-
-    auth_token = get_auth_token()
 
     # 阶段1：意图判别（clarification/rollback/reset 提前分流，不调生成）
     intent = discriminate_intent(
@@ -96,7 +93,6 @@ def react_agent_node(state: AppState) -> AppState:
         design_type=design_type,
         messages=conversation_history,  # 传入对话历史
         current_form_data=current_form_data,
-        auth_token=auth_token or "",
         task_name=design_type,
         mode=mode,
     )

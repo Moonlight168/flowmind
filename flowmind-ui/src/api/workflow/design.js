@@ -25,10 +25,11 @@ export function designForm(data) {
   })
 }
 
-export function clearDesignState(designType) {
+export function clearDesignState(designType, threadId) {
   return request({
     url: '/flowmind-ai/design/state/' + designType,
-    method: 'delete'
+    method: 'delete',
+    params: threadId ? { thread_id: threadId } : undefined
   })
 }
 

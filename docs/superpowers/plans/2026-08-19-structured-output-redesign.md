@@ -3,6 +3,7 @@
 > 状态：已实施全部 7 个 Commit（含 review 修复）
 > 日期：2026-08-19
 > 关联：`2026-08-17-validation-and-compression-design.md`（已落地的校验层 + 压缩）
+> 后续决策：2026-09-01 起，确定性全量预取被 ReAct 按需检索取代；结构化输出、校验、增量修改和版本管理决策继续有效。详见 `2026-09-01-react-retrieval-and-runtime-hardening.md`。
 
 ## 0. 目标与核心决策
 

@@ -331,7 +331,9 @@ function clearMessages() {
   sessionStorage.removeItem(storageKey.value)
   sessionStorage.removeItem(versionKey.value)
   // 同步清除后端 Redis 中的对话历史
-  clearDesignState(props.designType)
+  clearDesignState(props.designType, flowKey.value).catch((error) => {
+    console.warn('清除后端对话历史失败:', error)
+  })
 }
 
 defineExpose({

@@ -4,6 +4,8 @@ FlowMind 智能流程设计服务 - 模型管理器
 本模块提供统一的模型管理器，实现多模型优先级降级。
 """
 
+import threading
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from langchain_openai import ChatOpenAI
@@ -23,8 +25,8 @@ class ModelManagerConfig:
 class ModelManager:
     """统一的模型管理器
 
-    职责：多模型优先级降级
-    主流程通过 LangChain create_react_agent 使用 ChatOpenAI
+    职责：多模型优先级降级。设计任务经 create_react_agent（ReAct）+ chat 直接调用，
+    均通过本类创建 ChatOpenAI。
     """
 
     def __init__(
@@ -37,6 +39,8 @@ class ModelManager:
         self._priority = priority
         self._config = config or ModelManagerConfig()
         self._current_provider: str | None = None
+        self._llm_cache: dict[tuple[str, str | None], ChatOpenAI] = {}
+        self._cache_lock = threading.RLock()
 
     TASK_TEMPERATURE_CONFIG = {
         "category_design": {"temperature": 0.3},
@@ -48,13 +52,34 @@ class ModelManager:
     }
 
     def create_llm(
-        self, task_name: str | None = None, structured: bool = False
+        self,
+        task_name: str | None = None,
+        structured: bool = False,
+        excluded_providers: Collection[str] = (),
     ) -> "ChatOpenAI":
         """创建 ChatOpenAI 实例，失败时自动降级到下一优先级模型
 
         structured=True 时只选 supports_structured_output 的模型（结构化输出用）。
         """
-        candidates = self.get_available_providers()
+        llm, _ = self.create_llm_with_provider(
+            task_name=task_name,
+            structured=structured,
+            excluded_providers=excluded_providers,
+        )
+        return llm
+
+    def create_llm_with_provider(
+        self,
+        task_name: str | None = None,
+        structured: bool = False,
+        excluded_providers: Collection[str] = (),
+    ) -> tuple["ChatOpenAI", str]:
+        """创建模型并返回 provider，供调用失败后跳过故障 provider。"""
+        candidates = [
+            name
+            for name in self.get_available_providers()
+            if name not in excluded_providers
+        ]
         if structured:
             candidates = [
                 name
@@ -68,15 +93,26 @@ class ModelManager:
             if not config:
                 continue
             try:
-                llm = self._build_llm(config, task_name)
+                llm = self._get_or_create_llm(name, task_name)
                 self._current_provider = name
-                return llm
-            except Exception as e:
+                return llm, name
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
                 last_error = e
                 logger.warning(f"[ModelManager] 模型 [{name}] 调用失败，尝试降级: {e}")
                 continue
 
         raise last_error or RuntimeError("所有模型都不可用")
+
+    def _get_or_create_llm(self, name: str, task_name: str | None) -> "ChatOpenAI":
+        """按 (provider, task_name) 缓存 ChatOpenAI 实例（实例无状态可复用）"""
+        key = (name, task_name)
+        with self._cache_lock:
+            cached = self._llm_cache.get(key)
+            if cached is not None:
+                return cached
+            llm = self._build_llm(self._providers[name], task_name)
+            self._llm_cache[key] = llm
+            return llm
 
     def _build_llm(self, config: dict, task_name: str | None) -> "ChatOpenAI":
         """从配置构建 ChatOpenAI 实例"""
@@ -87,8 +123,6 @@ class ModelManager:
         if task_name in self.TASK_TEMPERATURE_CONFIG:
             params.update(self.TASK_TEMPERATURE_CONFIG[task_name])
 
-        # 所有设计任务走 tool-calling（bind_tools），chat 任务无需 JSON 输出，
-        # 因此不设置 response_format（与 tool-calling 互斥）
         return ChatOpenAI(
             model=config.get("model_name", ""),
             base_url=config.get("base_url", "").rstrip("/"),

@@ -12,40 +12,67 @@ FlowMind 智能审批服务 - 设计 Workflow
 - intent: 标识最终结果类型 (clarification/success/error)
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from secrets import token_hex
+
 import redis
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.config.settings import settings
-from app.core.checkpoint.redis_checkpoint import RedisCheckpoint
+from app.core import request_cache
+from app.core.checkpoint import checkpointer, thread_exists
 from app.graph.nodes.format_node import format_node
 from app.graph.nodes.react_agent_node import react_agent_node
 from app.graph.nodes.review_node import review_node
 from app.graph.state.app_state import AppState
 from app.infra.logger import generate_trace_id, log_context, logger
 
-LOCK_TTL_SECONDS = 120
+LOCK_TTL_SECONDS = 600
+_RELEASE_LOCK_SCRIPT = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
+
+_redis_client: redis.Redis | None = None
 
 
 def _get_redis_client() -> redis.Redis:
-    return redis.Redis(
-        host=settings.redis.host,
-        port=settings.redis.port,
-        db=settings.redis.db,
-        password=settings.redis.password,
-        decode_responses=True,
-    )
+    """锁专用 Redis 客户端（懒加载单例，避免每请求新建连接池）"""
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis.Redis(
+            host=settings.redis.host,
+            port=settings.redis.port,
+            db=settings.redis.db,
+            password=settings.redis.password,
+            decode_responses=True,
+        )
+    return _redis_client
 
 
-# 创建全局检查点存储
-try:
-    checkpointer = RedisCheckpoint()
-except Exception as exc:
-    if not settings.app.debug:
-        raise RuntimeError("Redis checkpoint 初始化失败，生产环境禁止降级") from exc
-    logger.warning(f"Redis checkpoint 初始化失败，降级到 MemorySaver: {exc!s}")
-    checkpointer = MemorySaver()
+@contextmanager
+def _thread_lock(thread_id: str) -> Iterator[None]:
+    """按 thread_id 加分布式锁，防止并发重复执行"""
+    lock_key = f"lock:design:{thread_id}"
+    lock_token = token_hex(16)
+    redis_client = _get_redis_client()
+    try:
+        acquired = redis_client.set(lock_key, lock_token, nx=True, ex=LOCK_TTL_SECONDS)
+    except redis.RedisError as exc:
+        raise RuntimeError("会话锁服务暂时不可用，请稍后重试") from exc
+    if not acquired:
+        raise RuntimeError("请等待上一个请求完成后再发起新请求")
+    try:
+        yield
+    finally:
+        try:
+            redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, lock_key, lock_token)
+        except redis.RedisError as exc:
+            logger.warning(f"[lock] 释放失败，等待 TTL 自动清理: {exc}")
 
 
 def _result_router(state: AppState) -> str:
@@ -130,7 +157,7 @@ def _prepare_design_call(
     if not trace_id:
         trace_id = generate_trace_id()
 
-    is_first_call = not checkpointer.thread_exists(thread_id)
+    is_first_call = not thread_exists(thread_id)
     # messages 用 add_messages reducer，自动追加到 checkpoint 现有消息
     initial_state: AppState = {
         "messages": [HumanMessage(content=user_input)],
@@ -166,34 +193,26 @@ def invoke_design_workflow(
         kwargs,
     )
 
-    lock_key = f"lock:design:{thread_id}"
-    redis_client = _get_redis_client()
-    acquired = redis_client.set(lock_key, "1", nx=True, ex=LOCK_TTL_SECONDS)
-
-    if not acquired:
-        raise RuntimeError("请等待上一个请求完成后再发起新请求")
-
     logger.info(f"[invoke] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
-    try:
-        with log_context(
-            trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
-        ):
-            result = design_workflow.invoke(initial_state, config)
+    with (
+        request_cache.scope(),
+        _thread_lock(thread_id),
+        log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
+    ):
+        result = design_workflow.invoke(initial_state, config)
 
-            # 从最终状态提取 design_output
-            if isinstance(result, dict):
-                design_output = result.get("design_output", {})
-                if design_output:
-                    logger.info(f"[invoke] 完成, intent={result.get('intent')}")
-                    return design_output
+        # 从最终状态提取 design_output
+        if isinstance(result, dict):
+            design_output = result.get("design_output", {})
+            if design_output:
+                logger.info(f"[invoke] 完成, intent={result.get('intent')}")
+                return design_output
 
-            logger.warning(
-                f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}"
-            )
-            return result
-    finally:
-        redis_client.delete(lock_key)
+        logger.warning(
+            f"[invoke] 无 design_output, result_keys={list(result.keys()) if isinstance(result, dict) else type(result)}"
+        )
+        return result
 
 
 def stream_design_workflow(
@@ -216,72 +235,61 @@ def stream_design_workflow(
         kwargs,
     )
 
-    lock_key = f"lock:design:{thread_id}"
-    redis_client = _get_redis_client()
-    acquired = redis_client.set(lock_key, "1", nx=True, ex=LOCK_TTL_SECONDS)
-    if not acquired:
-        raise RuntimeError("请等待上一个请求完成后再发起新请求")
-
     max_retry = settings.validation.review_max_retry_count
     logger.info(f"[stream] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
-    try:
-        with log_context(
-            trace_id=trace_id, request_id=thread_id[:8] if thread_id else None
+    with (
+        request_cache.scope(),
+        _thread_lock(thread_id),
+        log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
+    ):
+        design_count = 0
+        last_error_count = 0
+        for step in design_workflow.stream(
+            initial_state, config, stream_mode="updates"
         ):
-            design_count = 0
-            last_error_count = 0
-            for step in design_workflow.stream(
-                initial_state, config, stream_mode="updates"
-            ):
-                for node_name, node_state in step.items():
-                    if node_name == "design":
-                        design_count += 1
-                        if design_count == 1:
-                            yield {
-                                "type": "progress",
-                                "phase": "design",
-                                "message": "正在理解需求并生成流程结构",
-                            }
-                        else:
-                            yield {
-                                "type": "progress",
-                                "phase": "design",
-                                "message": f"发现 {last_error_count} 处问题，正在修正（第 {design_count - 1}/{max_retry} 次）",
-                            }
-                    elif node_name == "review":
+            for node_name, node_state in step.items():
+                if node_name == "design":
+                    design_count += 1
+                    if design_count == 1:
                         yield {
                             "type": "progress",
-                            "phase": "review",
-                            "message": "正在校验流程结构",
+                            "phase": "design",
+                            "message": "正在理解需求并生成流程结构",
                         }
-                        review_info = (
-                            (node_state or {})
-                            .get("design_output", {})
-                            .get("review", {})
-                            if isinstance(node_state, dict)
-                            else {}
-                        )
-                        last_error_count = len(review_info.get("errors", []))
-                    elif node_name == "format":
+                    else:
                         yield {
                             "type": "progress",
-                            "phase": "format",
-                            "message": "正在组装结果",
+                            "phase": "design",
+                            "message": f"发现 {last_error_count} 处问题，正在修正（第 {design_count - 1}/{max_retry} 次）",
                         }
+                elif node_name == "review":
+                    yield {
+                        "type": "progress",
+                        "phase": "review",
+                        "message": "正在校验流程结构",
+                    }
+                    review_info = (
+                        (node_state or {}).get("design_output", {}).get("review", {})
+                        if isinstance(node_state, dict)
+                        else {}
+                    )
+                    last_error_count = len(review_info.get("errors", []))
+                elif node_name == "format":
+                    yield {
+                        "type": "progress",
+                        "phase": "format",
+                        "message": "正在组装结果",
+                    }
 
-            final_state = design_workflow.get_state(config)
-            design_output = (
-                (final_state.values or {}).get("design_output", {})
-                if final_state
-                else {}
-            )
-            yield {
-                "type": "done",
-                **(design_output if isinstance(design_output, dict) else {}),
-            }
-    finally:
-        redis_client.delete(lock_key)
+        final_state = design_workflow.get_state(config)
+        design_output = (
+            (final_state.values or {}).get("design_output", {}) if final_state else {}
+        )
+        yield {
+            "type": "done",
+            **(design_output if isinstance(design_output, dict) else {}),
+        }
 
 
 def delete_design_thread(thread_id: str) -> None:

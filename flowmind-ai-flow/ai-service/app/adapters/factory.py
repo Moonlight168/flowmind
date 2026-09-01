@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - 模型工厂
 
 本模块实现模型管理器的工厂类，根据配置创建 LangChain ChatOpenAI 实例并统一管理。
-主流程使用 LangChain create_react_agent 或直接调用 ChatOpenAI，ModelManager 负责多模型优先级降级。
+设计任务经 create_react_agent（ReAct 检索 + 结构化输出），chat 直接调用；ModelManager 负责多模型优先级降级。
 """
 
 import threading

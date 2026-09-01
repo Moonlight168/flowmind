@@ -36,12 +36,14 @@ DEFAULT_MODELS = [
         "model": "qwen2.5_1.5b_instruct",
         "base_url": "http://localhost:8001/v1",
         "timeout": 60,
+        "supports_structured_output": False,
     },
     {
         "name": "qwen",
         "model": "qwen-turbo",
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "api_key": None,
+        "supports_structured_output": True,
     },
 ]
 

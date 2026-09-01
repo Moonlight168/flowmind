@@ -27,6 +27,7 @@ from app.agents.validators import (
     ValidatorPipeline,
 )
 from app.config.settings import settings
+from app.core import request_cache
 from app.core.auth_context import get_auth_token
 from app.graph.nodes.base import node_handler
 from app.graph.state.app_state import AppState
@@ -109,9 +110,18 @@ def _build_context(state: AppState) -> ValidatorContext:
         design_type=state.get("design_type", ""),
         mode=state.get("mode", "design"),
         current_form_data=state.get("current_form_data") or {},
-        available_forms=FormService(auth_token=auth_token).search_forms(""),
-        available_categories=CategoryService(auth_token=auth_token).search_categories(),
-        existing_models=FlowService(auth_token=auth_token).search_flow_models(),
+        available_forms=request_cache.get(
+            "backend:forms:",
+            lambda: FormService(auth_token=auth_token).search_forms(""),
+        ),
+        available_categories=request_cache.get(
+            "backend:categories:",
+            lambda: CategoryService(auth_token=auth_token).search_categories(),
+        ),
+        existing_models=request_cache.get(
+            "backend:models:",
+            lambda: FlowService(auth_token=auth_token).search_flow_models(),
+        ),
         auth_token=auth_token,
         user_input=user_input,
     )

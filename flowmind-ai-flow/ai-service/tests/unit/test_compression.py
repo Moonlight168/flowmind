@@ -2,7 +2,9 @@
 FlowMind 智能流程设计服务 - 前置压缩单元测试
 """
 
+from app.adapters.factory import ModelFactory
 from app.agents.compression import compress_history
+from app.config.settings import settings
 
 
 def _msgs(n: int, with_system: bool = True) -> list[dict]:
@@ -17,8 +19,6 @@ def _msgs(n: int, with_system: bool = True) -> list[dict]:
 
 def test_below_threshold_unchanged(monkeypatch):
     """未超阈值：原样返回"""
-    from app.config.settings import settings
-
     monkeypatch.setattr(settings.compress, "max_messages", 10)
     msgs = _msgs(5)
     assert compress_history(msgs) == msgs
@@ -26,8 +26,6 @@ def test_below_threshold_unchanged(monkeypatch):
 
 def test_pure_trim(monkeypatch):
     """纯裁剪：system + 最近 keep_recent 条，中间段丢弃"""
-    from app.config.settings import settings
-
     monkeypatch.setattr(settings.compress, "max_messages", 4)
     monkeypatch.setattr(settings.compress, "keep_recent", 2)
     monkeypatch.setattr(settings.compress, "enable_llm_summary", False)
@@ -42,7 +40,6 @@ def test_pure_trim(monkeypatch):
 
 def test_llm_summary_replaced(monkeypatch):
     """LLM 摘要：中间段替换为 1 条 [历史摘要]"""
-    from app.config.settings import settings
 
     class _FakeLLM:
         class _Resp:
@@ -59,8 +56,6 @@ def test_llm_summary_replaced(monkeypatch):
     monkeypatch.setattr(settings.compress, "keep_recent", 2)
     monkeypatch.setattr(settings.compress, "enable_llm_summary", True)
 
-    from app.adapters.factory import ModelFactory
-
     monkeypatch.setattr(
         ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
     )
@@ -75,7 +70,6 @@ def test_llm_summary_replaced(monkeypatch):
 
 def test_llm_summary_fallback_to_trim(monkeypatch):
     """LLM 摘要失败 → 回退纯裁剪，不抛异常"""
-    from app.config.settings import settings
 
     class _FakeManager:
         def create_llm(self, task_name=None):
@@ -84,8 +78,6 @@ def test_llm_summary_fallback_to_trim(monkeypatch):
     monkeypatch.setattr(settings.compress, "max_messages", 4)
     monkeypatch.setattr(settings.compress, "keep_recent", 2)
     monkeypatch.setattr(settings.compress, "enable_llm_summary", True)
-
-    from app.adapters.factory import ModelFactory
 
     monkeypatch.setattr(
         ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
