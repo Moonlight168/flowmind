@@ -79,8 +79,12 @@ class FallbackSettings(BaseSettings):
     """容错配置"""
 
     enabled: bool = Field(default=True)
-    max_retries: int = Field(default=3)
-    retry_interval: float = Field(default=1.0)
+    max_retries: int = Field(
+        default=3, ge=0, description="首选模型之外允许尝试的备用 Provider 数量"
+    )
+    retry_interval: float = Field(
+        default=1.0, ge=0, description="切换 Provider 前的等待秒数"
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="FALLBACK_",

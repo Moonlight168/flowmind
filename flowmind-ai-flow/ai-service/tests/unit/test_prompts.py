@@ -2,15 +2,15 @@
 FlowMind 智能流程设计服务 - Markdown 提示词单元测试
 """
 
-from app.agents.tools import (
+from app.config.llm_task import Task, get_all_task_configs
+from app.design.tools import (
     search_categories,
     search_flow_models,
     search_forms,
     search_roles,
 )
-from app.agents.validators import ValidationError
-from app.config.llm_task import Task, get_all_task_configs
-from app.graph.nodes.review_node import _build_error_feedback
+from app.design.validators import ValidationError
+from app.graph.nodes.review import _build_error_feedback
 from app.prompts.builder import build_prompt
 from app.prompts.loader import load_prompt, render_prompt
 

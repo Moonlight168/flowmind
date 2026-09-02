@@ -96,14 +96,15 @@ yarn test:e2e          # E2E 测试
 
 ### AI 服务 (flowmind-ai-approval)
 
-**核心层级**：`api/` → `agents/` → `graph/` → `adapters/` → `infra/`
+**核心层级**：`api/` → `graph/` → `design/` → `llm/` / `integrations/` → `infra/`
 
-- **adapters/**: LLM 适配器（OpenAI兼容接口），后端 API 适配器
-- **agents/**: 业务 Agent（category/flow/form design）
-- **graph/**: LangGraph 工作流，intent_node 识别后路由到子工作流
-- **domain/dto/**: 数据传输对象（ApprovalFlowDTO 等）
+- **graph/**: LangGraph 聊天和设计编排、节点与状态
+- **design/**: ReAct 生成、意图、历史压缩、校验器和 BPMN/VForm3 确定性逻辑
+- **llm/**: 统一模型运行时，处理 Provider 能力过滤、运行时降级和流式安全策略
+- **integrations/backend/**: Java 后端分类、表单、角色和流程模型 HTTP 客户端
+- **domain/dto/**: 数据传输对象；`domain/design_models.py` 为结构化设计模型
 
-**设计模式**：适配器模式（LLM）、工厂模式（ModelFactory）、策略模式（routing/）、模板方法（BaseAgent）
+**设计模式**：LangGraph 显式编排、统一模型运行时、外部 HTTP Client、确定性校验 Pipeline
 
 ### Java 后端 (flowmind-cloud)
 

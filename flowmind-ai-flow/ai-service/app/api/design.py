@@ -11,14 +11,14 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import require_auth
+from app.core.auth import TokenUser
 from app.domain.dto import ResponseVO
 from app.domain.dto.design_request import DesignRequestDTO
-from app.graph.workflows.design_workflow import (
+from app.graph.design_graph import (
     delete_design_thread,
     stream_design_workflow,
 )
 from app.infra.logger import generate_trace_id, set_trace_id
-from app.utils.auth import TokenUser
 
 router = APIRouter(prefix="/design", tags=["设计"])
 

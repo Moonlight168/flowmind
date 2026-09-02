@@ -4,7 +4,7 @@ FlowMind 智能流程设计服务 - checkpoint 兼容 helper 单元测试
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.core import checkpoint
+from app.infra import checkpoint
 
 
 def test_memory_saver_helpers(monkeypatch) -> None:

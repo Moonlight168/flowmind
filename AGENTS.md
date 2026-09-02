@@ -20,7 +20,7 @@ FlowMind 智能流程审批系统 —— AI 助手的项目级约定。详见 `C
 
 | 目录 | 内容 |
 |---|---|
-| `flowmind-ai-flow/ai-service` | Python AI 服务（FastAPI + LangGraph），核心：`app/graph/`（工作流）、`app/agents/`（agent + 校验层 + 压缩） |
+| `flowmind-ai-flow/ai-service` | Python AI 服务（FastAPI + LangGraph），核心：`app/graph/`（编排）、`app/design/`（设计领域）、`app/llm/`（模型运行时） |
 | `flowmind-cloud` | Java 微服务（Spring Cloud + Flowable），核心：`ruoyi-modules/ruoyi-flowable` |
 | `flowmind-ui` | Vue 3 前端，核心：`src/components/AiDesignDialog`、`src/components/ProcessDesigner` |
 | `docs/superpowers/` | 设计规格、实施计划存档（进 git） |

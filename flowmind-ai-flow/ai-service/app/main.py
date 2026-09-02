@@ -10,13 +10,13 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.adapters.factory import ModelFactory
-from app.api import chat, design, health, model_config
+from app.api import chat, design, health
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.infra.logger import generate_request_id, logger, set_request_id, setup_logging
-from app.infra.nacos_registry import deregister_from_nacos, register_to_nacos
+from app.infra.nacos import deregister_from_nacos, register_to_nacos
 from app.infra.observability import shutdown_observability
+from app.llm import initialize_model_runtime
 
 setup_logging()
 
@@ -25,7 +25,7 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
-    ModelFactory.initialize()
+    initialize_model_runtime()
 
     # 注册到 Nacos（失败时会抛出异常）
     if not register_to_nacos(max_retries=5, retry_interval=5):
@@ -89,7 +89,6 @@ async def log_context_middleware(request: Request, call_next):
 app.include_router(chat.router, prefix="", tags=["对话"])
 app.include_router(design.router, prefix="", tags=["设计"])
 app.include_router(health.router, tags=["health"])
-app.include_router(model_config.router, tags=["模型配置"])
 
 
 @app.get("/")

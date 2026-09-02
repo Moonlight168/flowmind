@@ -3,8 +3,8 @@ FlowMind 智能流程设计服务 - 聊天 SSE API 单元测试
 """
 
 from app.api import chat
+from app.core.auth import TokenUser
 from app.domain.dto import ChatRequestDTO
-from app.utils.auth import TokenUser
 
 
 async def test_chat_stream_sends_meta_tokens_and_done(monkeypatch):

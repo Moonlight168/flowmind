@@ -7,8 +7,9 @@
 ## 实现
 
 - 新增 `POST /chat/stream` SSE 接口，事件顺序为 `meta → delta* → done`。
-- 聊天 Workflow 使用 LangGraph `messages` 模式获取模型 token，并结合 `updates` 模式取得最终状态，继续由现有 checkpoint 保存完整对话。
+- 聊天 Workflow 最初使用 `messages + updates`；2026-09-02 为支持安全模型降级，改为节点显式调用 `ModelRuntime.stream()`，通过 `custom + updates` 输出 token 和最终状态，继续由现有 checkpoint 保存完整对话。
 - 仅转发 `chat` 节点产生的 `AIMessageChunk`，避免节点最终写入状态的完整 `AIMessage` 被重复输出。
+- 首个 token 前的 Provider 故障允许切换备用模型；已输出 token 后中断则终止流，不从备用模型重放内容。
 - SSE 响应关闭代理缓冲并禁用缓存；异常通过 `error` 事件返回。
 - 前端在首个 token 到达时插入 AI 消息，后续原位追加并自动滚动；`done` 事件用最终文本校准展示内容。
 - 提取通用 `postSse` 解析器，聊天和已有设计流共用，支持网络分片、CRLF 分隔、reader 释放和缺失 `done/error` 终止事件的断流检测。

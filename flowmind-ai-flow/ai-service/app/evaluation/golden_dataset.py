@@ -23,7 +23,7 @@ from redis.exceptions import RedisError
 
 from app.core.auth_context import set_auth_token
 from app.core.exceptions import FlowDesignException
-from app.graph.workflows.design_workflow import (
+from app.graph.design_graph import (
     delete_design_thread,
     invoke_design_workflow,
 )

@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - DESIGN_SPEC 单元测试
 """
 
-from app.agents.design_spec import DESIGN_SPEC
+from app.design.spec import DESIGN_SPEC
 
 
 def test_spec_has_three_types():

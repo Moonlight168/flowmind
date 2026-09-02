@@ -17,9 +17,9 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-from app.adapters.factory import ModelFactory
 from app.domain.dto import ResponseVO
 from app.infra.logger import log_api_endpoint
+from app.llm import get_model_runtime
 
 router = APIRouter(
     prefix="/health",
@@ -29,7 +29,7 @@ router = APIRouter(
 
 @router.get("/", response_model=ResponseVO[dict[str, str]])
 @log_api_endpoint()
-def health_check(request: Request) -> ResponseVO[dict[str, str]]:
+async def health_check(request: Request) -> ResponseVO[dict[str, str]]:
     """健康检查接口"""
     return ResponseVO.success(
         {
@@ -42,20 +42,17 @@ def health_check(request: Request) -> ResponseVO[dict[str, str]]:
 
 @router.get("/models", response_model=ResponseVO[dict[str, Any]])
 @log_api_endpoint()
-def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
-    """模型适配器状态接口"""
-    manager = ModelFactory.get_model_manager()
-    adapters = manager.get_available_adapters_info()
-    current_adapter = manager.get_current_adapter()
-
-    total_count = len(adapters)
+async def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
+    """返回脱敏后的模型配置与结构化能力状态。"""
+    providers = get_model_runtime().describe_providers()
+    total_count = len(providers)
 
     return ResponseVO.success(
         {
-            "status": "healthy" if total_count > 0 else "unhealthy",
-            "current_adapter": current_adapter,
+            "status": "configured" if total_count > 0 else "unconfigured",
+            "primary_provider": providers[0]["name"] if providers else None,
             "total_count": total_count,
-            "adapters": adapters,
+            "providers": providers,
             "timestamp": datetime.now().isoformat(),
         }
     )

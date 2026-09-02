@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - 基线节点保留校验器单元测试
 """
 
-from app.agents.validators import BaselineValidator, ValidatorContext
+from app.design.validators import BaselineValidator, ValidatorContext
 
 
 def _ctx(nodes=None, user_input=""):

@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - 校验器单元测试
 """
 
-from app.agents.validators import (
+from app.design.validators import (
     CategoryValidator,
     EdgeValidator,
     FormFieldValidator,

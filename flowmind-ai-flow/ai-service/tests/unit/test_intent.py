@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - 意图判别单元测试
 """
 
-from app.agents.intent import Intent, discriminate_intent
+from app.design.intent import Intent, discriminate_intent
 
 
 class _FakeLLM:

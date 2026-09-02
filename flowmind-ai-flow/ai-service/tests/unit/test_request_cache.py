@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - 请求级缓存单元测试
 """
 
-from app.core import request_cache
+from app.integrations.backend import request_cache
 
 
 def test_factory_called_once_on_cache_hit() -> None:

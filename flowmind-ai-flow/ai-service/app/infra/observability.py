@@ -126,6 +126,57 @@ def record_observation_output(observation: Any | None, output: Any) -> None:
         logger.warning(f"[langfuse] 记录输出失败: {exc}")
 
 
+@contextmanager
+def observe_model_attempt(
+    *,
+    task_name: str | None,
+    provider: str,
+    attempt_index: int,
+    fallback_enabled: bool,
+    structured_required: bool,
+    streaming: bool,
+) -> Iterator[Any | None]:
+    """在当前工作流下记录一次脱敏的 Provider 调用尝试。"""
+    if not observability_enabled():
+        yield None
+        return
+
+    metadata = {
+        "task_name": task_name,
+        "provider": provider,
+        "attempt_index": attempt_index,
+        "fallback_enabled": fallback_enabled,
+        "structured_required": structured_required,
+        "streaming": streaming,
+    }
+    stack = ExitStack()
+    try:
+        observation = stack.enter_context(
+            get_client().start_as_current_observation(
+                name="flowmind.model_attempt",
+                as_type="span",
+                metadata=metadata,
+            )
+        )
+    except OBSERVABILITY_ERRORS as exc:
+        logger.warning(f"[langfuse] 模型尝试观测初始化失败: {exc}")
+        try:
+            stack.close()
+        except OBSERVABILITY_ERRORS as close_exc:
+            logger.warning(f"[langfuse] 模型尝试观测清理失败: {close_exc}")
+        yield None
+        return
+
+    try:
+        yield observation
+    finally:
+        exception_info = sys.exc_info()
+        try:
+            stack.__exit__(*exception_info)
+        except OBSERVABILITY_ERRORS as exc:
+            logger.warning(f"[langfuse] 模型尝试观测结束失败: {exc}")
+
+
 def shutdown_observability() -> None:
     """在进程退出前发送队列中尚未上报的观测数据。"""
     if not observability_enabled():
@@ -139,6 +190,7 @@ def shutdown_observability() -> None:
 __all__ = [
     "langchain_config",
     "observability_enabled",
+    "observe_model_attempt",
     "observe_workflow",
     "record_observation_output",
     "shutdown_observability",

@@ -14,7 +14,7 @@ from app.graph.nodes.base import (
     design_error_fallback,
     node_handler,
 )
-from app.graph.state.app_state import AppState
+from app.graph.state import AppState
 
 
 def test_node_handler_returns_design_fallback_on_failure(

@@ -17,13 +17,13 @@ import httpx
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.agents.intent import Intent
+from app.design.intent import Intent
 from app.evaluation.golden_dataset import evaluate_contract, load_golden_cases
 
 # 用 importlib 获取真实模块（避免模块名与变量名冲突导致拿到编译图对象）
-react_agent_node = importlib.import_module("app.graph.nodes.react_agent_node")
-review_node = importlib.import_module("app.graph.nodes.review_node")
-dw = importlib.import_module("app.graph.workflows.design_workflow")
+react_agent_node = importlib.import_module("app.graph.nodes.generate")
+review_node = importlib.import_module("app.graph.nodes.review")
+dw = importlib.import_module("app.graph.design_graph")
 
 invoke_design_workflow = dw.invoke_design_workflow
 stream_design_workflow = dw.stream_design_workflow
@@ -63,9 +63,9 @@ def chain(monkeypatch):
     monkeypatch.setattr(dw, "thread_exists", lambda thread_id: False)
     monkeypatch.setattr(dw, "design_workflow", dw.create_design_workflow())
     monkeypatch.setattr(dw, "_get_redis_client", lambda: _FakeRedis())
-    monkeypatch.setattr(review_node, "FormService", _FakeBackendService)
-    monkeypatch.setattr(review_node, "CategoryService", _FakeBackendService)
-    monkeypatch.setattr(review_node, "FlowService", _FakeBackendService)
+    monkeypatch.setattr(review_node, "FormClient", _FakeBackendService)
+    monkeypatch.setattr(review_node, "CategoryClient", _FakeBackendService)
+    monkeypatch.setattr(review_node, "FlowModelClient", _FakeBackendService)
     return dw
 
 

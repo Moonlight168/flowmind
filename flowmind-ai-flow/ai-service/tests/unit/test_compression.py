@@ -2,9 +2,9 @@
 FlowMind 智能流程设计服务 - 前置压缩单元测试
 """
 
-from app.adapters.factory import ModelFactory
-from app.agents.compression import compress_history
+import app.design.history as compression_module
 from app.config.settings import settings
+from app.design.history import compress_history
 
 
 def _msgs(n: int, with_system: bool = True) -> list[dict]:
@@ -48,17 +48,15 @@ def test_llm_summary_replaced(monkeypatch):
         def invoke(self, messages, config=None):
             return self._Resp()
 
-    class _FakeManager:
-        def create_llm(self, task_name=None):
-            return _FakeLLM()
+    class _FakeRuntime:
+        def execute(self, task_name, operation, structured=False):
+            return operation(_FakeLLM())
 
     monkeypatch.setattr(settings.compress, "max_messages", 4)
     monkeypatch.setattr(settings.compress, "keep_recent", 2)
     monkeypatch.setattr(settings.compress, "enable_llm_summary", True)
 
-    monkeypatch.setattr(
-        ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
-    )
+    monkeypatch.setattr(compression_module, "get_model_runtime", _FakeRuntime)
 
     msgs = _msgs(6)
     out = compress_history(msgs)
@@ -71,17 +69,15 @@ def test_llm_summary_replaced(monkeypatch):
 def test_llm_summary_fallback_to_trim(monkeypatch):
     """LLM 摘要失败 → 回退纯裁剪，不抛异常"""
 
-    class _FakeManager:
-        def create_llm(self, task_name=None):
+    class _FakeRuntime:
+        def execute(self, task_name, operation, structured=False):
             raise RuntimeError("模型不可用")
 
     monkeypatch.setattr(settings.compress, "max_messages", 4)
     monkeypatch.setattr(settings.compress, "keep_recent", 2)
     monkeypatch.setattr(settings.compress, "enable_llm_summary", True)
 
-    monkeypatch.setattr(
-        ModelFactory, "get_model_manager", classmethod(lambda cls: _FakeManager())
-    )
+    monkeypatch.setattr(compression_module, "get_model_runtime", _FakeRuntime)
 
     msgs = _msgs(6)
     out = compress_history(msgs)

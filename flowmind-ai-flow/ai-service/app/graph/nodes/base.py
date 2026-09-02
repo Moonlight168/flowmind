@@ -17,7 +17,7 @@ from langgraph.errors import GraphInterrupt
 from openai import OpenAIError
 from pydantic import ValidationError
 
-from app.graph.state.app_state import AppState
+from app.graph.state import AppState
 from app.infra.logger import (
     get_request_id,
     get_session_id,

@@ -8,9 +8,9 @@ FlowMind 智能流程设计服务 - API 依赖注入
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.auth import TokenParseError, TokenUser, parse_token_strict
 from app.core.auth_context import set_auth_token, set_current_user
 from app.infra.logger import logger
-from app.utils.auth import TokenParseError, TokenUser, parse_token_strict
 
 security = HTTPBearer(auto_error=False)
 

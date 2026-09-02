@@ -8,12 +8,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
-from langchain_core.messages import AIMessageChunk
 
-from app.adapters.factory import ModelFactory
-
-chat_module = import_module("app.graph.workflows.chat_workflow")
-design_module = import_module("app.graph.workflows.design_workflow")
+chat_module = import_module("app.graph.chat_graph")
+design_module = import_module("app.graph.design_graph")
+chat_node_module = import_module("app.graph.nodes.chat")
 
 
 class _Observation:
@@ -82,14 +80,8 @@ def test_stream_chat_entry_yields_tokens_and_records_final_output(monkeypatch):
         def stream(self, state, config, stream_mode):
             captured["graph_config"] = config
             captured["stream_mode"] = stream_mode
-            yield (
-                "messages",
-                (AIMessageChunk(content="你"), {"langgraph_node": "chat"}),
-            )
-            yield (
-                "messages",
-                (AIMessageChunk(content="好"), {"langgraph_node": "chat"}),
-            )
+            yield "custom", {"type": "delta", "content": "你"}
+            yield "custom", {"type": "delta", "content": "好"}
             yield "updates", {"chat": {"chat_response": "你好"}}
 
         def get_state(self, config):
@@ -98,7 +90,11 @@ def test_stream_chat_entry_yields_tokens_and_records_final_output(monkeypatch):
     monkeypatch.setattr(
         chat_module,
         "_prepare_chat_call",
-        lambda *args: ({"configurable": {"thread_id": "thread-1"}}, "trace-1", {}),
+        lambda *args, **kwargs: (
+            {"configurable": {"thread_id": "thread-1"}},
+            "trace-1",
+            {},
+        ),
     )
     monkeypatch.setattr(chat_module, "log_context", _empty_scope)
     monkeypatch.setattr(
@@ -114,7 +110,7 @@ def test_stream_chat_entry_yields_tokens_and_records_final_output(monkeypatch):
         {"type": "delta", "content": "好"},
         {"type": "done", "response": "你好"},
     ]
-    assert captured["stream_mode"] == ["messages", "updates"]
+    assert captured["stream_mode"] == ["custom", "updates"]
     assert captured["graph_config"]["callbacks"] == ["langfuse"]
     assert observation.output == {"chat_response": "你好"}
 
@@ -123,14 +119,12 @@ def test_real_chat_graph_emits_model_tokens(monkeypatch):
     """真实 LangGraph 编排应保留 messages 回调并产出模型 token。"""
     model = FakeListChatModel(responses=["你好"])
 
-    class _Manager:
-        def create_llm(self, task_name=None):
-            return model
+    class _Runtime:
+        def stream(self, task_name, messages, config=None):
+            yield from model.stream(messages, config=config)
 
     monkeypatch.setattr(chat_module, "thread_exists", lambda thread_id: True)
-    monkeypatch.setattr(
-        ModelFactory, "get_model_manager", classmethod(lambda cls: _Manager())
-    )
+    monkeypatch.setattr(chat_node_module, "get_model_runtime", _Runtime)
 
     events = list(
         chat_module.stream_chat_workflow(

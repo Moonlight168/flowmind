@@ -15,15 +15,16 @@ from fastapi.responses import StreamingResponse
 from openai import OpenAIError
 
 from app.api.deps import require_auth
+from app.core.auth import TokenUser
 from app.domain.dto import ChatRequestDTO, ResponseVO
-from app.graph.workflows.chat_workflow import (
+from app.graph.chat_graph import (
     chat_workflow,
     get_chat_workflow_state,
     invoke_chat_workflow,
     stream_chat_workflow,
 )
 from app.infra.logger import generate_trace_id, logger, set_trace_id
-from app.utils.auth import TokenUser
+from app.llm import PartialStreamError
 
 router = APIRouter(
     prefix="/chat",
@@ -87,6 +88,7 @@ def chat_stream(
             RuntimeError,
             ValueError,
             OSError,
+            PartialStreamError,
         ) as exc:
             logger.error(f"[chat-stream] 流式调用失败: {exc}")
             error = {"type": "error", "message": "AI 服务暂时异常，请稍后重试"}
