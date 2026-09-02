@@ -23,6 +23,7 @@ from langgraph.graph import END, StateGraph
 
 from app.config.settings import settings
 from app.core.exceptions import FlowDesignException
+from app.design.bpmn_parser import enrich_flow_baseline
 from app.graph.nodes.finalize import finalize_node
 from app.graph.nodes.generate import generate_node
 from app.graph.nodes.review import review_node
@@ -168,6 +169,10 @@ def _prepare_design_call(
         trace_id = generate_trace_id()
 
     is_first_call = not thread_exists(thread_id)
+    # flow_design：前端可视化设计器只传 bpmn_xml 时，反解析为扁平 nodes/edges 基线，
+    # 使 prompt 的增量语义与 BaselineValidator 真正生效（不把整段 XML 塞给模型）。
+    if design_type == "flow_design":
+        current_form_data = enrich_flow_baseline(current_form_data or {})
     # messages 用 add_messages reducer，自动追加到 checkpoint 现有消息
     initial_state: AppState = {
         "messages": [HumanMessage(content=user_input)],
