@@ -57,7 +57,7 @@
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
-      <div id="form-designer">
+      <div id="form-designer" class="ai-designer-wrap">
         <v-form-designer
           ref="vfDesignerRef"
           :resetFormJson="true"
@@ -71,16 +71,22 @@
             <el-button type="success" plain @click="dialog.visible = true">保存</el-button>
           </template>
         </v-form-designer>
+        <div v-if="aiDesigning" class="ai-design-mask">
+          <div class="ai-design-mask-spinner"></div>
+          <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
+        </div>
       </div>
     </el-dialog>
 
     <!-- AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignDialogRef"
       v-model="aiDesignVisible"
       designType="form"
       :formData="form"
       @fill="handleAiFill"
+      @designing="onAiDesigning"
+      @progress="onAiProgress"
     />
 
     <!-- 预览表单对话框 -->
@@ -110,7 +116,7 @@
 
 <script setup name="Form" >
 import { listForm, addForm, updateForm, getForm, delForm } from "@/api/workflow/form";
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
 import { watch } from 'vue';
 
@@ -140,6 +146,8 @@ const designer = reactive({
 })
 const aiDesignVisible = ref(false);
 const aiDesignDialogRef = ref();
+const aiDesigning = ref(false);
+const aiDesignProgress = ref('');
 const userStore = useUserStore();
 const render = reactive({
   visible: false,
@@ -291,7 +299,7 @@ const handleDelete = async (row) => {
 
 /** AI 设计按钮 */
 const handleAiDesign = () => {
-  // 同步设计器的最新数据到 form.value，确保 AiDesignDialog 能获取到
+  // 同步设计器的最新数据到 form.value，确保 AiChatWindow 能获取到
   if (vfDesignerRef.value && vfDesignerRef.value.getFormJson) {
     const formJson = vfDesignerRef.value.getFormJson();
     if (formJson && Object.keys(formJson).length > 0) {
@@ -324,6 +332,17 @@ const handleAiFill = (data) => {
   }
 };
 
+/** AI 生成状态：开始/结束 */
+const onAiDesigning = (val) => {
+  aiDesigning.value = val;
+  if (val) aiDesignProgress.value = '';
+};
+
+/** AI 阶段进度文案 */
+const onAiProgress = (msg) => {
+  aiDesignProgress.value = msg;
+};
+
 /** 表单设计器打开后 */
 const handleDesignerOpened = () => {
   // Dialog 完全打开后的回调，确保 DOM 已渲染
@@ -339,6 +358,8 @@ const handleDesignerClosed = () => {
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignDialogRef.value?.clearMessages();
+    aiDesigning.value = false;
+    aiDesignProgress.value = '';
   }
 });
 
@@ -401,6 +422,41 @@ getList();
       align-items: center;
       justify-content: center;
     }
+  }
+}
+
+.ai-designer-wrap {
+  position: relative;
+  min-height: 60vh;
+}
+
+.ai-design-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  color: #3b82f6;
+  font-size: 14px;
+}
+
+.ai-design-mask-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: ai-design-spin 0.9s linear infinite;
+}
+
+@keyframes ai-design-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

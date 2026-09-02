@@ -114,7 +114,7 @@
     </el-dialog>
 
     <!-- 基础信息 AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignBasicDialogRef"
       v-model="aiDesignBasicVisible"
       designType="flow"
@@ -124,28 +124,36 @@
     />
 
     <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen>
-      <ProcessDesigner
-        :key="`designer-${reloadIndex}`"
-        ref="modelDesignerRef"
-        v-loading="designerLoading"
-        :designer-form="designerForm"
-        :bpmn-xml="bpmnXml"
-        @save="onSaveDesigner"
-      >
-        <template #custom-buttons>
-          <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
-        </template>
-      </ProcessDesigner>
+      <div class="ai-designer-wrap">
+        <ProcessDesigner
+          :key="`designer-${reloadIndex}`"
+          ref="modelDesignerRef"
+          v-loading="designerLoading"
+          :designer-form="designerForm"
+          :bpmn-xml="bpmnXml"
+          @save="onSaveDesigner"
+        >
+          <template #custom-buttons>
+            <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
+          </template>
+        </ProcessDesigner>
+        <div v-if="aiDesigning" class="ai-design-mask">
+          <div class="ai-design-mask-spinner"></div>
+          <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignDialogRef"
       v-model="aiDesignVisible"
       designType="flow"
       mode="design"
       :formData="designerFlowInfo"
       @fill="handleAiFill"
+      @designing="onAiDesigning"
+      @progress="onAiProgress"
     />
 
     <el-dialog :title="history.title" v-model="history.visible" append-to-body>
@@ -189,7 +197,7 @@ import { listAllCategory } from "@/api/workflow/category";
 import ProcessDesigner from "@/components/ProcessDesigner";
 import ProcessViewer from "@/components/ProcessViewer";
 import { useAiSessionStore } from '@/store/modules/aiSession';
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance() ;
@@ -216,6 +224,8 @@ const queryFormRef = ref();
 const modelDesignerRef = ref(null)
 const aiDesignVisible = ref(false);
 const aiDesignDialogRef = ref();
+const aiDesigning = ref(false);
+const aiDesignProgress = ref('');
 const aiDesignBasicVisible = ref(false);
 const aiDesignBasicDialogRef = ref();
 const designerFlowInfo = ref({});
@@ -539,6 +549,17 @@ const handleAiFill = (data) => {
   }
 };
 
+/** AI 生成状态：开始/结束 */
+const onAiDesigning = (val) => {
+  aiDesigning.value = val;
+  if (val) aiDesignProgress.value = '';
+};
+
+/** AI 阶段进度文案 */
+const onAiProgress = (msg) => {
+  aiDesignProgress.value = msg;
+};
+
 // 监听基础信息对话框关闭，清空 AI 聊天和后端 checkpoint
 watch(() => dialog.visible, (val) => {
   if (!val) {
@@ -550,6 +571,8 @@ watch(() => dialog.visible, (val) => {
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignDialogRef.value?.clearMessages();
+    aiDesigning.value = false;
+    aiDesignProgress.value = '';
   }
 });
 
@@ -572,5 +595,40 @@ onMounted(async () => {
   max-height: calc(100vh) !important;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.ai-designer-wrap {
+  position: relative;
+  min-height: 60vh;
+}
+
+.ai-design-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  color: #3b82f6;
+  font-size: 14px;
+}
+
+.ai-design-mask-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: ai-design-spin 0.9s linear infinite;
+}
+
+@keyframes ai-design-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

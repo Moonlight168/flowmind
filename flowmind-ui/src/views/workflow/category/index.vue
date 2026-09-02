@@ -76,14 +76,14 @@
       </template>
     </el-dialog>
 
-    <AiDesignDialog ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
+    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
   </div>
 </template>
 
 <script setup name="Category" >
 import { listCategory, getCategory, delCategory, addCategory, updateCategory } from "@/api/workflow/category";
 import { watch } from 'vue';
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance();

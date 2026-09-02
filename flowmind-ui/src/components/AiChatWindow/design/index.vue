@@ -1,18 +1,26 @@
 <template>
-  <el-dialog
-    v-model="visible"
-    width="520px"
-    destroy-on-close
-    class="ai-design-dialog"
+  <AiFloatingWindow
+    :model-value="visible"
+    :title="title"
+    :icon="ChatDotRound"
+    :width="540"
+    :height="640"
+    :min-width="380"
+    :min-height="460"
+    @update:model-value="visible = $event"
   >
-    <template #header>
-      <div class="dialog-header">
-        <span class="dialog-title">{{ title }}</span>
-        <el-button link type="info" @click="clearMessages" :disabled="loading">
-          新建对话
-        </el-button>
-      </div>
+    <template #actions>
+      <el-button
+        link
+        type="info"
+        title="新建对话"
+        :disabled="loading"
+        @click="clearMessages"
+      >
+        <el-icon><Plus /></el-icon>
+      </el-button>
     </template>
+
     <div class="dialog-messages" ref="messagesContainer">
       <div
         v-for="(msg, index) in messages"
@@ -48,29 +56,28 @@
       </div>
     </div>
 
-    <template #footer>
-      <div class="dialog-footer">
-        <el-input
-          v-model="inputText"
-          placeholder="请描述您的需求"
-          @keydown.enter="handleSend"
-          :disabled="loading"
-          size="default"
-          maxlength="2000"
-          show-word-limit
-        />
-        <el-button type="primary" @click="handleSend" :loading="loading" :disabled="!inputText.trim()">
-          发送
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
+    <div class="dialog-footer">
+      <el-input
+        v-model="inputText"
+        placeholder="请描述您的需求"
+        @keydown.enter="handleSend"
+        :disabled="loading"
+        size="default"
+        maxlength="2000"
+        show-word-limit
+      />
+      <el-button type="primary" @click="handleSend" :loading="loading" :disabled="!inputText.trim()">
+        发送
+      </el-button>
+    </div>
+  </AiFloatingWindow>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { designStream, clearDesignState } from '@/api/workflow/design'
-import { ChatDotRound } from '@element-plus/icons-vue'
+import { ChatDotRound, Plus } from '@element-plus/icons-vue'
+import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import useUserStore from '@/store/modules/user'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
@@ -97,7 +104,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'fill'])
+const emit = defineEmits(['update:modelValue', 'fill', 'progress', 'designing'])
 
 const visible = computed({
   get: () => props.modelValue,
@@ -255,6 +262,7 @@ async function handleSend() {
 
   loading.value = true
   progressText.value = ''
+  emit('designing', true)
 
   try {
     await designStream(props.designType, {
@@ -265,6 +273,7 @@ async function handleSend() {
     }, (event) => {
       if (event.type === 'progress') {
         progressText.value = event.message
+        emit('progress', event.message)
       } else if (event.type === 'done') {
         const data = event
         // 回退指令：恢复到目标版本（后端判别返回 rollback）
@@ -311,6 +320,7 @@ async function handleSend() {
   } finally {
     loading.value = false
     progressText.value = ''
+    emit('designing', false)
   }
 }
 
@@ -342,15 +352,9 @@ defineExpose({
 </script>
 
 <style lang="scss" scoped>
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
 .dialog-messages {
-  height: 320px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   background: #f5f7fa;
