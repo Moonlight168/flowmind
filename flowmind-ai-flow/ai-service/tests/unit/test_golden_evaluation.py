@@ -265,7 +265,9 @@ def test_cli_run_syncs_only_selected_case_and_flushes(
         format=lambda **kwargs: "evaluation summary",
     )
 
-    monkeypatch.setenv("FLOWMIND_AUTH_TOKEN", "token-for-test")
+    monkeypatch.setattr(
+        run_golden_eval.settings.evaluation, "auth_token", "token-for-test"
+    )
     monkeypatch.setattr(run_golden_eval, "observability_enabled", lambda: True)
     monkeypatch.setattr(
         run_golden_eval, "get_client", lambda: _FakeLangfuseClient(captured, result)

@@ -59,7 +59,7 @@ class ModelRuntime:
         "flow_design": {"temperature": 0.3},
         "form_design": {"temperature": 0.3},
         "chat": {"temperature": 0.8},
-        "compress": {"temperature": 0.0, "max_tokens": 300},
+        "compress": {"temperature": 0.0},
         "intent": {"temperature": 0.0, "max_tokens": 200},
     }
 
@@ -212,6 +212,8 @@ class ModelRuntime:
             "max_tokens": config.get("max_tokens", 2000),
         }
         params.update(self.TASK_PARAMETERS.get(task_name, {}))
+        if task_name == "compress":
+            params["max_tokens"] = settings.compress.summary_max_tokens
         return ChatOpenAI(
             model=config.get("model_name", ""),
             base_url=config.get("base_url", "").rstrip("/"),

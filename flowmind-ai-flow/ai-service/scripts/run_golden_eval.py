@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from langfuse import get_client
-
+from app.config.settings import settings
 from app.evaluation.golden_dataset import (
     build_workflow_task,
     evaluate_contract,
@@ -18,7 +16,7 @@ from app.evaluation.golden_dataset import (
     sync_dataset,
 )
 from app.infra.logger import logger
-from app.infra.observability import observability_enabled
+from app.infra.observability import get_client, observability_enabled
 
 DEFAULT_DATASET_PATH = Path(__file__).parents[1] / "evals" / "golden_dataset.jsonl"
 DEFAULT_DATASET_NAME = "flowmind-design-golden-v1"
@@ -51,7 +49,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def run(args: argparse.Namespace) -> Any:
     """Sync selected cases, execute the production workflow, and return the run."""
-    auth_token = os.getenv("FLOWMIND_AUTH_TOKEN")
+    auth_token = settings.evaluation.auth_token
     if not auth_token:
         raise RuntimeError("缺少 FLOWMIND_AUTH_TOKEN, 无法验证完整后端调用链")
     if not observability_enabled():

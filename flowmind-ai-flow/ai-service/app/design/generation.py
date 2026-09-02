@@ -3,7 +3,7 @@ FlowMind 智能流程设计服务 - 设计 Agent
 
 ReAct 主路径：create_react_agent 边推理边调检索工具取真实数据，
 最终用结构化输出（response_format）约束字段。
-失败重试(≤3)，耗尽返回 error（不甩锅用户）。
+失败时按配置执行语义重试，耗尽返回 error（不甩锅用户）。
 """
 
 from typing import Any
@@ -12,6 +12,7 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import ValidationError
 
 from app.config import Task
+from app.config.settings import settings
 from app.design.spec import DESIGN_SPEC
 from app.design.tools import search_categories
 from app.domain.design_models import BasicDesign
@@ -21,8 +22,6 @@ from app.llm import ModelExhaustedError, get_model_runtime
 from app.prompts.builder import build_prompt
 from app.prompts.loader import load_prompt
 
-MAX_STRUCTURED_RETRY = 3
-
 
 def run_react_agent(
     design_type: str,
@@ -31,7 +30,7 @@ def run_react_agent(
     task_name: str | None = None,
     mode: str = "design",
 ) -> dict[str, Any]:
-    """运行设计 Agent：ReAct 检索 + 结构化输出，失败重试(≤3)→error
+    """运行设计 Agent：ReAct 检索 + 结构化输出，失败重试后返回 error。
 
     Args:
         design_type: 设计类型 (category_design/flow_design/form_design)
@@ -71,7 +70,8 @@ def run_react_agent(
         tools = spec["tools"]
 
     last_error: Exception | None = None
-    for attempt in range(1, MAX_STRUCTURED_RETRY + 1):
+    max_retry = settings.validation.structured_max_retry_count
+    for attempt in range(1, max_retry + 1):
         try:
             result = runtime.execute(
                 task_name,
@@ -83,9 +83,7 @@ def run_react_agent(
                 logger.info("[LLM] ReAct 结构化输出成功")
                 return obj.model_dump() if hasattr(obj, "model_dump") else obj
             last_error = ValueError("结构化输出返回 None")
-            logger.warning(
-                f"[LLM] 结构化输出返回 None（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）"
-            )
+            logger.warning(f"[LLM] 结构化输出返回 None（第 {attempt}/{max_retry} 次）")
         except (
             ValidationError,
             ValueError,
@@ -94,9 +92,7 @@ def run_react_agent(
             AttributeError,
         ) as e:
             last_error = e
-            logger.warning(
-                f"[LLM] 结构化输出失败（第 {attempt}/{MAX_STRUCTURED_RETRY} 次）: {e}"
-            )
+            logger.warning(f"[LLM] 结构化输出失败（第 {attempt}/{max_retry} 次）: {e}")
         except ModelExhaustedError as e:
             last_error = e
             logger.warning(f"[LLM] 可用 Provider 已耗尽: {e}")

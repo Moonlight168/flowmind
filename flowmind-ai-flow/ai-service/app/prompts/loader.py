@@ -4,7 +4,6 @@ FlowMind 智能流程设计服务 - Markdown 提示词加载器
 
 import hashlib
 import json
-import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,6 +13,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+from app.config.settings import settings
 from app.infra.logger import logger
 
 PROMPT_ROOT = Path(__file__).parent
@@ -88,7 +88,7 @@ def resolve_prompt_version(
     forced = _forced_selection(relative_path, versions, stable_version)
     if forced is not None:
         return forced
-    if not release_key:
+    if not settings.prompt.rollout_enabled or not release_key:
         return _selection(relative_path, versions, stable_version, stable_version)
 
     weighted = _weighted_versions(versions)
@@ -107,7 +107,6 @@ def clear_prompt_cache() -> None:
     """清空版本配置和提示词文件缓存，供测试或配置重载使用。"""
     _read_prompt.cache_clear()
     _load_registry.cache_clear()
-    _version_overrides.cache_clear()
 
 
 @cache
@@ -131,23 +130,6 @@ def _load_registry(registry_path: Path) -> dict[str, Any]:
     return prompts if isinstance(prompts, dict) else {}
 
 
-@cache
-def _version_overrides(raw: str) -> dict[str, str]:
-    raw = raw.strip()
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        logger.warning(f"[prompt] 强制版本配置无效，忽略覆盖: {exc}")
-        return {}
-    return (
-        {str(path): str(version) for path, version in data.items()}
-        if isinstance(data, dict)
-        else {}
-    )
-
-
 def _prompt_config(relative_path: str) -> dict[str, Any]:
     config = _load_registry(PROMPT_VERSIONS_FILE).get(relative_path)
     return config if isinstance(config, dict) else {}
@@ -156,8 +138,7 @@ def _prompt_config(relative_path: str) -> dict[str, Any]:
 def _forced_selection(
     relative_path: str, versions: dict[str, Any], stable_version: str
 ) -> PromptSelection | None:
-    overrides = _version_overrides(os.getenv("PROMPT_VERSION_OVERRIDES", ""))
-    override = overrides.get(relative_path)
+    override = settings.prompt.version_overrides.get(relative_path)
     if override is None:
         return None
     if override in versions:

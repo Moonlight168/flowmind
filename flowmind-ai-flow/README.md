@@ -137,11 +137,14 @@ python -m scripts.run_golden_eval --case-id flow-linear-leave
 }
 ```
 
-实际命中的 `version/cohort` 会写入 Langfuse 的 `prompt_versions` metadata。灰度异常时可通过环境变量立即强制回滚，无需修改业务代码：
+实际命中的 `version/cohort` 会写入 Langfuse 的 `prompt_versions` metadata。所有功能开关统一由 `.env` 管理；开启灰度或强制回滚后重启 AI 服务即可生效：
 
 ```bash
+PROMPT_ROLLOUT_ENABLED=true
 PROMPT_VERSION_OVERRIDES={"agents/chat.md":"v1"}
 ```
+
+其他功能同样通过 `.env` 控制，包括 `LANGFUSE_TRACING_ENABLED`、`FALLBACK_ENABLED`、`COMPRESS_ENABLE_LLM_SUMMARY` 和 `NACOS_ENABLED`。业务模块只读取 `app/config/settings.py` 的类型化配置，不直接读取环境变量。
 
 ---
 

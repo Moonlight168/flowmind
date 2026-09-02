@@ -15,10 +15,17 @@ def _empty_context(**kwargs):
     yield
 
 
+def _enable_observability(monkeypatch) -> None:
+    config = observability.settings.observability
+    monkeypatch.setattr(config, "public_key", "pk-test")
+    monkeypatch.setattr(config, "secret_key", "sk-test")
+    monkeypatch.setattr(config, "tracing_enabled", True)
+
+
 def test_observability_disabled_without_credentials(monkeypatch):
     """缺少密钥时不创建客户端，也不改变 Runnable 配置。"""
-    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
-    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+    monkeypatch.setattr(observability.settings.observability, "public_key", "")
+    monkeypatch.setattr(observability.settings.observability, "secret_key", "")
     monkeypatch.setattr(
         observability,
         "get_client",
@@ -38,8 +45,7 @@ def test_observability_disabled_without_credentials(monkeypatch):
 
 def test_observe_workflow_propagates_context_and_callback(monkeypatch):
     """根观测应传播用户、会话和业务 trace，并注册 LangChain 回调。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     captured = {}
     observation = object()
     handler = object()
@@ -60,7 +66,7 @@ def test_observe_workflow_propagates_context_and_callback(monkeypatch):
 
     monkeypatch.setattr(observability, "get_client", lambda: _Client())
     monkeypatch.setattr(observability, "propagate_attributes", _propagate_attributes)
-    monkeypatch.setattr(observability, "CallbackHandler", lambda: handler)
+    monkeypatch.setattr(observability, "CallbackHandler", lambda **kwargs: handler)
     monkeypatch.setattr(observability, "get_current_user", lambda: _User())
 
     with observability.observe_workflow(
@@ -87,8 +93,7 @@ def test_observe_workflow_propagates_context_and_callback(monkeypatch):
 
 def test_observe_workflow_records_prompt_versions_on_root(monkeypatch):
     """根观测结束时应记录请求实际使用的提示词版本。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     updates = []
 
     class _Observation:
@@ -102,7 +107,7 @@ def test_observe_workflow_records_prompt_versions_on_root(monkeypatch):
 
     monkeypatch.setattr(observability, "get_client", lambda: _Client())
     monkeypatch.setattr(observability, "propagate_attributes", _empty_context)
-    monkeypatch.setattr(observability, "CallbackHandler", lambda: object())
+    monkeypatch.setattr(observability, "CallbackHandler", lambda **kwargs: object())
     monkeypatch.setattr(
         observability,
         "get_prompt_metadata",
@@ -127,17 +132,15 @@ def test_observe_workflow_records_prompt_versions_on_root(monkeypatch):
 
 def test_disabled_flag_overrides_credentials(monkeypatch):
     """显式关闭追踪时即使存在密钥也保持禁用。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
-    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+    _enable_observability(monkeypatch)
+    monkeypatch.setattr(observability.settings.observability, "tracing_enabled", False)
 
     assert observability.observability_enabled() is False
 
 
 def test_shutdown_flushes_enabled_client(monkeypatch):
     """启用观测时，服务退出必须刷新 Langfuse 后台队列。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     flushed = []
 
     class _Client:
@@ -151,10 +154,37 @@ def test_shutdown_flushes_enabled_client(monkeypatch):
     assert flushed == [True]
 
 
+def test_langfuse_client_uses_typed_settings(monkeypatch):
+    """Langfuse SDK 应由统一 Settings 显式构造。"""
+    config = observability.settings.observability
+    monkeypatch.setattr(config, "public_key", "pk-config")
+    monkeypatch.setattr(config, "secret_key", "sk-config")
+    monkeypatch.setattr(config, "base_url", "https://langfuse.example")
+    monkeypatch.setattr(config, "tracing_enabled", True)
+    monkeypatch.setattr(config, "tracing_environment", "test")
+    captured = {}
+    monkeypatch.setattr(
+        observability,
+        "Langfuse",
+        lambda **kwargs: captured.update(kwargs) or object(),
+    )
+    observability.get_client.cache_clear()
+
+    observability.get_client()
+    observability.get_client.cache_clear()
+
+    assert captured == {
+        "public_key": "pk-config",
+        "secret_key": "sk-config",
+        "base_url": "https://langfuse.example",
+        "tracing_enabled": True,
+        "environment": "test",
+    }
+
+
 def test_initialization_failure_does_not_break_business(monkeypatch):
     """Langfuse 初始化异常时应降级，业务代码仍可继续执行。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     monkeypatch.setattr(
         observability,
         "get_client",
@@ -183,8 +213,7 @@ def test_callback_manager_is_copied_before_adding_handler():
 
 def test_shutdown_failure_isolated(monkeypatch):
     """Langfuse 刷新异常不得阻断应用关闭。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
 
     class _Client:
         def shutdown(self):
@@ -197,8 +226,7 @@ def test_shutdown_failure_isolated(monkeypatch):
 
 def test_business_error_reaches_root_observation(monkeypatch):
     """业务异常必须传给根观测，使失败链路被正确标记。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     exit_types = []
 
     class _Context:
@@ -219,7 +247,7 @@ def test_business_error_reaches_root_observation(monkeypatch):
     monkeypatch.setattr(
         observability, "propagate_attributes", lambda **kwargs: _Context()
     )
-    monkeypatch.setattr(observability, "CallbackHandler", lambda: object())
+    monkeypatch.setattr(observability, "CallbackHandler", lambda **kwargs: object())
 
     with (
         pytest.raises(KeyError, match="business failed"),
@@ -234,8 +262,7 @@ def test_business_error_reaches_root_observation(monkeypatch):
 
 def test_observation_exit_failure_does_not_mask_business_error(monkeypatch):
     """观测退出失败时，原始业务异常必须保持不变。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
     root_exit_types = []
 
     class _PropagationContext:
@@ -263,7 +290,7 @@ def test_observation_exit_failure_does_not_mask_business_error(monkeypatch):
         "propagate_attributes",
         lambda **kwargs: _PropagationContext(),
     )
-    monkeypatch.setattr(observability, "CallbackHandler", lambda: object())
+    monkeypatch.setattr(observability, "CallbackHandler", lambda **kwargs: object())
 
     with (
         pytest.raises(KeyError, match="business failed"),
@@ -278,8 +305,7 @@ def test_observation_exit_failure_does_not_mask_business_error(monkeypatch):
 
 def test_observation_exit_failure_does_not_break_success(monkeypatch):
     """正常业务完成后，观测退出失败也不得改变成功结果。"""
-    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
-    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    _enable_observability(monkeypatch)
 
     class _Context:
         def __enter__(self):
@@ -296,7 +322,7 @@ def test_observation_exit_failure_does_not_break_success(monkeypatch):
     monkeypatch.setattr(
         observability, "propagate_attributes", lambda **kwargs: _Context()
     )
-    monkeypatch.setattr(observability, "CallbackHandler", lambda: object())
+    monkeypatch.setattr(observability, "CallbackHandler", lambda **kwargs: object())
 
     completed = False
     with observability.observe_workflow(

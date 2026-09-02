@@ -4,7 +4,6 @@ FlowMind 智能流程设计服务 - Nacos 注册器
 本模块使用 Nacos 官方 SDK 实现服务注册，内置自动心跳维持机制。
 """
 
-import os
 import socket
 import time
 
@@ -35,7 +34,7 @@ class NacosRegistry:
     def _init_client(self) -> None:
         """初始化 Nacos 客户端"""
         if self._client is None:
-            server_addr = os.getenv("NACOS_SERVER_ADDR", settings.nacos.server_addr)
+            server_addr = settings.nacos.server_addr
             self._client = nacos.NacosClient(server_addr)
             logger.info(f"Nacos 客户端已初始化 - 地址：{server_addr}")
 
@@ -49,8 +48,8 @@ class NacosRegistry:
             self._init_client()
 
             # 获取注册 IP 和端口
-            ip = os.getenv("NACOS_REGISTER_IP") or self._get_local_ip()
-            port = int(os.getenv("NACOS_REGISTER_PORT", 0)) or settings.app.port
+            ip = settings.nacos.register_ip or self._get_local_ip()
+            port = settings.nacos.register_port or settings.app.port
 
             self._register_ip = ip
             self._register_port = port
@@ -136,17 +135,14 @@ def get_registry() -> NacosRegistry:
     return _registry
 
 
-def register_to_nacos(max_retries: int = 5, retry_interval: int = 5) -> bool:
-    """注册服务到 Nacos（便捷函数）
-
-    Args:
-        max_retries: 最大重试次数
-        retry_interval: 重试间隔（秒）
-
-    Returns:
-        注册是否成功
-    """
+def register_to_nacos() -> bool:
+    """按统一配置注册服务到 Nacos。"""
+    if not settings.nacos.enabled:
+        logger.info("Nacos 注册已通过配置关闭")
+        return True
     registry = get_registry()
+    max_retries = settings.nacos.max_retries
+    retry_interval = settings.nacos.retry_interval
 
     for attempt in range(1, max_retries + 1):
         success = registry.register()
@@ -169,5 +165,7 @@ def deregister_from_nacos() -> bool:
     Returns:
         注销是否成功
     """
+    if not settings.nacos.enabled:
+        return True
     registry = get_registry()
     return registry.deregister()

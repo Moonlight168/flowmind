@@ -5,17 +5,18 @@ FlowMind 智能流程设计服务 - Langfuse 可观测性
 位于同一条 Langfuse 链路中。未配置 Langfuse 密钥时自动禁用，不影响业务执行。
 """
 
-import os
 import sys
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
+from functools import cache
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackManager
-from langfuse import get_client, propagate_attributes
+from langfuse import Langfuse, propagate_attributes
 from langfuse.langchain import CallbackHandler
 
+from app.config.settings import settings
 from app.core.auth_context import get_current_user
 from app.infra.logger import logger
 from app.prompts.loader import get_prompt_metadata
@@ -28,11 +29,20 @@ _langchain_handler: ContextVar[CallbackHandler | None] = ContextVar(
 
 def observability_enabled() -> bool:
     """仅在密钥完整且未显式关闭追踪时启用 Langfuse。"""
-    tracing_enabled = os.getenv("LANGFUSE_TRACING_ENABLED", "true").lower()
-    return bool(
-        os.getenv("LANGFUSE_PUBLIC_KEY")
-        and os.getenv("LANGFUSE_SECRET_KEY")
-        and tracing_enabled not in {"0", "false", "no", "off"}
+    config = settings.observability
+    return bool(config.public_key and config.secret_key and config.tracing_enabled)
+
+
+@cache
+def get_client() -> Langfuse:
+    """使用统一 Settings 构造并缓存 Langfuse 客户端。"""
+    config = settings.observability
+    return Langfuse(
+        public_key=config.public_key,
+        secret_key=config.secret_key,
+        base_url=config.base_url,
+        tracing_enabled=config.tracing_enabled,
+        environment=config.tracing_environment,
     )
 
 
@@ -100,7 +110,7 @@ def observe_workflow(
                 metadata=trace_metadata,
             )
         )
-        handler = CallbackHandler()
+        handler = CallbackHandler(public_key=settings.observability.public_key)
     except OBSERVABILITY_ERRORS as exc:
         logger.warning(f"[langfuse] 初始化失败，本次调用降级为无观测: {exc}")
         try:
@@ -211,6 +221,7 @@ def shutdown_observability() -> None:
 
 
 __all__ = [
+    "get_client",
     "langchain_config",
     "observability_enabled",
     "observe_model_attempt",

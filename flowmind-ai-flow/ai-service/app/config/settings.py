@@ -11,9 +11,8 @@ FlowMind 智能流程设计服务 - 配置管理
 版本: 3.0.0
 """
 
-import json
-import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -21,7 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 加载 .env 文件（确保在 Settings 初始化前读取环境变量）
 _env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(_env_path, override=True)
+load_dotenv(_env_path, override=False)
 
 # ============ 默认值常量 ============
 SECONDS_PER_HOUR = 3600
@@ -179,10 +178,59 @@ class BackendSettings(BaseSettings):
 class NacosSettings(BaseSettings):
     """Nacos 配置"""
 
+    enabled: bool = Field(default=True)
     server_addr: str = Field(default="localhost:8848")
+    register_ip: str | None = Field(default=None)
+    register_port: int = Field(default=0, ge=0, le=65535)
+    max_retries: int = Field(default=5, ge=1)
+    retry_interval: float = Field(default=5.0, ge=0)
 
     model_config = SettingsConfigDict(
         env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+class ObservabilitySettings(BaseSettings):
+    """Langfuse 链路监控配置。"""
+
+    public_key: str = Field(default="")
+    secret_key: str = Field(default="")
+    base_url: str = Field(default="https://cloud.langfuse.com")
+    tracing_enabled: bool = Field(default=True)
+    tracing_environment: str = Field(default="development")
+
+    model_config = SettingsConfigDict(
+        env_prefix="LANGFUSE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class PromptSettings(BaseSettings):
+    """提示词版本与灰度发布配置。"""
+
+    rollout_enabled: bool = Field(default=False)
+    version_overrides: dict[str, str] = Field(default_factory=dict)
+
+    model_config = SettingsConfigDict(
+        env_prefix="PROMPT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class EvaluationSettings(BaseSettings):
+    """黄金数据集运行配置。"""
+
+    auth_token: str = Field(default="")
+
+    model_config = SettingsConfigDict(
+        env_prefix="FLOWMIND_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
 
@@ -208,6 +256,9 @@ class ValidationConfig(BaseSettings):
     """校验配置"""
 
     review_max_retry_count: int = Field(default=3, description="review 节点重试预算")
+    structured_max_retry_count: int = Field(
+        default=3, ge=1, description="结构化内容语义重试预算"
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="VALIDATION_",
@@ -233,16 +284,19 @@ class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     backend: BackendSettings = Field(default_factory=BackendSettings)
     nacos: NacosSettings = Field(default_factory=NacosSettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    prompt: PromptSettings = Field(default_factory=PromptSettings)
+    evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     log: LogSettings = Field(default_factory=LogSettings)
     compress: CompressConfig = Field(default_factory=CompressConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
-    jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
+    jwt_secret: str = Field(default="")
+    models: list[dict[str, Any]] = Field(
+        default_factory=lambda: [dict(model) for model in DEFAULT_MODELS]
+    )
 
     model_priority: str = Field(default="vllm,qwen")
-    triple_protection_enabled: bool = Field(default=True)  # 三级保障体系开关
-    rules_table: str = Field(default="approval_rules")
-    langgraph_checkpoint_dir: str | None = Field(default=None)
 
     @field_validator("model_priority", mode="before")
     @classmethod
@@ -254,21 +308,11 @@ class Settings(BaseSettings):
 
     def get_model_providers(self) -> dict[str, dict]:
         """获取模型列表配置"""
-        # 优先从环境变量 MODELS 读取 JSON 配置
-        models_env = os.getenv("MODELS", "")
-        if models_env:
-            try:
-                models_list = json.loads(models_env)
-                return {
-                    m["name"]: _normalize_model_config(m)
-                    for m in models_list
-                    if m.get("name")
-                }
-            except json.JSONDecodeError:
-                pass  # 解析失败，使用默认配置
-
-        # 默认配置
-        return {m["name"]: _normalize_model_config(m) for m in DEFAULT_MODELS}
+        return {
+            model["name"]: _normalize_model_config(model)
+            for model in self.models
+            if model.get("name")
+        }
 
     def get_fallback_config(self) -> dict:
         return {
@@ -276,45 +320,6 @@ class Settings(BaseSettings):
             "max_retries": self.fallback.max_retries,
             "retry_interval": self.fallback.retry_interval,
         }
-
-    def reload_model_priority(self, new_priority: str | None = None) -> list[str]:
-        """重新加载模型优先级配置
-
-        Args:
-            new_priority: 新的优先级字符串，为 None 时从环境变量加载
-
-        Returns:
-            更新后的模型优先级列表
-        """
-        if new_priority is None:
-            new_priority = os.getenv("MODEL_PRIORITY", self.model_priority)
-        self.model_priority = new_priority
-        return self.get_model_priority()
-
-    def update_fallback_config(
-        self,
-        enabled: bool | None = None,
-        max_retries: int | None = None,
-        retry_interval: float | None = None,
-    ) -> dict:
-        """更新降级配置
-
-        Args:
-            enabled: 是否启用降级
-            max_retries: 最大重试次数
-            retry_interval: 重试间隔
-
-        Returns:
-            更新后的降级配置
-        """
-        if enabled is not None:
-            self.fallback.enabled = enabled
-        if max_retries is not None:
-            self.fallback.max_retries = max_retries
-        if retry_interval is not None:
-            self.fallback.retry_interval = retry_interval
-
-        return self.get_fallback_config()
 
 
 def _normalize_model_config(model: dict) -> dict:

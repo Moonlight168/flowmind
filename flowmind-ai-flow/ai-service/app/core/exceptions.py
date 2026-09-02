@@ -11,6 +11,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from app.config.settings import settings
 from app.domain.dto import ResponseVO
 from app.infra.logger import get_trace_id, logger
 
@@ -275,20 +276,6 @@ def register_exception_handlers(app: FastAPI) -> None:
                 error_code="INTERNAL_SERVER_ERROR",
                 message="服务器内部错误",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                details={"type": type(exc).__name__} if settings.debug else {},
+                details={"type": type(exc).__name__} if settings.app.debug else {},
             ),
         )
-
-
-# 延迟导入 settings，避免循环依赖
-def _get_debug_mode(self=None) -> bool:
-    """获取调试模式状态"""
-    try:
-        from app.config.settings import settings
-
-        return settings.debug
-    except Exception:
-        return False
-
-
-settings = type("settings", (), {"debug": property(_get_debug_mode)})()

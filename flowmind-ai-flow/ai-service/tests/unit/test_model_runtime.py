@@ -245,3 +245,17 @@ def test_execute_observes_each_provider_attempt(monkeypatch) -> None:
         },
         {"success": True, "token_started": False},
     ]
+
+
+def test_compression_token_limit_comes_from_settings(monkeypatch) -> None:
+    monkeypatch.setattr("app.llm.runtime.settings.compress.summary_max_tokens", 123)
+    monkeypatch.setattr("app.llm.runtime.ChatOpenAI", lambda **kwargs: kwargs)
+    runtime = ModelRuntime(
+        providers={"primary": {"model_name": "model-a"}},
+        priority=["primary"],
+        config=ModelRuntimeConfig(retry_interval=0),
+    )
+
+    max_tokens = runtime.execute("compress", lambda model: model["max_tokens"])
+
+    assert max_tokens == 123

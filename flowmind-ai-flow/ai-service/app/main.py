@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     initialize_model_runtime()
 
     # 注册到 Nacos（失败时会抛出异常）
-    if not register_to_nacos(max_retries=5, retry_interval=5):
+    if not register_to_nacos():
         logger.error("Nacos 注册失败，服务启动中止")
         raise RuntimeError("Nacos 注册失败，请检查 Nacos 服务是否正常运行")
 

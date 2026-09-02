@@ -16,6 +16,8 @@ def _write_registry(tmp_path, versions: dict, monkeypatch) -> None:
         json.dumps({"prompts": {"agents/chat.md": versions}}), encoding="utf-8"
     )
     monkeypatch.setattr(loader, "PROMPT_VERSIONS_FILE", registry)
+    monkeypatch.setattr(loader.settings.prompt, "rollout_enabled", True)
+    monkeypatch.setattr(loader.settings.prompt, "version_overrides", {})
     loader.clear_prompt_cache()
 
 
@@ -58,7 +60,6 @@ def test_prompt_version_override_supports_immediate_rollback(
     (tmp_path / "agents" / "chat.md").write_text("stable", encoding="utf-8")
     (tmp_path / "agents" / "chat.v2.md").write_text("canary", encoding="utf-8")
     monkeypatch.setattr(loader, "PROMPT_ROOT", tmp_path)
-    monkeypatch.setenv("PROMPT_VERSION_OVERRIDES", json.dumps({"agents/chat.md": "v1"}))
     _write_registry(
         tmp_path,
         {
@@ -69,6 +70,9 @@ def test_prompt_version_override_supports_immediate_rollback(
             },
         },
         monkeypatch,
+    )
+    monkeypatch.setattr(
+        loader.settings.prompt, "version_overrides", {"agents/chat.md": "v1"}
     )
 
     with loader.prompt_release("thread-42"):
@@ -131,3 +135,27 @@ def test_missing_canary_file_falls_back_to_stable(tmp_path, monkeypatch) -> None
         "version": "v1",
         "cohort": "stable",
     }
+
+
+def test_disabled_rollout_always_uses_stable_version(tmp_path, monkeypatch) -> None:
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "agents" / "chat.md").write_text("stable", encoding="utf-8")
+    (tmp_path / "agents" / "chat.v2.md").write_text("canary", encoding="utf-8")
+    monkeypatch.setattr(loader, "PROMPT_ROOT", tmp_path)
+    _write_registry(
+        tmp_path,
+        {
+            "stable": "v1",
+            "versions": {
+                "v1": {"file": "agents/chat.md", "weight": 0},
+                "v2": {"file": "agents/chat.v2.md", "weight": 100},
+            },
+        },
+        monkeypatch,
+    )
+    monkeypatch.setattr(loader.settings.prompt, "rollout_enabled", False)
+
+    with loader.prompt_release("thread-42"):
+        content = loader.load_prompt("agents/chat.md")
+
+    assert content == "stable"
