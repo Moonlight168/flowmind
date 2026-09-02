@@ -19,6 +19,7 @@ from app.infra.observability import (
     observe_workflow,
     record_observation_output,
 )
+from app.prompts import prompt_release
 
 
 def create_chat_workflow() -> StateGraph:
@@ -75,6 +76,7 @@ def invoke_chat_workflow(
     )
 
     with (
+        prompt_release(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
             "flowmind.chat",
@@ -110,6 +112,7 @@ def stream_chat_workflow(
     final_response = ""
 
     with (
+        prompt_release(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
             "flowmind.chat",

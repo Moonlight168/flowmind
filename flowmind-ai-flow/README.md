@@ -12,6 +12,7 @@
 | **多轮对话**    | LangGraph 工作流持续优化设计       |
 | **多模型支持**  | OpenAI 兼容接口                    |
 | **黄金集评估**  | 全量/单条执行并上报 Langfuse     |
+| **提示词灰度**  | Markdown 版本管理、同会话稳定分流与快速回滚 |
 
 ## 系统架构
 
@@ -74,6 +75,7 @@ flowmind-ai-flow/
 │       ├── integrations/backend/ # Java 后端 HTTP Client
 │       ├── domain/              # DTO 与结构化设计模型
 │       ├── infra/               # checkpoint、日志、Nacos、Langfuse
+│       ├── prompts/             # Markdown 提示词与 versions.json 灰度配置
 │       └── config/             # 配置层
 ├── docker-compose.yml
 └── README.md
@@ -118,6 +120,28 @@ python -m scripts.run_golden_eval --case-id flow-linear-leave
 ```
 
 脚本会幂等同步 `evals/golden_dataset.jsonl`，并在 Langfuse Dataset Run 中记录真实工作流链路、输出和契约评分。单条运行失败会转换为可评分的兜底结果，不中断同批其他用例。
+
+## 提示词版本与灰度发布
+
+提示词正文仍统一保存在 `app/prompts/**/*.md`，`app/prompts/versions.json` 只维护稳定版本、版本文件和流量权重。分流使用 `thread_id + 提示词路径` 的稳定哈希，同一会话始终命中同一版本。
+
+新增版本时复制 Markdown 文件并配置权重，例如：
+
+```json
+{
+  "stable": "v1",
+  "versions": {
+    "v1": {"file": "agents/chat.md", "weight": 95},
+    "v2": {"file": "agents/chat.v2.md", "weight": 5}
+  }
+}
+```
+
+实际命中的 `version/cohort` 会写入 Langfuse 的 `prompt_versions` metadata。灰度异常时可通过环境变量立即强制回滚，无需修改业务代码：
+
+```bash
+PROMPT_VERSION_OVERRIDES={"agents/chat.md":"v1"}
+```
 
 ---
 

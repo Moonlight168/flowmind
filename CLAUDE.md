@@ -101,6 +101,7 @@ yarn test:e2e          # E2E 测试
 - **graph/**: LangGraph 聊天和设计编排、节点与状态
 - **design/**: ReAct 生成、意图、历史压缩、校验器和 BPMN/VForm3 确定性逻辑
 - **llm/**: 统一模型运行时，处理 Provider 能力过滤、运行时降级和流式安全策略
+- **prompts/**: Markdown 提示词、版本注册表与基于 thread_id 的稳定灰度分流；命中版本写入 Langfuse metadata
 - **integrations/backend/**: Java 后端分类、表单、角色和流程模型 HTTP 客户端
 - **domain/dto/**: 数据传输对象；`domain/design_models.py` 为结构化设计模型
 

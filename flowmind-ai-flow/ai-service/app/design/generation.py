@@ -19,6 +19,7 @@ from app.infra.logger import logger
 from app.infra.observability import langchain_config
 from app.llm import ModelExhaustedError, get_model_runtime
 from app.prompts.builder import build_prompt
+from app.prompts.loader import load_prompt
 
 MAX_STRUCTURED_RETRY = 3
 
@@ -107,5 +108,9 @@ def run_react_agent(
 
 def _invoke_agent(llm: Any, tools: list[Any], schema: Any, messages: list[dict]):
     """使用指定模型构建并执行一次 ReAct Agent。"""
-    agent = create_react_agent(llm, tools, response_format=schema)
+    versioned_tools = [
+        tool.model_copy(update={"description": load_prompt(f"tools/{tool.name}.md")})
+        for tool in tools
+    ]
+    agent = create_react_agent(llm, versioned_tools, response_format=schema)
     return agent.invoke({"messages": messages}, config=langchain_config())

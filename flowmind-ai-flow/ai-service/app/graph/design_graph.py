@@ -35,6 +35,7 @@ from app.infra.observability import (
     record_observation_output,
 )
 from app.integrations.backend import request_cache
+from app.prompts import prompt_release
 
 LOCK_TTL_SECONDS = 600
 _RELEASE_LOCK_SCRIPT = """
@@ -205,6 +206,7 @@ def invoke_design_workflow(
     logger.info(f"[invoke] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
     with (
+        prompt_release(thread_id),
         request_cache.scope(),
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
@@ -263,6 +265,7 @@ def stream_design_workflow(
     logger.info(f"[stream] 开始执行 design_type={design_type}, thread_id={thread_id}")
 
     with (
+        prompt_release(thread_id),
         request_cache.scope(),
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),

@@ -18,6 +18,7 @@ from langfuse.langchain import CallbackHandler
 
 from app.core.auth_context import get_current_user
 from app.infra.logger import logger
+from app.prompts.loader import get_prompt_metadata
 
 OBSERVABILITY_ERRORS = (ValueError, RuntimeError, TypeError, OSError)
 _langchain_handler: ContextVar[CallbackHandler | None] = ContextVar(
@@ -38,6 +39,11 @@ def observability_enabled() -> bool:
 def langchain_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """把当前 Langfuse 回调合并进 Runnable 配置。"""
     merged = dict(config or {})
+    prompt_versions = get_prompt_metadata()
+    if prompt_versions:
+        metadata = dict(merged.get("metadata") or {})
+        metadata["prompt_versions"] = prompt_versions
+        merged["metadata"] = metadata
     handler = _langchain_handler.get()
     if handler is None:
         return merged
@@ -110,6 +116,11 @@ def observe_workflow(
     finally:
         _langchain_handler.reset(token)
         exception_info = sys.exc_info()
+        prompt_versions = get_prompt_metadata()
+        if prompt_versions:
+            record_observation_metadata(
+                observation, {"prompt_versions": prompt_versions}
+            )
         try:
             stack.__exit__(*exception_info)
         except OBSERVABILITY_ERRORS as exc:
@@ -124,6 +135,18 @@ def record_observation_output(observation: Any | None, output: Any) -> None:
         observation.update(output=output)
     except OBSERVABILITY_ERRORS as exc:
         logger.warning(f"[langfuse] 记录输出失败: {exc}")
+
+
+def record_observation_metadata(
+    observation: Any | None, metadata: dict[str, Any]
+) -> None:
+    """补充根观测元数据；监控异常不得影响业务结果。"""
+    if observation is None:
+        return
+    try:
+        observation.update(metadata=metadata)
+    except OBSERVABILITY_ERRORS as exc:
+        logger.warning(f"[langfuse] 记录元数据失败: {exc}")
 
 
 @contextmanager
@@ -192,6 +215,7 @@ __all__ = [
     "observability_enabled",
     "observe_model_attempt",
     "observe_workflow",
+    "record_observation_metadata",
     "record_observation_output",
     "shutdown_observability",
 ]

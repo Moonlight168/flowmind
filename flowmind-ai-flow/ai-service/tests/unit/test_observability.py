@@ -10,6 +10,11 @@ from langchain_core.callbacks import CallbackManager
 from app.infra import observability
 
 
+@contextmanager
+def _empty_context(**kwargs):
+    yield
+
+
 def test_observability_disabled_without_credentials(monkeypatch):
     """缺少密钥时不创建客户端，也不改变 Runnable 配置。"""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
@@ -78,6 +83,46 @@ def test_observe_workflow_propagates_context_and_callback(monkeypatch):
         "trace_name": "flowmind.design",
     }
     assert captured["observation"]["as_type"] == "agent"
+
+
+def test_observe_workflow_records_prompt_versions_on_root(monkeypatch):
+    """根观测结束时应记录请求实际使用的提示词版本。"""
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    updates = []
+
+    class _Observation:
+        def update(self, **kwargs):
+            updates.append(kwargs)
+
+    class _Client:
+        @contextmanager
+        def start_as_current_observation(self, **kwargs):
+            yield _Observation()
+
+    monkeypatch.setattr(observability, "get_client", lambda: _Client())
+    monkeypatch.setattr(observability, "propagate_attributes", _empty_context)
+    monkeypatch.setattr(observability, "CallbackHandler", lambda: object())
+    monkeypatch.setattr(
+        observability,
+        "get_prompt_metadata",
+        lambda: {"agents/chat.md": {"version": "v2", "cohort": "canary"}},
+    )
+
+    with observability.observe_workflow(
+        "test", input={}, session_id="thread-1", trace_id="trace-1"
+    ):
+        pass
+
+    assert updates == [
+        {
+            "metadata": {
+                "prompt_versions": {
+                    "agents/chat.md": {"version": "v2", "cohort": "canary"}
+                }
+            }
+        }
+    ]
 
 
 def test_disabled_flag_overrides_credentials(monkeypatch):

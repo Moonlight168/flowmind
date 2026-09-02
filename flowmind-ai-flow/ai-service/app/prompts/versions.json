@@ -1,0 +1,13 @@
+{
+  "prompts": {
+    "agents/chat.md": {
+      "stable": "v1",
+      "versions": {
+        "v1": {
+          "file": "agents/chat.md",
+          "weight": 100
+        }
+      }
+    }
+  }
+}
