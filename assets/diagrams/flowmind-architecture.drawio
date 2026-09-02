@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram id="flowmind-architecture" name="FlowMind-系统架构">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2140" pageHeight="1650" math="0" shadow="0" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============ 分层背景 ============ -->
+        <mxCell id="2" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f4f8fc;strokeColor=#d5e2f0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="2020" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="前端 / 用户入口" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#5b7fa6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="56" width="200" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="4" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f4f8fc;strokeColor=#d5e2f0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="230" width="2020" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="统一入口 · API 网关" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#5b7fa6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="246" width="220" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="6" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f4f8fc;strokeColor=#d5e2f0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="430" width="2020" height="620" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="服务与应用层" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#5b7fa6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="446" width="200" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="8" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fbfcfd;strokeColor=#e6ebf1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1120" width="2020" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="9" value="数据 / 基础设施（Docker）" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#5b7fa6;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1136" width="240" height="22" as="geometry" />
+        </mxCell>
+
+        <mxCell id="10" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#e3e3e3;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1390" width="2020" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="外部依赖" style="text;html=1;align=left;verticalAlign=middle;fontSize=13;fontStyle=1;fontColor=#8a8a8a;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1406" width="200" height="22" as="geometry" />
+        </mxCell>
+
+        <!-- ============ 前端 / 网关 ============ -->
+        <mxCell id="20" value="&lt;b&gt;flowmind-ui&lt;/b&gt;（Vue 3 + Element Plus + BPMN-JS）&#xa;AI 助手 · 审批中心 · 流程设计器 · 草稿箱&#xa;端口 88（开发）/ 80（生产）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f1fb;strokeColor=#7fa6d0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="800" y="70" width="420" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="21" value="&lt;b&gt;flowmind-gateway&lt;/b&gt;（Spring Cloud Gateway · 端口 9001）&#xa;路由 · JWT 认证 · SSE 转发" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e2;strokeColor=#e0a04b;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="800" y="265" width="420" height="85" as="geometry" />
+        </mxCell>
+
+        <!-- ============ Java 微服务容器 ============ -->
+        <mxCell id="30" value="flowmind-cloud 微服务（Java · Spring Cloud + Flowable）" style="swimlane;startSize=32;rounded=1;html=1;fillColor=#eef4fb;strokeColor=#9db8d8;fontStyle=1;fontSize=13;verticalAlign=middle;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="140" y="500" width="760" height="460" as="geometry" />
+        </mxCell>
+        <mxCell id="31" value="&lt;b&gt;认证 ruoyi-auth&lt;/b&gt;&#xa;JWT 认证&#xa;端口 9002" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ece3f5;strokeColor=#a98fc9;fontSize=12;" vertex="1" parent="30">
+          <mxGeometry x="30" y="60" width="215" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="32" value="&lt;b&gt;系统 ruoyi-system&lt;/b&gt;&#xa;用户 / 角色 / 权限&#xa;端口 9003" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f1fb;strokeColor=#7fa6d0;fontSize=12;" vertex="1" parent="30">
+          <mxGeometry x="270" y="60" width="215" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="&lt;b&gt;流程 ruoyi-flowable&lt;/b&gt;&#xa;Flowable 流程引擎&#xa;模型 / 部署 / 任务 / 表单&#xa;端口 9007" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f1fb;strokeColor=#7fa6d0;fontSize=12;" vertex="1" parent="30">
+          <mxGeometry x="510" y="60" width="220" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- ============ AI 服务容器 ============ -->
+        <mxCell id="40" value="flowmind-ai-flow / ai-service（AI 服务 · FastAPI + LangGraph · 8000）" style="swimlane;startSize=32;rounded=1;html=1;fillColor=#f7f1fb;strokeColor=#c3a6dd;fontStyle=1;fontSize=13;verticalAlign=middle;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="980" y="500" width="900" height="460" as="geometry" />
+        </mxCell>
+        <mxCell id="41" value="&lt;b&gt;接口层 api&lt;/b&gt; · FastAPI&#xa;/design、/chat/stream（SSE 流式进度与逐 token 输出）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0e8f8;strokeColor=#b393d4;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="40">
+          <mxGeometry x="30" y="55" width="840" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="42" value="&lt;b&gt;工作流 graph&lt;/b&gt; · LangGraph 显式编排&#xa;design（ReAct 检索 + 结构化生成）→ review（校验）→ format（组装）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0e8f8;strokeColor=#b393d4;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="40">
+          <mxGeometry x="30" y="150" width="840" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="43" value="&lt;b&gt;领域 + 运行时&lt;/b&gt; · 设计域（意图 / 压缩 / 校验 · prompts Markdown 灰度）&#xa;llm 统一模型运行时（能力过滤 · 降级 · 流式安全）· infra（Redis checkpoint · Langfuse 观测）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0e8f8;strokeColor=#b393d4;fontSize=12;align=left;spacingLeft=10;" vertex="1" parent="40">
+          <mxGeometry x="30" y="245" width="840" height="115" as="geometry" />
+        </mxCell>
+
+        <!-- ============ 基础设施 ============ -->
+        <mxCell id="50" value="&lt;b&gt;MySQL&lt;/b&gt;&#xa;业务 / 流程数据&#xa;宿主 13306" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e4f2e5;strokeColor=#7cb37f;direction=south;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1160" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="51" value="&lt;b&gt;Nacos&lt;/b&gt;&#xa;注册中心 · 配置中心&#xa;宿主 18848" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fcf3d8;strokeColor=#d9bc63;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="760" y="1160" width="280" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="52" value="&lt;b&gt;Redis&lt;/b&gt;&#xa;缓存 · 会话 checkpoint&#xa;宿主 16379" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e4f2e5;strokeColor=#7cb37f;direction=south;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="1160" width="280" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ============ 外部依赖 ============ -->
+        <mxCell id="60" value="&lt;b&gt;LLM 模型&lt;/b&gt;（OpenAI 兼容）&#xa;vLLM 本地 GPU · qwen2.5-1.5b&#xa;DashScope 云端 · qwen3.6-flash" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#f6f6f6;strokeColor=#8a8a8a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="1425" width="420" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="61" value="&lt;b&gt;Langfuse 可观测&lt;/b&gt;&#xa;全链路 trace · prompt 灰度 metadata" style="rounded=1;dashed=1;whiteSpace=wrap;html=1;fillColor=#f6f6f6;strokeColor=#8a8a8a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="1425" width="420" height="105" as="geometry" />
+        </mxCell>
+
+        <!-- ============ 连线 ============ -->
+        <mxCell id="70" value="HTTP / SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="20" target="21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="71" value="Java 业务 API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;exitX=0.08;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="21" target="30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="72" value="AI 接口（SSE）" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;startArrow=classic;startFill=1;endArrow=classic;endFill=1;exitX=0.9;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="21" target="40">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="74" value="流程 / 业务数据" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="33" target="50">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="75" value="注册 / 配置发现" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;strokeColor=#8a8a8a;fontColor=#555555;" edge="1" parent="1" source="30" target="51">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="76" value="会话 checkpoint / 锁" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;strokeColor=#8a8a8a;fontColor=#555555;" edge="1" parent="1" source="40" target="52">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="77" value="OpenAI 兼容调用" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;dashed=1;exitX=0.31;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;strokeColor=#8a8a8a;fontColor=#555555;" edge="1" parent="1" source="40" target="60">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="78" value="上报 trace / metadata" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;endFill=1;dashed=1;exitX=0.88;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;labelBackgroundColor=#ffffff;strokeColor=#8a8a8a;fontColor=#555555;" edge="1" parent="1" source="40" target="61">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

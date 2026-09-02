@@ -15,7 +15,7 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 | 子项目                     | 技术栈                  | 端口    | 职责                            |
 | -------------------------- | ----------------------- | ------- | ------------------------------- |
-| **flowmind-ui**      | Vue 3 + Element Plus    | 5173/80 | 用户界面、AI 助手、审批中心     |
+| **flowmind-ui**      | Vue 3 + Element Plus    | 88/80 | 用户界面、AI 助手、审批中心     |
 | **flowmind-cloud**   | Spring Cloud + Flowable | 8080    | 业务逻辑、Flowable 流程引擎     |
 | **flowmind-ai-flow** | FastAPI + LangGraph     | 8000    | AI 意图识别、流程设计、表单生成 |
 
@@ -67,23 +67,9 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ## 系统架构
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        前端层 (flowmind-ui)                      │
-│              Vue 3 + Element Plus + BPMN-JS                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ HTTP
-┌─────────────────────────────────────────────────────────────────┐
-│                    API 网关 (Spring Cloud Gateway)               │
-└─────────────────────────────────────────────────────────────────┘
-                    │                       │
-                    ▼                       ▼
-         ┌──────────────────┐    ┌─────────────────────┐
-         │  业务模块        │    │  AI 服务            │
-         │  (Flowable)      │    │  (FastAPI+LangGraph)│
-         └──────────────────┘    └─────────────────────┘
-```
+![FlowMind 系统架构](./assets/diagrams/flowmind-architecture.png)
+
+> 架构图源文件：`assets/diagrams/flowmind-architecture.drawio`，可用 [draw.io / diagrams.net](https://app.diagrams.net) 打开编辑后重新导出。
 
 ## 技术栈
 
@@ -171,9 +157,9 @@ bin\start.bat
 
 自动启动：Docker 基础环境 → Java 后端 → 前端
 
-**已启动服务**：Gateway (9001)、Auth (9200)、System (9201)、Flowable (9204)
+**已启动服务**：Gateway (9001)、Auth (9002)、System (9003)、Flowable (9007)
 
-**未启动（可选）**：File (9202)、Gen (9203)、Job (9205)、Visual
+**未启动（可选）**：Gen (9004)、Job (9005)、File (9006)、Visual
 
 AI 服务（需单独启动）：
 
@@ -185,14 +171,22 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 服务端口
 
-| 服务     | 端口    | 访问地址                    |
-| -------- | ------- | --------------------------- |
-| 前端     | 5173/80 | http://localhost:5173       |
-| API 网关 | 8080    | http://localhost:8080       |
-| AI 服务  | 8000    | http://localhost:8000       |
-| Nacos    | 8848    | http://localhost:8848/nacos |
-| MySQL    | 3306    | localhost:3306              |
-| Redis    | 6379    | localhost:6379              |
+本地开发（`bin/start.bat` / `flowmind-cloud/bin/run-all.bat`）：
+
+| 服务                 | 端口                     | 访问地址                            |
+| -------------------- | ------------------------ | ----------------------------------- |
+| 前端（开发）         | 88                       | http://localhost:88                 |
+| 前端（生产 Nginx）   | 80                       | http://localhost                    |
+| API 网关（Gateway）  | 9001                     | http://localhost:9001               |
+| Auth 认证            | 9002                     | —                                   |
+| System 系统          | 9003                     | —                                   |
+| Flowable 流程        | 9007                     | —                                   |
+| AI 服务              | 8000                     | http://localhost:8000               |
+| Nacos（Docker 映射） | 18848（容器内 8848）    | http://localhost:18848/nacos        |
+| MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
+| Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
+
+> 可选模块端口：Gen 9004、Job 9005、File 9006。AI 服务 Docker 编排位于 `docker/ai-service/`，整体生产编排位于 `docker/flowmind/`。
 
 ## 项目仓库
 
@@ -213,4 +207,4 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
 
-**最后更新**: 2026-06-04
+**最后更新**: 2026-09-02

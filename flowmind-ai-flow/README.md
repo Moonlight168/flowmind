@@ -10,7 +10,9 @@
 | **AI 设计流程** | 自动生成 BPMN 2.0 流程结构         |
 | **AI 设计表单** | 自动生成 v-form-designer 表单 JSON |
 | **多轮对话**    | LangGraph 工作流持续优化设计       |
-| **多模型支持**  | OpenAI 兼容接口                    |
+| **SSE 流式**    | 设计接口以 SSE 推送节点级进度，done 事件带最终结果 |
+| **逐 token 输出** | 对话 `/chat/stream` 逐 token 流式返回并保留 LangGraph 状态 |
+| **多模型支持**  | OpenAI 兼容接口 + 运行时降级      |
 | **黄金集评估**  | 全量/单条执行并上报 Langfuse     |
 | **提示词灰度**  | Markdown 版本管理、同会话稳定分流与快速回滚 |
 
@@ -62,36 +64,46 @@
 
 ```
 flowmind-ai-flow/
-├── ai-service/
-│   └── app/
-│       ├── main.py              # FastAPI 入口
-│       ├── api/                 # API 路由
-│       │   ├── design.py        # AI 设计接口
-│       │   ├── chat.py         # 对话接口
-│       │   └── health.py       # 健康检查
-│       ├── graph/               # chat_graph、design_graph、节点与状态
-│       ├── design/              # 生成、意图、压缩、校验和结果转换
-│       ├── llm/                 # 统一模型运行时与 Provider 降级
-│       ├── integrations/backend/ # Java 后端 HTTP Client
-│       ├── domain/              # DTO 与结构化设计模型
-│       ├── infra/               # checkpoint、日志、Nacos、Langfuse
-│       ├── prompts/             # Markdown 提示词与 versions.json 灰度配置
-│       └── config/             # 配置层
-├── docker-compose.yml
-└── README.md
+└── ai-service/
+    ├── app/
+    │   ├── main.py               # FastAPI 入口
+    │   ├── api/                  # API 路由：design/chat/health（SSE 流式）
+    │   ├── graph/                # chat_graph、design_graph、节点与状态
+    │   ├── design/               # ReAct 生成、意图、压缩、校验器和 BPMN/VForm3 结果转换
+    │   ├── llm/                  # 统一模型运行时与 Provider 降级
+    │   ├── integrations/backend/ # Java 后端 HTTP Client
+    │   ├── domain/               # DTO 与结构化设计模型
+    │   ├── core/                 # JWT 认证解析与异常基类
+    │   ├── evaluation/           # 黄金数据集加载与确定性契约评分
+    │   ├── infra/                # checkpoint、日志、observability（Langfuse）、Nacos
+    │   ├── prompts/              # Markdown 提示词与 versions.json 灰度配置
+    │   └── config/               # settings.py 类型化配置
+    ├── scripts/run_golden_eval.py # 黄金集评估入口
+    ├── evals/                    # golden_dataset.jsonl 用例
+    ├── .env.example
+    └── pyproject.toml
 ```
+
+> AI 服务的 Docker Compose 在仓库根目录 `docker/ai-service/docker-compose.yml`（含 vllm + ai-service）。
 
 ## 核心 API
 
 | 端点                 | 方法 | 说明            |
 | -------------------- | ---- | --------------- |
-| `/design/category` | POST | AI 设计流程分类 |
-| `/design/flow`     | POST | AI 设计流程     |
-| `/design/form`     | POST | AI 设计表单     |
-| `/chat`            | POST | 对话接口        |
-| `/health`          | GET  | 健康检查        |
+| `/design/category` | POST | AI 设计流程分类（SSE 流式） |
+| `/design/flow`     | POST | AI 设计流程（SSE 流式）     |
+| `/design/form`     | POST | AI 设计表单（SSE 流式）     |
+| `/chat`            | POST | 对话接口（一次性返回）      |
+| `/chat/stream`     | POST | 对话接口（SSE 逐 token 流式） |
+| `/chat/history`    | GET  | 对话历史                    |
+| `/health`          | GET  | 健康检查                    |
+| `/health/models`   | GET  | 当前可用模型列表            |
+
+> 设计三接口均以 SSE（`text/event-stream`）先推送节点级进度（生成 → 校验 → 组装），`done` 事件携带最终结果；若校验重试/失败会推送对应进度文案。
 
 ## 响应格式
+
+设计接口以 SSE 流返回，下面 JSON 为最终 `done` 事件的载荷：
 
 ```json
 {
@@ -148,4 +160,4 @@ PROMPT_VERSION_OVERRIDES={"agents/chat.md":"v1"}
 
 ---
 
-**文档更新日期**: 2026-05-04
+**文档更新日期**: 2026-09-02

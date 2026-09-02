@@ -12,26 +12,26 @@ FlowMind 是一个**智能流程审批系统**，采用微服务架构，包含�
 
 | 项目 | 技术栈 | 端口 | 职责 |
 |------|--------|------|------|
-| **flowmind-ai-approval** | FastAPI + LangChain + LangGraph | 8000 | AI 意图识别、流程设计、表单设计、审批意见生成 |
-| **flowmind-cloud** | Spring Cloud + Flowable | 8080 | 业务逻辑、Flowable 流程引擎、权限管理 |
-| **flowmind-ui** | Vue 3 + TypeScript + Element Plus | 5173/80 | 用户界面、Flowable 流程设计器 |
+| **flowmind-ai-flow**（`ai-service`） | FastAPI + LangChain + LangGraph | 8000 | AI 意图识别、流程设计、表单设计、审批意见生成 |
+| **flowmind-cloud** | Spring Cloud + Flowable | 9001/9002/9003/9007（网关/认证/系统/Flowable） | 业务逻辑、Flowable 流程引擎、权限管理 |
+| **flowmind-ui** | Vue 3 + TypeScript + Element Plus | 88（dev）/80（prod） | 用户界面、Flowable 流程设计器 |
 
 ### 服务通信架构
 
 ```
-flowmind-ui → flowmind-cloud → Flowable 流程引擎
-     ↓              ↓
-     └───────────────┴──→ flowmind-ai-approval (SSE/WebSocket)
+flowmind-ui (dev 88) → flowmind-cloud（网关 9001）→ Flowable 流程引擎
+     │                        │
+     └────────────────────────┴──→ flowmind-ai-flow (8000，SSE 流式推送进度/token)
 ```
 
 ---
 
 ## 常用命令
 
-### AI 服务 (flowmind-ai-approval)
+### AI 服务 (flowmind-ai-flow/ai-service)
 
 ```bash
-cd flowmind-ai-approval/ai-service
+cd flowmind-ai-flow/ai-service
 
 # 安装依赖
 poetry install
@@ -39,15 +39,14 @@ poetry install
 # 代码格式化 + Lint
 ruff check --fix && ruff format
 
-# 运行测试
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/e2e/
+# 运行测试（注意：pyproject 默认 testpaths 指向不存在的 tests/system，请显式传目录）
+pytest tests/unit/ tests/integration/
 
-# 单个测试文件
-pytest tests/unit/test_agent.py -v
+# 单个测试文件（示例）
+pytest tests/unit/test_model_runtime.py -v
 
-# Docker 环境
+# Docker 环境（AI 服务 compose 位于仓库根 docker/ai-service）
+cd docker/ai-service
 docker-compose up -d --build
 docker-compose logs -f ai-service
 ```
@@ -62,9 +61,6 @@ mvn clean package -DskipTests
 
 # 运行（单个模块）
 mvn spring-boot:run -pl ruoyi-modules/ruoyi-system
-
-# 格式化代码
-mvn fmt:format
 
 # 运行测试
 mvn test -pl ruoyi-modules/ruoyi-flowable
@@ -94,7 +90,7 @@ yarn test:e2e          # E2E 测试
 
 ## 架构设计
 
-### AI 服务 (flowmind-ai-approval)
+### AI 服务 (flowmind-ai-flow/ai-service)
 
 **核心层级**：`api/` → `graph/` → `design/` → `llm/` / `integrations/` → `infra/`
 
@@ -102,9 +98,12 @@ yarn test:e2e          # E2E 测试
 - **design/**: ReAct 生成、意图、历史压缩、校验器和 BPMN/VForm3 确定性逻辑
 - **llm/**: 统一模型运行时，处理 Provider 能力过滤、运行时降级和流式安全策略
 - **prompts/**: Markdown 提示词、版本注册表与基于 thread_id 的稳定灰度分流；命中版本写入 Langfuse metadata
-- **config/settings.py**: `.env` 配置唯一入口，统一承载模型降级、提示词灰度、Langfuse、压缩、校验、Nacos 与评估参数
+- **config/**（`app/config/settings.py`）: `.env` 配置唯一入口，统一承载模型降级、提示词灰度、Langfuse、压缩、校验、Nacos 与评估参数
+- **core/**: JWT 认证解析与异常基类（`auth.py`/`auth_context.py`/`exceptions.py`）
 - **integrations/backend/**: Java 后端分类、表单、角色和流程模型 HTTP 客户端
-- **domain/dto/**: 数据传输对象；`domain/design_models.py` 为结构化设计模型
+- **domain/**: `domain/dto/` 数据传输对象；`domain/design_models.py` 为结构化设计模型
+- **evaluation/**: 黄金数据集加载、真实链路执行与确定性契约评分（入口 `scripts/run_golden_eval.py`）
+- **infra/**: Redis checkpoint、日志、observability（Langfuse）与 Nacos 封装
 
 **设计模式**：LangGraph 显式编排、统一模型运行时、外部 HTTP Client、确定性校验 Pipeline
 
@@ -129,7 +128,7 @@ yarn test:e2e          # E2E 测试
 
 ## 代码规范
 
-### Python (flowmind-ai-approval)
+### Python (flowmind-ai-flow/ai-service)
 
 #### 导入规范
 - **禁止使用延迟导入（lazy import）**，所有 import 必须放在文件顶部
@@ -178,23 +177,20 @@ yarn test:e2e          # E2E 测试
 
 ### 启动顺序
 
-1. Docker Compose：MySQL、Redis、Nacos
-2. AI 服务：`cd flowmind-ai-approval && docker-compose up -d`
-3. Java 后端（本地开发）
-4. 前端：`yarn dev`
+1. Docker Compose 基础环境（MySQL、Redis、Nacos）：`cd docker/cloud && docker-compose up -d`（或直接 `bin/start.bat`）
+2. AI 服务：`cd docker/ai-service && docker-compose up -d`
+3. Java 后端（本地开发）：`cd flowmind-cloud && bin/run-all.bat`，按 9001（Gateway）→9002（Auth）→9003（System）→9007（Flowable）启动
+4. 前端：`cd flowmind-ui && yarn dev`（端口 88）
 
 ### 密钥管理
 
 - 禁止硬编码，使用环境变量
-- AI 服务配置：`flowmind-ai-approval/.env`
+- AI 服务配置：`flowmind-ai-flow/ai-service/.env`（从 `.env.example` 复制）
 
 ---
 
 ## Superpowers 文档位置
 
 `docs/superpowers/` 目录下：
-- `seeds/`: SEED-XXX-*.md 种子需求
+- `plans/`: YYYY-MM-DD-*-implementation.md 实施计划（含状态、决策与 commit 记录）
 - `specs/`: YYYY-MM-DD-*-design.md 设计规格
-- `plans/`: YYYY-MM-DD-*-implementation.md 实施计划
-- `phases/`: 阶段总结
-- `artifacts/`: 产出物存档

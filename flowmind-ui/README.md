@@ -2,7 +2,7 @@
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-b99b286755aef70355a7084753f89cdb7c9.png">
 </p>
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind UI v2.0.0</h1>
-<h4 align="center">基于 RuoYi-Vue 前端的工作流管理系统</h4>
+<h4 align="center">基于 RuoYi-Vue3（Vue 3 + Element Plus）前端的工作流管理系统</h4>
 <p align="center">
 	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.0.0-brightgreen.svg"></a>
 	<a href="https://github.com/Moonlight168/flowmind-ui/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
@@ -25,9 +25,9 @@
 
 ### 环境要求
 
-| 软件    | 版本 |
-| ------- | ---- |
-| Node.js | 16+  |
+| 软件    | 版本          |
+| ------- | ------------- |
+| Node.js | 18+（Vite 6） |
 
 ### 安装运行
 
@@ -53,10 +53,10 @@ npm run build:prod
 
 ### 访问地址
 
-| 环境     | 地址                  |
-| -------- | --------------------- |
-| 开发环境 | http://localhost:5173 |
-| 生产环境 | http://localhost:88   |
+| 环境     | 地址                          |
+| -------- | ----------------------------- |
+| 开发环境 | http://localhost:88           |
+| 生产环境 | http://localhost（Nginx 80）  |
 
 ---
 
@@ -174,8 +174,11 @@ flowmind-ui/
 
 ```bash
 # .env.development
-VITE_APP_TITLE=FlowMind 管理系统
-VITE_API_BASE_URL=http://localhost:8080
+VITE_APP_TITLE=FlowMind后台管理系统
+VITE_APP_BASE_API=/dev-api   # vite.config.js 将 /dev-api 代理到 http://localhost:9001（网关）
+
+# .env.production
+VITE_APP_BASE_API=/prod-api  # 生产由 Nginx 反向代理到网关
 ```
 
 ### 添加新页面
@@ -197,4 +200,4 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ---
 
-**文档更新日期**: 2026-05-04
+**文档更新日期**: 2026-09-02

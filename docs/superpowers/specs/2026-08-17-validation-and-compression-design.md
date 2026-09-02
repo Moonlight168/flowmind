@@ -1,14 +1,14 @@
 # 校验层 + 前置压缩 实现方案（定稿）
 
-> 状态：已评审，实施中
-> 关联：`2026-08-17-context-compression-optimization-design.md`、`2026-08-02-validator-architecture-design.md`
+> 状态：已实施完成（校验层 + 前置压缩随后续方案落地；本文为实施前设计快照，正文 `app/agents/*` 为重构前旧路径，已由 `80d4563` 迁移为 `app/design/*`、`app/graph/nodes/*`）
+> 后续修订：§0「砍掉 with_structured_output」已被 `2026-08-19` 方案否决——结构化输出成为唯一生成路径，最终形态为 ReAct 按需检索 + `response_format` 结构化收尾。详见 `plans/2026-08-19-structured-output-redesign.md`、`plans/2026-09-01-react-retrieval-and-runtime-hardening.md`
 
 ## 0. 结论
 
 - dsh 替换 ReAct Agent：**暂缓**（preview + 双运行时，不换）
 - 压缩：前置压缩（trim_messages 裁剪 + 可选 LLM 摘要），替换半废的压缩工具
 - 校验：JSON 层结构校验器（Node/Edge/Form/Category/BPMN），在生成 BPMN 前早失败
-- 砍掉：FieldLockValidator、Node/FormEnricher（与 format_node 的 transform_to_vform3/bpmn_generator 职责重复）、DeployValidator（与"前端确认后保存"架构冲突）、with_structured_output（与 tool-calling 冲突）、staged_state（无消费者 YAGNI）
+- 砍掉：FieldLockValidator、Node/FormEnricher（与 format_node 的 transform_to_vform3/bpmn_generator 职责重复）、DeployValidator（与"前端确认后保存"架构冲突）、staged_state（无消费者 YAGNI）；with_structured_output（与 tool-calling 冲突）——❌ 此项已被 2026-08-19 方案否决，结构化输出成为主路径
 
 ## 1. 职责边界（review vs format）
 

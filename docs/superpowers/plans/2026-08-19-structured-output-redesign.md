@@ -3,7 +3,7 @@
 > 状态：已实施全部 7 个 Commit（含 review 修复）
 > 日期：2026-08-19
 > 关联：`2026-08-17-validation-and-compression-design.md`（已落地的校验层 + 压缩）
-> 后续决策：2026-09-01 起，确定性全量预取被 ReAct 按需检索取代；结构化输出、校验、增量修改和版本管理决策继续有效。详见 `2026-09-01-react-retrieval-and-runtime-hardening.md`。
+> 后续决策：2026-09-01 起，确定性全量预取被 ReAct 按需检索取代；本方案「Commit 7 删 ReAct」亦被 `4540062` 回退——设计主路径改为 **ReAct 按需检索 + 最终结构化输出（`response_format` 收尾）**，结构化 schema（Pydantic/`response_format`）、校验、增量修改和版本管理决策继续有效。详见 `2026-09-01-react-retrieval-and-runtime-hardening.md`。
 
 ## 0. 目标与核心决策
 
@@ -13,7 +13,7 @@
 
 | 决策 | 结论 |
 |---|---|
-| 生成路径 | **只保留结构化输出**（with_structured_output + Pydantic），删文本路径、降级、json-repair |
+| 生成路径 | **只保留结构化输出**（with_structured_output + Pydantic），删文本路径、降级、json-repair（⚠️ 已由 2026-09-01 决策调整：ReAct 按需检索 + `response_format` 结构化收尾成为主路径） |
 | 模型不支持 function calling | failover 跳过（`supports_structured_output` 分流），全不支持 → error |
 | JSON 解析 | 只用 Pydantic（`extra="forbid"`），删 json-repair |
 | 失败处理 | Pydantic 失败 → 重试(≤3) → error；业务规则失败 → 重试 → 半成品 |
@@ -216,7 +216,7 @@ Commit 7 ─── 依赖 6
 
 ## 12. 明确不做
 
-- ❌ 文本降级路径、json-repair（只保留结构化）
+- ❌ 文本自由输出路径、json-repair（结构化语义保留；ReAct 删除已回退为主路径，见 2026-09-01 方案）
 - ❌ 部署闭环（生成的是模型，不是部署）
 - ❌ 审批意见生成
 - ❌ AI 意图识别（前端按钮固定 design_type）
@@ -233,10 +233,10 @@ Commit 7 ─── 依赖 6
 | 4 | 意图判别 | ✅ 已实施（含 review 修复：接入 react_agent_node） |
 | 5 | DESIGN_SPEC + 预取摘要 + 模型能力分流 | ✅ 已实施 |
 | 6 | 结构化生成主路径 | ✅ 已实施（含 review 修复：basic 模式走 legacy、异常元组加宽） |
-| 7 | 删 ReAct + json-repair | ✅ 已实施（结构化失败重试≤3→error，不再降级） |
+| 7 | 删 ReAct + json-repair | ✅ 已实施，但 ReAct 删除已被 `4540062` 回退（按需检索 + 结构化收尾主路径，见 2026-09-01 方案） |
 
 **review 发现的问题（已全部修复）**：
 - ✅ BaselineValidator 覆盖 flow(nodes+edges)/form(字段)/category(code)
 - ✅ rollbackTo('prev') 截断版本历史，连续回退逐级生效
 - ✅ 预取失败与结构化失败分离（预取单独 try 置空，不误降级）
-- ⚠️ 前端 versionKey 不含流程标识（sessionId 为空时不同流程共用版本库，属调用方职责，需父组件传 sessionId）
+- ✅ 前端 versionKey 含流程标识：`07b0728` 起按 flowKey 生成 versionKey，不同流程版本历史不再串扰
