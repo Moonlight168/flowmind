@@ -101,12 +101,14 @@ def test_describe_providers_returns_only_safe_runtime_metadata() -> None:
             "name": "primary",
             "model": "model-a",
             "priority": 1,
+            "configured": False,
             "supports_structured_output": False,
         },
         {
             "name": "fallback",
             "model": "model-b",
             "priority": 2,
+            "configured": False,
             "supports_structured_output": True,
         },
     ]

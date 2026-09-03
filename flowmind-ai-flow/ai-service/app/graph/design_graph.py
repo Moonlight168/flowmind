@@ -2,6 +2,7 @@
 FlowMind 智能审批服务 - 设计 Workflow
 
 简化版工作流设计：
+- prepare_node: 校验请求并标准化设计基线
 - design_node: 调用 LLM 生成内容，追加 AI 回复到 messages
 - review_node: 审查输出，失败时注入错误反馈到 messages 并重试
 - format_node: 统一格式化输出
@@ -23,10 +24,9 @@ from langgraph.graph import END, StateGraph
 
 from app.config.settings import settings
 from app.core.exceptions import FlowDesignException
-from app.design.bpmn_parser import enrich_flow_baseline
-from app.design.operations import normalize_design_baseline
 from app.graph.nodes.finalize import finalize_node
 from app.graph.nodes.generate import generate_node
+from app.graph.nodes.prepare import prepare_design_node
 from app.graph.nodes.review import review_node
 from app.graph.state import AppState
 from app.infra.checkpoint import checkpointer
@@ -123,11 +123,18 @@ def _result_router(state: AppState) -> str:
 def create_design_workflow() -> StateGraph:
     workflow = StateGraph(AppState)
 
+    workflow.add_node("prepare", prepare_design_node)
     workflow.add_node("design", generate_node)
     workflow.add_node("review", review_node)
     workflow.add_node("format", finalize_node)
 
-    workflow.set_entry_point("design")
+    workflow.set_entry_point("prepare")
+
+    workflow.add_conditional_edges(
+        "prepare",
+        lambda state: "format" if state.get("intent") == "error" else "design",
+        {"design": "design", "format": "format"},
+    )
 
     # design → review/format 的条件路由
     # clarification 和 error 直接进入 format，success 进入 review
@@ -174,11 +181,6 @@ def _prepare_design_call(
     if not trace_id:
         trace_id = generate_trace_id()
 
-    # flow_design：前端可视化设计器只传 bpmn_xml 时，反解析为扁平 nodes/edges 基线，
-    # 使 prompt 的增量语义与 BaselineValidator 真正生效（不把整段 XML 塞给模型）。
-    if design_type == "flow_design":
-        current_form_data = enrich_flow_baseline(current_form_data or {})
-    current_form_data = normalize_design_baseline(design_type, current_form_data or {})
     # messages 用 add_messages reducer，自动追加到 checkpoint 现有消息
     initial_state: AppState = {
         "messages": [HumanMessage(content=user_input)],
@@ -316,7 +318,13 @@ def stream_design_workflow(
             initial_state, langchain_config(config), stream_mode="updates"
         ):
             for node_name, node_state in step.items():
-                if node_name == "design":
+                if node_name == "prepare":
+                    yield {
+                        "type": "progress",
+                        "phase": "prepare",
+                        "message": "正在解析当前设计和会话上下文",
+                    }
+                elif node_name == "design":
                     design_count += 1
                     if design_count == 1:
                         yield {

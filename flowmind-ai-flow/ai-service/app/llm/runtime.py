@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, TypeVar
+from urllib.parse import urlparse
 
 import httpx
 from langchain_openai import ChatOpenAI
@@ -174,6 +175,7 @@ class ModelRuntime:
                 "name": name,
                 "model": self._providers[name].get("model_name", ""),
                 "priority": index,
+                "configured": self._provider_is_configured(name),
                 "supports_structured_output": self._providers[name].get(
                     "supports_structured_output", True
                 ),
@@ -181,6 +183,28 @@ class ModelRuntime:
             for index, name in enumerate(self._priority, start=1)
             if name in self._providers
         ]
+
+    def describe_readiness(self) -> dict[str, Any]:
+        """返回结构化降级候选和具体未就绪原因。"""
+        eligible = [
+            name
+            for name in self._candidates(structured=True)
+            if self._provider_is_configured(name)
+        ]
+        reasons = []
+        if not self._config.enabled:
+            reasons.append("fallback_disabled")
+        if self._config.max_retries < 1:
+            reasons.append("fallback_retry_budget_zero")
+        if len(eligible) < 2:
+            reasons.append("structured_provider_count_lt_2")
+        return {
+            "fallback_enabled": self._config.enabled,
+            "fallback_max_retries": self._config.max_retries,
+            "eligible_structured_provider_count": len(eligible),
+            "structured_fallback_ready": not reasons,
+            "not_ready_reasons": reasons,
+        }
 
     def _candidates(self, structured: bool) -> list[str]:
         candidates = [name for name in self._priority if name in self._providers]
@@ -203,6 +227,22 @@ class ModelRuntime:
                     provider, self._providers[provider], task_name
                 )
             return self._model_cache[key]
+
+    def _provider_is_configured(self, provider: str) -> bool:
+        config = self._providers[provider]
+        model = str(config.get("model_name") or "").strip()
+        base_url = str(config.get("base_url") or "").strip()
+        api_key = str(config.get("api_key") or "").strip()
+        parsed_url = urlparse(base_url)
+        return bool(
+            model
+            and parsed_url.scheme in {"http", "https"}
+            and parsed_url.netloc
+            and not model.startswith("your_")
+            and model != "replace_me"
+            and ".example" not in base_url
+            and not api_key.startswith("your_")
+        )
 
     def _build_model(
         self, provider: str, config: dict[str, Any], task_name: str | None

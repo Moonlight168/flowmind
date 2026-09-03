@@ -162,17 +162,19 @@ app/
 
 ### 5.1 外部 interface
 
-建议 `ModelRuntime` 只暴露三个入口：
+`ModelRuntime` 暴露四个入口：
 
 ```python
 runtime.execute(task_name, operation, *, structured=False)
 runtime.stream(task_name, messages, *, config=None)
 runtime.describe_providers()
+runtime.describe_readiness()
 ```
 
 - `execute`：调用方提供一次基于模型的操作；适用于普通聊天、意图、压缩和需要按 Provider 重建的 ReAct Agent。
 - `stream`：显式管理聊天 token 流，保证流式降级不会重复输出。
 - `describe_providers`：为健康检查提供脱敏后的配置与能力信息，不再维护跨请求共享的“当前 Provider”。
+- `describe_readiness`：集中判断结构化候选、降级开关和尝试预算，并返回可诊断的未就绪原因。
 
 `ModelExhaustedError` 可直接定义在 `runtime.py`，暂不为一个异常新增单独文件。
 
@@ -327,3 +329,10 @@ Provider A 已输出 delta 后中断
 - 已完成 `design/`、`llm/`、`integrations/backend/`、扁平 `graph/`、`infra/checkpoint/` 等目录迁移，删除旧 `adapters/agents/utils` 源文件。
 - 已删除失效且无调用方的动态 `/models` router，`/health/models` 改为输出脱敏 Provider 配置和能力。
 - 验证：Ruff 通过；单元与集成测试合计 107 项通过。黄金数据集真实执行仍需要环境提供认证令牌和 Langfuse 密钥。
+
+## 13. P1 收口（2026-09-03）
+
+- 设计工作流增加确定性的 `prepare` 前置节点，统一校验设计类型/模式并标准化分类、BPMN、VForm3 基线；节点执行进入现有 LangGraph/Langfuse 链路。
+- 新增 `/health/ready` 就绪探针：只有启用降级、额外尝试数至少为 1，且配置至少两个结构化 Provider 时返回成功；启动阶段同步记录未就绪原因。
+- AI 本地与生产 Compose 改用就绪探针，修复本地 Compose 的 YAML 拼写错误；`.env.example` 增加独立结构化备用 Provider 配置模板。
+- 验证：两套 Compose 配置解析通过，Ruff 通过，AI 单元与集成测试 179 项通过。

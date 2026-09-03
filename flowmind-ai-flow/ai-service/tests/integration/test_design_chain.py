@@ -2,7 +2,7 @@
 FlowMind 智能流程设计服务 - AI 生产链路集成测试
 
 覆盖从 invoke_design_workflow 入口到最终 design_output 的完整链路：
-design（压缩 + LLM）→ review（校验 + 死循环检测）→ format（组装）
+prepare（基线标准化）→ design（压缩 + LLM）→ review（校验 + 死循环检测）→ format（组装）
 
 mock 点：
 - run_react_agent：LLM 输出（可控，避免真实 API 调用）
@@ -116,7 +116,7 @@ _FLOW_RESULT = {"operations": [{"op": "replace_graph", **_FLOW_GRAPH}]}
 
 
 def test_stream_design_workflow(chain, monkeypatch):
-    """流式：进度事件序列（design→review→format）+ done 事件带完整结果"""
+    """流式：进度事件序列（prepare→design→review→format）+ done 事件带完整结果"""
     _mock_llm(monkeypatch, [_FLOW_RESULT])
     events = list(
         stream_design_workflow(
@@ -131,7 +131,7 @@ def test_stream_design_workflow(chain, monkeypatch):
     assert events[-1]["intent"] == "success"
     assert events[-1]["form_data"]["bpmn_xml"]
     phases = [e.get("phase") for e in events if e["type"] == "progress"]
-    assert phases == ["design", "review", "format"]
+    assert phases == ["prepare", "design", "review", "format"]
 
 
 def test_flow_design_full_chain(chain, monkeypatch):

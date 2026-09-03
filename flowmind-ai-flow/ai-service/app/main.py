@@ -25,7 +25,11 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
-    initialize_model_runtime()
+    runtime = initialize_model_runtime()
+    readiness = runtime.describe_readiness()
+    if not readiness["structured_fallback_ready"]:
+        reasons = ",".join(readiness["not_ready_reasons"])
+        logger.error(f"结构化模型降级未就绪: {reasons}")
 
     # 注册到 Nacos（失败时会抛出异常）
     if not register_to_nacos():
