@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from app.design.generation import run_react_agent
 from app.design.history import compress_history
 from app.design.intent import discriminate_intent
+from app.design.operations import apply_design_operations
 from app.graph.nodes.base import node_handler
 from app.graph.state import AppState
 from app.infra.logger import logger
@@ -84,6 +85,13 @@ def generate_node(state: AppState) -> AppState:
 
     # 前置压缩：消息过多时裁剪/摘要，再喂给 LLM
     conversation_history = compress_history(conversation_history)
+    if state.get("allow_full_replace"):
+        for message in reversed(conversation_history):
+            if message.get("role") == "user":
+                message["content"] = (
+                    "[用户已在界面明确确认全部重新生成]\n" + message["content"]
+                )
+                break
 
     result = run_react_agent(
         design_type=design_type,
@@ -92,6 +100,47 @@ def generate_node(state: AppState) -> AppState:
         task_name=design_type,
         mode=mode,
     )
+
+    if "operations" in result:
+        operations = result["operations"]
+        if _contains_forbidden_replace(state, operations):
+            state["intent"] = "error"
+            state["design_output"] = {
+                "intent": "error",
+                "message": "检测到全量替换操作，但本次请求未获得用户明确授权",
+                "error_type": "full_replace_not_confirmed",
+                "retryable": False,
+            }
+            return state
+        try:
+            materialized = apply_design_operations(
+                design_type,
+                current_form_data,
+                operations,
+                mode=mode,
+            )
+        except ValueError as exc:
+            logger.warning("[design] operation application failed: %s", exc)
+            state["intent"] = "error"
+            state["design_output"] = {
+                "intent": "error",
+                "message": str(exc),
+                "error_type": "invalid_operation",
+                "retryable": False,
+                "operation_count": len(operations),
+            }
+            return state
+        result = {
+            **materialized,
+            "operations": operations,
+            "operation_count": len(operations),
+        }
+        logger.info(
+            "[design] operations applied, type=%s, mode=%s, count=%s",
+            design_type,
+            mode,
+            len(operations),
+        )
 
     logger.debug(f"[design] LLM 返回: {str(result)[:200]}")
 
@@ -113,6 +162,18 @@ def generate_node(state: AppState) -> AppState:
     state["messages"].append(AIMessage(content=ai_message))
 
     return state
+
+
+def _contains_forbidden_replace(state: AppState, operations: list[dict]) -> bool:
+    """已有设计只有在用户显式确认后才允许全量替换。"""
+    if state.get("allow_full_replace"):
+        return False
+    baseline = state.get("current_form_data") or {}
+    has_design = bool(
+        baseline.get("nodes") or baseline.get("widgetList") or baseline.get("content")
+    )
+    replace_ops = {"replace_graph", "replace_form"}
+    return has_design and any(item.get("op") in replace_ops for item in operations)
 
 
 def _baseline_summary(current_form_data: dict, design_type: str) -> str:

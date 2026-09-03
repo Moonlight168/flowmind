@@ -26,6 +26,7 @@ class AppState(TypedDict, total=False):
     design_type: str | None
     mode: str | None
     current_form_data: dict | None
+    allow_full_replace: bool | None
 
     # chat 专用
     chat_response: str | None

@@ -48,9 +48,12 @@ def design_error_fallback(state: AppState) -> AppState:
     """将设计节点异常转换为工作流可路由的错误状态。"""
     state["intent"] = "error"
     state["design_output"] = {
+        "status": "error",
         "intent": "error",
+        "form_data": None,
         "message": DESIGN_ERROR_MESSAGE,
         "error_type": "internal",
+        "retryable": True,
     }
     return state
 

@@ -6,8 +6,6 @@ FlowMind 智能流程设计服务 - 角色服务
 
 from typing import Any
 
-import requests
-
 from app.config.settings import settings
 from app.infra.logger import logger
 from app.integrations.backend.client import BackendClient
@@ -33,25 +31,8 @@ class RoleClient(BackendClient):
         Returns:
             匹配的角色列表，不存在返回空列表
         """
-        try:
-            url = f"{self.base_url}{self.api_path}/list"
-            params = {}
-            if role_name:
-                params["roleName"] = role_name
-
-            response = self._get(url, params=params)
-
-            if response.status_code == 200:
-                result = response.json()
-                rows = result.get("rows") or result.get("data")
-                if rows and len(rows) > 0:
-                    logger.info(f"搜索到 {len(rows)} 个角色")
-                    return list(rows)
-            return []
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"搜索角色失败（网络错误）：{e}")
-            return []
-        except (ValueError, TypeError, KeyError) as e:
-            logger.error(f"搜索角色失败（未预期）：{e}", exc_info=True)
-            return []
+        url = f"{self.base_url}{self.api_path}/list"
+        params = {"roleName": role_name} if role_name else {}
+        rows = self._get_list(url, params=params, resource_name="角色")
+        logger.info(f"搜索到 {len(rows)} 个角色")
+        return rows

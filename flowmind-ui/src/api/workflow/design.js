@@ -25,11 +25,11 @@ export function designForm(data) {
   })
 }
 
-export function clearDesignState(designType, threadId) {
+export function clearDesignState(designType, threadId, mode = 'design') {
   return request({
     url: '/flowmind-ai/design/state/' + designType,
     method: 'delete',
-    params: threadId ? { thread_id: threadId } : undefined
+    params: { ...(threadId ? { thread_id: threadId } : {}), mode }
   })
 }
 
@@ -40,7 +40,7 @@ export function clearDesignState(designType, threadId) {
  * @param {object} data - 请求体 { user_input, current_form_data, mode }
  * @param {function} onEvent - 回调，逐条接收事件对象
  *   进度事件：{ type: 'progress', phase, message }
- *   完成事件：{ type: 'done', form_data, message, intent, partial }
+ *   完成事件：{ type: 'done', status, form_data, operations, validation, trace_id }
  *   错误事件：{ type: 'error', message }
  */
 export async function designStream(designType, data, onEvent) {

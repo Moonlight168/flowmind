@@ -120,17 +120,19 @@
       designType="flow"
       mode="basic"
       :formData="form"
+      @preview="handleAiPreviewBasic"
+      @discard="discardAiPreviewBasic"
       @fill="handleAiFillBasic"
     />
 
     <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen>
-      <div class="ai-designer-wrap">
+      <div :class="['ai-designer-wrap', { 'ai-designer-wrap--with-panel': aiDesignVisible }]">
         <ProcessDesigner
           :key="`designer-${reloadIndex}`"
           ref="modelDesignerRef"
           v-loading="designerLoading"
-          :designer-form="designerForm"
-          :bpmn-xml="bpmnXml"
+          :designer-form="designerForm.form"
+          :bpmn-xml="designerPreviewData?.bpmn_xml || bpmnXml"
           @save="onSaveDesigner"
         >
           <template #custom-buttons>
@@ -151,6 +153,8 @@
       designType="flow"
       mode="design"
       :formData="designerFlowInfo"
+      @preview="handleAiPreview"
+      @discard="discardAiPreview"
       @fill="handleAiFill"
       @designing="onAiDesigning"
       @progress="onAiProgress"
@@ -227,6 +231,8 @@ const aiDesignDialogRef = ref();
 const aiDesigning = ref(false);
 const aiDesignProgress = ref('');
 const aiDesignBasicVisible = ref(false);
+const basicPreviewSnapshot = ref(null);
+const designerPreviewData = ref(null);
 const aiDesignBasicDialogRef = ref();
 const designerFlowInfo = ref({});
 
@@ -440,6 +446,10 @@ const getCategoryList = async () => {
 }
 
 const onSaveDesigner = async (str) => {
+  if (designerPreviewData.value) {
+    proxy.$modal.msgWarning('请先在 AI 变更预览中应用或放弃本次变更');
+    return;
+  }
   bpmnXml.value = str;
 
   // 检查是否为新模型（AI 生成的流程）
@@ -507,6 +517,15 @@ const handleAiFillBasic = (data) => {
   if (data.description) {
     form.value.description = data.description;
   }
+  basicPreviewSnapshot.value = null;
+};
+
+const handleAiPreviewBasic = (data) => {
+  basicPreviewSnapshot.value = data;
+};
+
+const discardAiPreviewBasic = () => {
+  basicPreviewSnapshot.value = null;
 };
 
 /** 可视化设计 AI 设计按钮 */
@@ -547,6 +566,15 @@ const handleAiFill = (data) => {
   if (data.flow_key) {
     designerForm.form.processKey = data.flow_key;
   }
+  designerPreviewData.value = null;
+};
+
+const handleAiPreview = (data) => {
+  designerPreviewData.value = data;
+};
+
+const discardAiPreview = () => {
+  designerPreviewData.value = null;
 };
 
 /** AI 生成状态：开始/结束 */
@@ -600,6 +628,15 @@ onMounted(async () => {
 .ai-designer-wrap {
   position: relative;
   min-height: 60vh;
+  transition: margin-right 0.2s ease;
+}
+
+.ai-designer-wrap--with-panel {
+  margin-right: 560px;
+}
+
+@media (max-width: 1100px) {
+  .ai-designer-wrap--with-panel { margin-right: 0; }
 }
 
 .ai-design-mask {

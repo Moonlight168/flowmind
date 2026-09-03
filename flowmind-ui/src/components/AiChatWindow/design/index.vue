@@ -56,7 +56,27 @@
       </div>
     </div>
 
+    <div v-if="pendingPreview" class="change-preview">
+      <div class="change-preview__title">变更预览</div>
+      <div class="change-preview__summary">
+        共 {{ pendingPreview.operation_count || pendingPreview.operations?.length || 0 }} 项变更，
+        已通过语法和业务校验
+      </div>
+      <ul v-if="pendingPreview.operations?.length" class="change-preview__operations">
+        <li v-for="(operation, index) in pendingPreview.operations" :key="index">
+          {{ operationLabel(operation) }}
+        </li>
+      </ul>
+      <div class="change-preview__actions">
+        <el-button @click="discardPreview">放弃</el-button>
+        <el-button type="primary" @click="applyPreview">应用变更</el-button>
+      </div>
+    </div>
+
     <div class="dialog-footer">
+      <el-checkbox v-if="mode === 'design'" v-model="allowFullReplace" :disabled="loading">
+        全部重新生成
+      </el-checkbox>
       <el-input
         v-model="inputText"
         placeholder="请描述您的需求"
@@ -81,6 +101,7 @@ import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import useUserStore from '@/store/modules/user'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { ElMessageBox } from 'element-plus'
 
 const userStore = useUserStore()
 
@@ -104,7 +125,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'fill', 'progress', 'designing'])
+const emit = defineEmits(['update:modelValue', 'fill', 'preview', 'discard', 'progress', 'designing'])
 
 const visible = computed({
   get: () => props.modelValue,
@@ -121,6 +142,10 @@ const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
 const progressText = ref('')
+const pendingPreview = ref(null)
+const previewBaselineHadDesign = ref(false)
+const previewBaseline = ref(null)
+const allowFullReplace = ref(false)
 const messagesContainer = ref(null)
 // 统一维护当前表单数据：AI 更新和外部修改都同步到这里
 const currentFormData = ref({})
@@ -243,6 +268,7 @@ watch(visible, (val) => {
       currentFormData.value = { ...props.formData }
     }
   } else {
+    discardPreview()
     // 弹窗关闭时：保存状态
     sessionStorage.setItem(storageKey.value, JSON.stringify({
       messages: messages.value,
@@ -255,6 +281,17 @@ async function handleSend() {
   if (!inputText.value.trim() || loading.value) return
 
   const userInput = inputText.value.trim()
+  if (allowFullReplace.value) {
+    try {
+      await ElMessageBox.confirm(
+        '全部重新生成会丢弃当前设计，确认继续吗？',
+        '二次确认',
+        { type: 'warning', confirmButtonText: '确认重新生成', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+  }
   inputText.value = ''
 
   messages.value.push({ role: 'user', content: userInput })
@@ -269,7 +306,8 @@ async function handleSend() {
       user_input: userInput,
       current_form_data: currentFormData.value,
       mode: props.mode,
-      thread_id: flowKey.value
+      thread_id: flowKey.value,
+      allow_full_replace: allowFullReplace.value
     }, (event) => {
       if (event.type === 'progress') {
         progressText.value = event.message
@@ -290,14 +328,15 @@ async function handleSend() {
           sessionStorage.removeItem(versionKey.value)
           messages.value.push({ role: 'assistant', content: data.message || '已清空，重新开始' })
           scrollToBottom()
-        } else if (data.form_data != null && JSON.stringify(data.form_data) !== '{}') {
-          currentFormData.value = data.form_data
-          emit('fill', data.form_data)
-          // 完整成功才存版本 + 关闭；半成品草稿（partial）保持打开
-          if (data.intent === 'success' && !data.partial) {
-            saveVersion(data.form_data)
-            visible.value = false
-          }
+        } else if (data.status === 'ready' && data.form_data != null) {
+          previewBaseline.value = cloneData(currentFormData.value)
+          previewBaselineHadDesign.value = Boolean(
+            currentFormData.value.nodes?.length ||
+            currentFormData.value.widgetList?.length ||
+            currentFormData.value.content
+          )
+          pendingPreview.value = data
+          emit('preview', data.form_data)
         }
         if (data.message && data.kind !== 'rollback' && data.kind !== 'reset') {
           messages.value.push({ role: 'assistant', content: data.message })
@@ -318,6 +357,7 @@ async function handleSend() {
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
     scrollToBottom()
   } finally {
+    allowFullReplace.value = false
     loading.value = false
     progressText.value = ''
     emit('designing', false)
@@ -332,8 +372,60 @@ function scrollToBottom() {
   }, 0)
 }
 
+function operationLabel(operation) {
+  const labels = {
+    replace_graph: '生成流程结构', add_node: '新增流程节点', update_node: '修改流程节点',
+    remove_node: '删除流程节点', add_edge: '新增流程连线', update_edge: '修改流程连线',
+    remove_edge: '删除流程连线', replace_form: '生成表单结构', add_widget: '新增表单字段',
+    update_widget: '修改表单字段', remove_widget: '删除表单字段', move_widget: '移动表单字段',
+    update_category: '修改分类信息', update_flow_metadata: '修改流程基本信息'
+  }
+  const target = operation.node_id || operation.widget_name || operation.node?.name || operation.widget?.options?.label
+  return `${labels[operation.op] || operation.op}${target ? `：${target}` : ''}`
+}
+
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value || {}))
+}
+
+async function applyPreview() {
+  if (!pendingPreview.value) return
+  const replacesAll = pendingPreview.value.operations?.some(operation =>
+    ['replace_graph', 'replace_form'].includes(operation.op)
+  )
+  if (replacesAll && previewBaselineHadDesign.value) {
+    try {
+      await ElMessageBox.confirm(
+        '该操作会替换当前全部设计，是否确认应用？',
+        '二次确认',
+        { type: 'warning', confirmButtonText: '确认替换', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+  }
+  const formData = pendingPreview.value.form_data
+  currentFormData.value = formData
+  emit('fill', formData)
+  saveVersion(formData)
+  pendingPreview.value = null
+  previewBaselineHadDesign.value = false
+  previewBaseline.value = null
+  visible.value = false
+}
+
+function discardPreview() {
+  if (!pendingPreview.value) return
+  if (previewBaseline.value) currentFormData.value = cloneData(previewBaseline.value)
+  pendingPreview.value = null
+  previewBaselineHadDesign.value = false
+  previewBaseline.value = null
+  emit('discard')
+}
+
 
 function clearMessages() {
+  discardPreview()
   messages.value = []
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
   // 只清空 AI 生成的数据
@@ -341,7 +433,7 @@ function clearMessages() {
   sessionStorage.removeItem(storageKey.value)
   sessionStorage.removeItem(versionKey.value)
   // 同步清除后端 Redis 中的对话历史
-  clearDesignState(props.designType, flowKey.value).catch((error) => {
+  clearDesignState(props.designType, flowKey.value, props.mode).catch((error) => {
     console.warn('清除后端对话历史失败:', error)
   })
 }
@@ -536,4 +628,15 @@ defineExpose({
     flex: 1;
   }
 }
+
+.change-preview {
+  padding: 12px 16px;
+  border-top: 1px solid #dcdfe6;
+  background: #f0f9eb;
+}
+
+.change-preview__title { font-weight: 600; color: #303133; }
+.change-preview__summary { margin-top: 4px; font-size: 12px; color: #606266; }
+.change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
+.change-preview__actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

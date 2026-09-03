@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 import typing
+from itertools import pairwise
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
@@ -23,6 +24,8 @@ from redis.exceptions import RedisError
 
 from app.core.auth_context import set_auth_token
 from app.core.exceptions import FlowDesignException
+from app.design.bpmn_validator import validate_bpmn_xml
+from app.design.validators.vform3_validator import validate_vform3_document
 from app.graph.design_graph import (
     delete_design_thread,
     invoke_design_workflow,
@@ -43,8 +46,8 @@ EVALUATION_RUNTIME_ERRORS = (
 )
 
 
-class GoldenInput(BaseModel):
-    """真实设计工作流所需的输入。"""
+class GoldenTurn(BaseModel):
+    """One anonymized user turn and its artifact baseline."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -52,6 +55,14 @@ class GoldenInput(BaseModel):
     user_input: str = Field(min_length=1)
     current_form_data: dict[str, Any] = Field(default_factory=dict)
     mode: Literal["basic", "design"] = "design"
+
+
+class GoldenInput(BaseModel):
+    """A single-turn or multi-turn design conversation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    turns: list[GoldenTurn] = Field(min_length=1)
 
 
 class GoldenFallbackOutput(BaseModel):
@@ -69,7 +80,7 @@ class GoldenExpectedOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    intent: Literal["success", "clarification", "error"]
+    status: Literal["ready", "needs_input", "error"]
     required_paths: list[str] = Field(default_factory=list)
     min_counts: dict[str, int] = Field(default_factory=dict)
     required_node_types: list[str] = Field(default_factory=list)
@@ -86,6 +97,7 @@ class GoldenCase(BaseModel):
 
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     category: str = Field(min_length=1)
+    source: Literal["real_anonymized", "curated"]
     input: GoldenInput
     expected_output: GoldenExpectedOutput
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -133,7 +145,7 @@ def sync_dataset(client: Any, dataset_name: str, cases: list[GoldenCase]) -> lis
     client.create_dataset(
         name=dataset_name,
         description="FlowMind 设计链路黄金数据集",
-        metadata={"schema_version": 1, "service": "flowmind-ai-flow"},
+        metadata={"schema_version": 2, "service": "flowmind-ai-flow"},
         input_schema=GoldenInput.model_json_schema(),
         expected_output_schema=GoldenExpectedOutput.model_json_schema(),
     )
@@ -147,6 +159,8 @@ def sync_dataset(client: Any, dataset_name: str, cases: list[GoldenCase]) -> lis
                 **case.metadata,
                 "case_id": case.id,
                 "category": case.category,
+                "source": case.source,
+                "turn_count": len(case.input.turns),
             },
         )
         for case in cases
@@ -162,10 +176,23 @@ def build_workflow_task(auth_token: str) -> typing.Callable[..., dict[str, Any]]
         set_auth_token(auth_token)
         try:
             case_input = GoldenInput.model_validate(item.input)
-            output = invoke_design_workflow(
-                **case_input.model_dump(), thread_id=thread_id
-            )
-            return {"case_id": case_id, "thread_id": thread_id, **output}
+            turn_outputs = []
+            latest_artifact: dict[str, Any] = {}
+            for turn in case_input.turns:
+                turn_data = turn.model_dump()
+                if not turn_data["current_form_data"]:
+                    turn_data["current_form_data"] = latest_artifact
+                output = invoke_design_workflow(**turn_data, thread_id=thread_id)
+                output["design_type"] = turn.design_type
+                turn_outputs.append(output)
+                if output.get("status") == "ready" and output.get("form_data"):
+                    latest_artifact = output["form_data"]
+            return {
+                "case_id": case_id,
+                "thread_id": thread_id,
+                "turn_outputs": turn_outputs,
+                **turn_outputs[-1],
+            }
         except EVALUATION_RUNTIME_ERRORS as exc:
             return _runtime_failure_output(case_id, thread_id, exc)
         finally:
@@ -185,7 +212,9 @@ def _runtime_failure_output(
     return {
         "case_id": case_id,
         "thread_id": thread_id,
+        "status": "error",
         "intent": "error",
+        "form_data": None,
         "error_type": "evaluation_runtime",
         "message": "评估执行失败，已隔离该用例",
         "failed_exception": exception_name,
@@ -199,14 +228,15 @@ def evaluate_contract(
     expected = GoldenExpectedOutput.model_validate(expected_output)
     scores = [
         _evaluation(
-            "intent_match",
-            output.get("intent") == expected.intent,
-            f"期望 intent={expected.intent}",
+            "status_match",
+            output.get("status") == expected.status,
+            f"期望 status={expected.status}",
         )
     ]
     _append_path_scores(scores, output, expected)
     _append_coverage_scores(scores, output, expected)
     _append_fallback_score(scores, output, expected)
+    _append_chain_quality_scores(scores, output)
     scores.append(
         Evaluation(
             name="contract_score",
@@ -215,6 +245,85 @@ def evaluate_contract(
         )
     )
     return scores
+
+
+def _append_chain_quality_scores(
+    scores: list[Evaluation], output: dict[str, Any]
+) -> None:
+    turns = output.get("turn_outputs") or [output]
+    ready_turns = [turn for turn in turns if turn.get("status") == "ready"]
+    if ready_turns:
+        valid = sum(_artifact_is_valid(turn) for turn in ready_turns)
+        scores.append(
+            Evaluation(
+                name="artifact_validity",
+                value=valid / len(ready_turns),
+                comment=f"可导入产物 {valid}/{len(ready_turns)}",
+            )
+        )
+    if len(ready_turns) > 1:
+        scores.append(
+            _evaluation(
+                "incremental_retention",
+                _retains_previous_artifact(ready_turns),
+                "多轮修改保留未显式删除的既有元素",
+            )
+        )
+
+
+def _artifact_is_valid(turn: dict[str, Any]) -> bool:
+    artifact = turn.get("form_data") or {}
+    if turn.get("validation", {}).get("passed") is False:
+        return False
+    if turn.get("design_type") == "flow_design" and artifact.get("bpmn_xml"):
+        return validate_bpmn_xml(artifact["bpmn_xml"]).is_valid
+    if turn.get("design_type") == "form_design":
+        try:
+            validate_vform3_document(artifact)
+        except (ValueError, TypeError):
+            return False
+        return True
+    return True
+
+
+def _retains_previous_artifact(turns: list[dict[str, Any]]) -> bool:
+    for previous, current in pairwise(turns):
+        removed = _removed_targets(current.get("operations") or [])
+        previous_ids = _artifact_element_ids(previous.get("form_data") or {})
+        current_ids = _artifact_element_ids(current.get("form_data") or {})
+        if not previous_ids.difference(removed).issubset(current_ids):
+            return False
+    return True
+
+
+def _removed_targets(operations: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(operation.get("node_id") or operation.get("widget_name"))
+        for operation in operations
+        if operation.get("op") in {"remove_node", "remove_widget"}
+    }
+
+
+def _artifact_element_ids(artifact: dict[str, Any]) -> set[str]:
+    nodes = {
+        str(node.get("id")) for node in artifact.get("nodes", []) if node.get("id")
+    }
+    widgets = _nested_widget_names(artifact.get("widgetList", []))
+    return nodes | widgets
+
+
+def _nested_widget_names(widgets: list[dict[str, Any]]) -> set[str]:
+    names: set[str] = set()
+    for widget in widgets:
+        name = (widget.get("options") or {}).get("name")
+        if name:
+            names.add(str(name))
+        names.update(_nested_widget_names(widget.get("widgetList") or []))
+        names.update(_nested_widget_names(widget.get("cols") or []))
+        names.update(_nested_widget_names(widget.get("tabs") or []))
+        for row in widget.get("rows") or []:
+            names.update(_nested_widget_names(row.get("cols") or []))
+    return names
 
 
 def _append_path_scores(
@@ -279,7 +388,7 @@ def _fallback_contract_matches(
     output: dict[str, Any], expected: GoldenExpectedOutput
 ) -> bool | None:
     explicit_contract = expected.error_type is not None or expected.message_contains
-    observed_fallback = output.get("intent") == "error" and expected.fallback_output
+    observed_fallback = output.get("status") == "error" and expected.fallback_output
     if not explicit_contract and not observed_fallback:
         return None
     error_types = (
@@ -346,6 +455,7 @@ __all__ = [
     "GoldenExpectedOutput",
     "GoldenFallbackOutput",
     "GoldenInput",
+    "GoldenTurn",
     "build_workflow_task",
     "evaluate_contract",
     "load_golden_cases",

@@ -107,17 +107,22 @@ flowmind-ai-flow/
 
 ```json
 {
+  "status": "ready",
   "form_data": {
     "flow_name": "请假审批流程",
     "category_id": "leave_approval",
     "bpmn_xml": "<?xml version='1.0'...?>",
     "description": "..."
   },
-  "message": "已为您生成【请假审批流程】流程",
-  "design_type": "flow",
-  "review_passed": true
+  "message": "已生成流程变更预览",
+  "operations": [{"op": "add_node", "node": {"id": "manager_approve"}}],
+  "operation_count": 1,
+  "validation": {"passed": true, "errors": []},
+  "trace_id": "..."
 }
 ```
+
+`ready` 只表示候选结果已通过语法和业务校验，前端仍需用户点击“应用变更”；`needs_input` 和 `error` 均不携带可覆盖当前设计的草稿。替换已有完整设计时还会进行二次确认。
 
 ## 黄金数据集评估
 
@@ -131,7 +136,7 @@ python -m scripts.run_golden_eval
 python -m scripts.run_golden_eval --case-id flow-linear-leave
 ```
 
-脚本会幂等同步 `evals/golden_dataset.jsonl`，并在 Langfuse Dataset Run 中记录真实工作流链路、输出和契约评分。单条运行失败会转换为可评分的兜底结果，不中断同批其他用例。
+脚本会幂等同步 `evals/golden_dataset.jsonl`。每条用例统一使用 `turns` 表示单轮或多轮匿名真实对话/人工覆盖用例，并在 Langfuse Dataset Run 中记录每轮输出、操作、校验、模型降级和契约评分。单条运行失败会转换为可评分的兜底结果，不中断同批其他用例。
 
 ## 提示词版本与灰度发布
 

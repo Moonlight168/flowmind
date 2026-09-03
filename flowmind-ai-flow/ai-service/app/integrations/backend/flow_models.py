@@ -36,31 +36,15 @@ class FlowModelClient(BackendClient):
         Returns:
             匹配的流程模型列表，不存在返回空列表
         """
-        try:
-            url = f"{self.base_url}{self.api_path}/list"
-            params = {}
-            if model_name:
-                params["modelName"] = model_name
-            if model_key:
-                params["modelKey"] = model_key
-
-            response = self._get(url, params=params)
-
-            if response.status_code == 200:
-                result = response.json()
-                rows = result.get("data") or result.get("rows")
-                if rows and len(rows) > 0:
-                    logger.info(f"搜索到 {len(rows)} 个流程模型")
-                    return list(rows)
-            return []
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"搜索流程模型失败（网络错误）：{e}")
-            return []
-        # Fallback: 捕获 JSON 解析、数据类型等意外错误
-        except (ValueError, TypeError, KeyError) as e:
-            logger.error(f"搜索流程模型失败（未预期）：{e}", exc_info=True)
-            return []
+        url = f"{self.base_url}{self.api_path}/list"
+        params = {}
+        if model_name:
+            params["modelName"] = model_name
+        if model_key:
+            params["modelKey"] = model_key
+        rows = self._get_list(url, params=params, resource_name="流程模型")
+        logger.info(f"搜索到 {len(rows)} 个流程模型")
+        return rows
 
     def get_model_by_name(self, model_name: str) -> dict[str, Any] | None:
         """根据流程模型名称获取第一个匹配的流程模型

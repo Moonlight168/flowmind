@@ -3,7 +3,6 @@ FlowMind 智能流程设计服务 - Prompt 构建器
 """
 
 import json
-import re
 from typing import Any
 
 from app.config.llm_task import Task, get_task_config
@@ -73,49 +72,16 @@ def _format_current_form_data(value: dict) -> str:
 
 
 def _format_flow_basic_info(current_form_data: dict) -> str:
-    """格式化流程基本信息为提示词片段"""
+    """Format the normalized artifact baseline without large serialized blobs."""
     if not current_form_data:
-        return "（新流程，尚无基本信息）"
-
-    lines = []
-    # 兼容前端和后端的不同字段名
-    flow_name = current_form_data.get("flow_name") or current_form_data.get("modelName")
-    code = current_form_data.get("code") or current_form_data.get("category")
-    description = current_form_data.get("description")
-    bpmn_xml = current_form_data.get("bpmnXml") or current_form_data.get("bpmn_xml")
-    nodes = current_form_data.get("nodes")
-    edges = current_form_data.get("edges")
-
-    if flow_name:
-        lines.append(f"- 流程名称：{flow_name}")
-    if code:
-        lines.append(f"- 分类编码：{code}")
-    if description:
-        lines.append(f"- 流程描述：{description}")
-
-    if nodes:
-        # nodes 优先：传完整结构（而非节点名），让 LLM 在完整结构上增量修改，保留用户手动改的审批人/表单绑定
-        lines.append("现有流程结构（完整，必须在此基础上增量修改）：")
-        lines.append(f"nodes: {json.dumps(nodes, ensure_ascii=False)}")
-        lines.append(f"edges: {json.dumps(edges or [], ensure_ascii=False)}")
-        lines.append(
-            "- 只修改用户指令提到的内容，未提及的节点/连线/审批人/表单绑定【逐字保留】原样返回"
-        )
-        lines.append("- 完整返回 nodes + edges（含保留的节点，不是只返回改动部分）")
-    elif bpmn_xml:
-        lines.append("- 已有流程编排，用户正在修改现有流程")
-        # 尝试从 bpmnXml 中提取节点信息供 AI 参考（无 nodes 时的 fallback）
-        try:
-            # 提取 userTask 节点名称
-            task_names = re.findall(r'<bpmn2?:userTask[^>]*name="([^"]*)"', bpmn_xml)
-            if task_names:
-                lines.append(f"- 现有审批节点：{', '.join(task_names)}")
-        except TypeError:
-            pass
-    else:
-        lines.append("- 尚无流程编排，将全新生成")
-
-    return "\n".join(lines) if lines else "（新流程，尚无基本信息）"
+        return "（空白设计）"
+    omitted = {"bpmnXml", "bpmn_xml", "content"}
+    baseline = {
+        key: value
+        for key, value in current_form_data.items()
+        if key not in omitted and value not in (None, "")
+    }
+    return json.dumps(baseline, ensure_ascii=False, indent=2)
 
 
 def _format_default(value: Any) -> str:

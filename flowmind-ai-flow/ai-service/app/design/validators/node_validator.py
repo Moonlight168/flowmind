@@ -107,12 +107,11 @@ class NodeValidator:
                     )
                 )
 
-        # NODE_N005: START_EVENT 必须有 form_key
+        # NODE_N005: START_EVENT 必须有 form_key；所有显式引用都必须存在。
         for node in nodes:
-            if (node.get("type") or "").upper() != "START_EVENT":
-                continue
             form_key = node.get("form_key", "")
-            if not form_key:
+            is_start = (node.get("type") or "").upper() == "START_EVENT"
+            if is_start and not form_key:
                 errors.append(
                     ValidationError(
                         "NODE_N005",
@@ -120,27 +119,33 @@ class NodeValidator:
                         element_id=node.get("id"),
                     )
                 )
-            elif context.available_forms and not _form_key_exists(
-                form_key, context.available_forms
+            elif (
+                form_key
+                and context.forms_lookup_complete
+                and not _form_key_exists(form_key, context.available_forms)
             ):
                 errors.append(
                     ValidationError(
                         "NODE_N005",
-                        f"开始节点的 form_key '{form_key}' 不在可用表单列表中",
+                        f"节点 '{node.get('name')}' 的 form_key '{form_key}' 不在可用表单列表中",
                         element_id=node.get("id"),
                     )
                 )
 
-        # NODE_N006: GATEWAY 类节点必须有 ≥2 出边
+        # NODE_N006: 网关必须是分支（至少两条出边）或汇聚（至少两条入边）。
         for node in nodes:
             if (node.get("type") or "").upper() not in GATEWAY_TYPES:
                 continue
             out_count = sum(1 for e in edges if e.get("source") == node.get("id"))
-            if out_count < 2:
+            in_count = sum(1 for e in edges if e.get("target") == node.get("id"))
+            is_split = out_count >= 2
+            is_merge = in_count >= 2 and out_count == 1
+            if not (is_split or is_merge):
                 errors.append(
                     ValidationError(
                         "NODE_N006",
-                        f"网关 '{node.get('name')}' 出边数量不足（至少 2 条，当前 {out_count} 条）",
+                        f"网关 '{node.get('name')}' 不是有效分支或汇聚"
+                        f"（入边 {in_count} 条，出边 {out_count} 条）",
                         element_id=node.get("id"),
                     )
                 )
@@ -149,13 +154,24 @@ class NodeValidator:
 
 
 def _form_key_exists(form_key: str, available_forms: list[dict]) -> bool:
-    """宽松匹配 form_key 是否在可用表单列表中"""
+    """匹配后端可能返回的数字 ID、业务 key 和 Flowable key。"""
+    expected = _normalize_form_key(form_key)
     for form in available_forms:
-        if form_key in (
+        identifiers = (
             form.get("formId"),
             form.get("id"),
             form.get("formKey"),
             form.get("form_key"),
+        )
+        if any(
+            _normalize_form_key(value) == expected
+            for value in identifiers
+            if value is not None
         ):
             return True
     return False
+
+
+def _normalize_form_key(value: object) -> str:
+    normalized = str(value).strip()
+    return normalized[4:] if normalized.startswith("key_") else normalized

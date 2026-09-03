@@ -9,6 +9,10 @@ import requests
 from app.config.settings import settings
 
 
+class BackendLookupError(RuntimeError):
+    """A backend lookup failed; this is different from a valid empty result."""
+
+
 class BackendClient:
     """后端服务基类
 
@@ -94,6 +98,28 @@ class BackendClient:
     def _get(self, url: str, **kwargs) -> requests.Response:
         """发送 GET 请求"""
         return self._request("GET", url, **kwargs)
+
+    def _get_list(self, url: str, *, params: dict, resource_name: str) -> list[dict]:
+        """Read a list response and fail closed on transport or protocol errors."""
+        try:
+            response = self._get(url, params=params)
+            if response.status_code != 200:
+                raise BackendLookupError(
+                    f"{resource_name}查询失败，HTTP {response.status_code}"
+                )
+            payload = response.json()
+            if payload.get("code") not in (None, 200):
+                raise BackendLookupError(f"{resource_name}查询返回业务错误")
+            rows = payload.get("data") if "data" in payload else payload.get("rows")
+            if rows is None:
+                return []
+            if not isinstance(rows, list):
+                raise BackendLookupError(f"{resource_name}查询响应格式错误")
+            return rows
+        except requests.RequestException as exc:
+            raise BackendLookupError(f"{resource_name}查询网络不可用") from exc
+        except (ValueError, TypeError, KeyError) as exc:
+            raise BackendLookupError(f"{resource_name}查询响应无法解析") from exc
 
     def _post(self, url: str, **kwargs) -> requests.Response:
         """发送 POST 请求"""

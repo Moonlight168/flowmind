@@ -40,9 +40,12 @@ def test_node_handler_returns_design_fallback_on_failure(
 
     assert result["intent"] == "error"
     assert result["design_output"] == {
+        "status": "error",
         "intent": "error",
+        "form_data": None,
         "message": "AI 服务暂时异常，请稍后重试",
         "error_type": "internal",
+        "retryable": True,
     }
     assert len(error_logs) == 1
     assert "[design] 执行失败: 模型不可用" in error_logs[0]

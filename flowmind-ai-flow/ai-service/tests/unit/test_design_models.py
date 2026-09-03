@@ -16,28 +16,32 @@ from app.domain.design_models import (
 
 def test_flow_design_valid():
     obj = FlowDesign(
-        nodes=[
+        operations=[
             {
-                "type": "START_EVENT",
-                "id": "startEvent",
-                "name": "开始",
-                "form_key": "form1",
-            },
-            {
-                "type": "USER_TASK",
-                "id": "node_approve",
-                "name": "审批",
-                "candidate_groups": ["ROLE1"],
-            },
-            {"type": "END_EVENT", "id": "endEvent", "name": "结束"},
-        ],
-        edges=[
-            {"source": "start", "target": "node_approve"},
-            {"source": "node_approve", "target": "end"},
+                "op": "replace_graph",
+                "nodes": [
+                    {
+                        "type": "START_EVENT",
+                        "id": "startEvent",
+                        "name": "开始",
+                        "form_key": "form1",
+                    },
+                    {
+                        "type": "USER_TASK",
+                        "id": "node_approve",
+                        "name": "审批",
+                        "candidate_groups": ["ROLE1"],
+                    },
+                    {"type": "END_EVENT", "id": "endEvent", "name": "结束"},
+                ],
+                "edges": [
+                    {"source": "start", "target": "node_approve"},
+                    {"source": "node_approve", "target": "end"},
+                ],
+            }
         ],
     )
-    assert len(obj.nodes) == 3
-    assert len(obj.edges) == 2
+    assert obj.operations[0].op == "replace_graph"
 
 
 def test_flow_node_invalid_type_rejected():
@@ -57,24 +61,36 @@ def test_flow_node_missing_required():
 
 def test_form_design_valid():
     obj = FormDesign(
-        form_name="请假申请单",
-        widgetList=[
-            FormWidget(
-                type="input",
-                formItemFlag=True,
-                options={"name": "reason", "label": "请假事由"},
-            ),
+        operations=[
+            {
+                "op": "replace_form",
+                "form_name": "请假申请单",
+                "widgetList": [
+                    FormWidget(
+                        type="input",
+                        formItemFlag=True,
+                        options={"name": "reason", "label": "请假事由"},
+                    ),
+                ],
+                "formConfig": {},
+            }
         ],
     )
-    assert obj.form_name == "请假申请单"
-    assert len(obj.widgetList) == 1
+    assert obj.operations[0].op == "replace_form"
 
 
 def test_category_design_valid():
-    obj = CategoryDesign(category_name="请假审批", code="leave_approval")
-    assert obj.code == "leave_approval"
+    obj = CategoryDesign(
+        operations=[
+            {
+                "op": "update_category",
+                "changes": {"category_name": "请假审批", "code": "leave_approval"},
+            }
+        ]
+    )
+    assert obj.operations[0].changes.code == "leave_approval"
 
 
 def test_category_design_extra_rejected():
     with pytest.raises(ValidationError):
-        CategoryDesign(category_name="x", code="x", unexpected_field="y")
+        CategoryDesign(operations=[], unexpected_field="y")

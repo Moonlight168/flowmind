@@ -30,8 +30,8 @@ def test_render_prompt_only_replaces_named_variables() -> None:
     )
 
     assert "- 流程名称：请假" in prompt
-    assert '"condition": "${amount > 10000}"' in prompt
-    assert '{"nodes": [...]' in prompt
+    assert '"op":"add_node"' in prompt
+    assert "结构化 condition" in prompt
 
 
 def test_render_prompt_does_not_replace_placeholders_inside_values() -> None:
@@ -56,8 +56,8 @@ def test_build_prompt_combines_markdown_layers() -> None:
     )
 
     assert prompt.startswith("你是流程模型设计专家")
-    assert "- 流程名称：请假流程" in prompt
-    assert "# BPMN 流程设计规范" in prompt
+    assert '"flow_name": "请假流程"' in prompt
+    assert "# BPMN 设计约束" in prompt
     assert "## 意图识别" in prompt
 
 

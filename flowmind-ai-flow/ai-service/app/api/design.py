@@ -5,6 +5,7 @@ FlowMind 智能流程设计服务 - 设计 API
 """
 
 import json
+from hashlib import sha256
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -12,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
+from app.core.exceptions import FlowDesignException
 from app.domain.dto import ResponseVO
 from app.domain.dto.design_request import DesignRequestDTO
 from app.graph.design_graph import (
@@ -21,12 +23,32 @@ from app.graph.design_graph import (
 from app.infra.logger import generate_trace_id, set_trace_id
 
 router = APIRouter(prefix="/design", tags=["设计"])
+STREAM_ERRORS = (RuntimeError, ValueError, TypeError, FlowDesignException)
 
 
-def _design_thread_id(design_type: str, user_key: str) -> str:
-    """生成设计会话 thread_id，兼容 category_design / category 两种写法"""
+def _safe_stream_error(trace_id: str) -> str:
+    event = {
+        "type": "error",
+        "status": "error",
+        "error_type": "internal",
+        "retryable": True,
+        "message": "AI 服务暂时异常，请稍后重试",
+        "trace_id": trace_id,
+    }
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _design_thread_id(
+    design_type: str,
+    user_key: str,
+    mode: str = "design",
+    conversation_id: str | None = None,
+) -> str:
+    """Namespace a client conversation by user, artifact type and mode."""
     short = design_type.replace("_design", "")
-    return f"design_{short}_{user_key}"
+    raw = f"{user_key}:{conversation_id or 'default'}"
+    conversation_key = sha256(raw.encode()).hexdigest()[:16]
+    return f"design_{short}_{mode}_{conversation_key}"
 
 
 @router.post("/category")
@@ -37,8 +59,8 @@ def design_category(
     """分类设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id(
-        "category_design", current_user.user_key
+    thread_id = _design_thread_id(
+        "category_design", current_user.user_key, conversation_id=payload.thread_id
     )
 
     def event_stream():
@@ -49,10 +71,11 @@ def design_category(
                 thread_id=thread_id,
                 trace_id=trace_id,
                 current_form_data=payload.current_form_data,
+                allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except RuntimeError as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except STREAM_ERRORS:
+            yield _safe_stream_error(trace_id)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -65,8 +88,11 @@ def design_flow(
     """流程设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id(
-        "flow_design", current_user.user_key
+    thread_id = _design_thread_id(
+        "flow_design",
+        current_user.user_key,
+        payload.mode,
+        payload.thread_id,
     )
 
     def event_stream():
@@ -78,10 +104,11 @@ def design_flow(
                 trace_id=trace_id,
                 current_form_data=payload.current_form_data,
                 mode=payload.mode,
+                allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except RuntimeError as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except STREAM_ERRORS:
+            yield _safe_stream_error(trace_id)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -94,8 +121,8 @@ def design_form(
     """表单设计接口（SSE：进度事件 + done 事件）"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or _design_thread_id(
-        "form_design", current_user.user_key
+    thread_id = _design_thread_id(
+        "form_design", current_user.user_key, conversation_id=payload.thread_id
     )
 
     def event_stream():
@@ -106,10 +133,11 @@ def design_form(
                 thread_id=thread_id,
                 trace_id=trace_id,
                 current_form_data=payload.current_form_data,
+                allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except RuntimeError as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except STREAM_ERRORS:
+            yield _safe_stream_error(trace_id)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -118,9 +146,10 @@ def design_form(
 async def delete_design_state(
     design_type: str,
     thread_id: str | None = None,
+    mode: str = "design",
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
     """删除设计会话（thread_id 可选，不传则删除默认会话）"""
-    tid = thread_id or _design_thread_id(design_type, current_user.user_key)
+    tid = _design_thread_id(design_type, current_user.user_key, mode, thread_id)
     delete_design_thread(tid)
     return ResponseVO.success({"thread_id": tid})

@@ -76,7 +76,7 @@
       </template>
     </el-dialog>
 
-    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
+    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @preview="handleAiPreview" @discard="discardAiPreview" @fill="handleAiFill" />
   </div>
 </template>
 
@@ -96,6 +96,7 @@ const single = ref(true);
 const multiple = ref(true);
 const total = ref(0);
 const aiDesignVisible = ref(false);
+const aiPreviewSnapshot = ref(null);
 const aiDesignDialogRef = ref();
 const userStore = useUserStore();
 
@@ -216,6 +217,13 @@ const handleAiFill = (formData) => {
     form.value.code = formData.code || '';
     form.value.remark = formData.remark || '';
   }
+  aiPreviewSnapshot.value = null;
+}
+const handleAiPreview = (formData) => {
+  aiPreviewSnapshot.value = formData;
+}
+const discardAiPreview = () => {
+  aiPreviewSnapshot.value = null;
 }
 
 // 监听主对话框关闭，清空 AI 聊天和后端 checkpoint

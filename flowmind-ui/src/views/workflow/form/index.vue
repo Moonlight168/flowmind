@@ -57,7 +57,7 @@
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
-      <div id="form-designer" class="ai-designer-wrap">
+      <div id="form-designer" :class="['ai-designer-wrap', { 'ai-designer-wrap--with-panel': aiDesignVisible }]">
         <v-form-designer
           ref="vfDesignerRef"
           :resetFormJson="true"
@@ -68,7 +68,7 @@
           <!-- 自定义按钮插槽 -->
           <template #customToolButtons>
             <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
-            <el-button type="success" plain @click="dialog.visible = true">保存</el-button>
+            <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
           </template>
         </v-form-designer>
         <div v-if="aiDesigning" class="ai-design-mask">
@@ -84,6 +84,8 @@
       v-model="aiDesignVisible"
       designType="form"
       :formData="form"
+      @preview="handleAiPreview"
+      @discard="discardAiPreview"
       @fill="handleAiFill"
       @designing="onAiDesigning"
       @progress="onAiProgress"
@@ -145,6 +147,7 @@ const designer = reactive({
   title: ''
 })
 const aiDesignVisible = ref(false);
+const aiPreviewData = ref(null);
 const aiDesignDialogRef = ref();
 const aiDesigning = ref(false);
 const aiDesignProgress = ref('');
@@ -330,6 +333,27 @@ const handleAiFill = (data) => {
   if (vfDesignerRef.value?.setFormJson) {
     vfDesignerRef.value.setFormJson(formJson);
   }
+  aiPreviewData.value = null;
+};
+
+const handleAiPreview = (data) => {
+  aiPreviewData.value = data;
+  const formJson = {
+    widgetList: data?.widgetList || [],
+    formConfig: data?.formConfig || {}
+  };
+  vfDesignerRef.value?.setFormJson?.(formJson);
+};
+
+const discardAiPreview = () => {
+  if (!aiPreviewData.value) return;
+  if (vfDesignerRef.value?.setFormJson) {
+    const baseline = form.value.content
+      ? JSON.parse(form.value.content)
+      : { widgetList: [], formConfig: {} };
+    vfDesignerRef.value.setFormJson(baseline);
+  }
+  aiPreviewData.value = null;
 };
 
 /** AI 生成状态：开始/结束 */
@@ -428,6 +452,15 @@ getList();
 .ai-designer-wrap {
   position: relative;
   min-height: 60vh;
+  transition: margin-right 0.2s ease;
+}
+
+.ai-designer-wrap--with-panel {
+  margin-right: 560px;
+}
+
+@media (max-width: 1100px) {
+  .ai-designer-wrap--with-panel { margin-right: 0; }
 }
 
 .ai-design-mask {

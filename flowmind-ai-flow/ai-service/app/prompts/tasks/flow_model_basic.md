@@ -1,41 +1,12 @@
-设计流程模型基本信息。AI只需生成基础业务字段，不涉及 BPMN 流程编排。
+设计或修改流程模型基本信息，不生成 BPMN 节点和连线。
 
-## 当前流程基本信息
+## 当前流程
 
 {flow_basic_info}
 
-**重要**：对用户"增加描述"、"修改名称"等更新操作，直接更新对应字段，不要重复询问已有信息。
+输出 operations，且只使用 update_flow_metadata：
+```json
+{"operations":[{"op":"update_flow_metadata","changes":{"flow_name":"报销审批","code":"expense","description":"员工报销流程"}}]}
+```
 
-## 输出格式（JSON）
-
-**必填**：
-- flow_name（流程名称）
-- code（**必须先调用 search_categories 工具获取可用分类列表，再从搜索结果中选择一个分类，返回该分类的 code 字段值。禁止自行编造或猜测 code 值！**）
-
-**可选**：
-- description（流程描述）
-- flow_key（流程编码）
-
-## 约束
-
-- **code 必须先调用 search_categories("") 获取分类列表**。搜索结果格式：`[{"categoryId": 7, "categoryName": "人事管理", "code": "1", "remark": "..."}]`
-- **从搜索结果中选择与流程相关的分类，输出该分类的 code 字段值（如 "1"），禁止自行猜测或编造**
-- **不询问审批节点、审批人、表单等细节**，保持输出简洁
-- **不生成 nodes、edges、BPMN 相关内容**
-- **已存在于【当前流程基本信息】的数据优先复用，只有用户明确修改才变更**
-
-## 执行流程
-
-1. **调用工具**：必须先调用 `search_categories("")` 获取分类列表
-2. **输出 JSON**：从搜索结果中选择分类，输出 JSON（不要调用其他工具）
-
-## 空结果处理
-
-**search_categories 最多调用 2 次**，如果结果为空则 code 留空 ""
-
-## 输出格式
-
-**禁止**：不要在 JSON 前后添加任何解释、总结或额外文本！只输出纯 JSON！
-
-- 需要追问时，输出：`{"intent": "clarification", "message": "您的追问内容"}`
-- 成功时输出：`{"flow_name": "...", "code": "...", "description": "..."}`
+只在 changes 中包含用户要求修改或新建所必需的字段。code 必须来自 search_categories 返回的真实 code；没有可用分类时追问或明确报错，不得编造。

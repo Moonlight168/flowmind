@@ -12,10 +12,11 @@ from app.design.validators.base import (
     ValidationSeverity,
     ValidatorContext,
 )
+from app.design.vform3_transformer import CONTAINER_TYPES, DISPLAY_TYPES, FIELD_TYPES
 
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
-CONTAINER_TYPES = {"grid", "table", "tab", "card"}
 OPTION_ITEM_TYPES = {"radio", "checkbox", "select", "cascader"}
+ALLOWED_WIDGET_TYPES = FIELD_TYPES | CONTAINER_TYPES | DISPLAY_TYPES
 
 
 class FormFieldValidator:
@@ -32,23 +33,37 @@ class FormFieldValidator:
             return ValidationResult.from_errors(errors)
 
         seen_names: set[str] = set()
-        for widget in widgets:
+        for widget in _walk_widgets(widgets):
             options = widget.get("options", {}) or {}
             name = options.get("name", "")
             widget_type = (widget.get("type") or "").lower()
 
-            # FORM_FF002: type/formItemFlag/options.name
-            if not widget_type or "formItemFlag" not in widget or not name:
+            if widget_type and widget_type not in ALLOWED_WIDGET_TYPES:
                 errors.append(
                     ValidationError(
-                        "FORM_FF002",
-                        f"表单字段缺少 type/formItemFlag/options.name: {name or '<无name>'}",
+                        "FORM_FF009",
+                        f"不支持的 VForm3 组件: '{widget_type}'",
                         element_id=name,
                     )
                 )
 
-            # FORM_FF003: name 唯一 + 命名规范
-            if name:
+            requires_flag = widget_type != "grid-col"
+            if not widget_type or (requires_flag and "formItemFlag" not in widget):
+                errors.append(
+                    ValidationError(
+                        "FORM_FF002",
+                        f"表单组件缺少 type/formItemFlag: {name or '<无name>'}",
+                        element_id=name,
+                    )
+                )
+
+            # 只有数据字段参与绑定名和业务属性校验，容器可使用内部名称。
+            if widget_type in FIELD_TYPES:
+                if not name:
+                    errors.append(
+                        ValidationError("FORM_FF002", "表单字段缺少 options.name")
+                    )
+                    continue
                 if name in seen_names:
                     errors.append(
                         ValidationError(
@@ -77,7 +92,11 @@ class FormFieldValidator:
                     )
 
             # FORM_FF005: required 与 disabled 互斥
-            if options.get("required") and options.get("disabled"):
+            if (
+                widget_type in FIELD_TYPES
+                and options.get("required")
+                and options.get("disabled")
+            ):
                 errors.append(
                     ValidationError(
                         "FORM_FF005",
@@ -100,7 +119,7 @@ class FormFieldValidator:
 
             # FORM_FF007: label 非空且长度 1-30
             label = options.get("label", "")
-            if not label or len(label) > 30:
+            if widget_type in FIELD_TYPES and (not label or len(label) > 30):
                 errors.append(
                     ValidationError(
                         "FORM_FF007",
@@ -111,13 +130,19 @@ class FormFieldValidator:
 
             # FORM_FF008: 容器 formItemFlag 必须为 false
             if (
-                widget_type in CONTAINER_TYPES
+                widget_type in (CONTAINER_TYPES - {"grid-col"})
                 and widget.get("formItemFlag") is not False
             ):
                 errors.append(
                     ValidationError(
                         "FORM_FF008",
                         f"容器组件 '{widget_type}' 的 formItemFlag 必须为 false",
+                    )
+                )
+            if widget_type in CONTAINER_TYPES and not _has_valid_children(widget):
+                errors.append(
+                    ValidationError(
+                        "FORM_FF010", f"容器组件 '{widget_type}' 的嵌套结构不合法"
                     )
                 )
 
@@ -132,3 +157,26 @@ def _max_depth(items: list[dict]) -> int:
         if children:
             depth = max(depth, 1 + _max_depth(children))
     return depth
+
+
+def _walk_widgets(widgets: list[dict]):
+    for widget in widgets:
+        yield widget
+        yield from _walk_widgets(widget.get("widgetList") or [])
+        for child in widget.get("cols") or []:
+            yield from _walk_widgets([child])
+        for child in widget.get("tabs") or []:
+            yield from _walk_widgets(child.get("widgetList") or [])
+        for row in widget.get("rows") or []:
+            for cell in row.get("cols") or []:
+                yield from _walk_widgets(cell.get("widgetList") or [])
+
+
+def _has_valid_children(widget: dict) -> bool:
+    widget_type = widget.get("type")
+    if widget_type == "grid":
+        return isinstance(widget.get("cols"), list) and all(
+            child.get("type") == "grid-col" for child in widget["cols"]
+        )
+    child_key = {"card": "widgetList", "tab": "tabs", "table": "rows"}.get(widget_type)
+    return child_key is None or isinstance(widget.get(child_key), list)

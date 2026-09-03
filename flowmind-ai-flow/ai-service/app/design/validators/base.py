@@ -54,6 +54,8 @@ class ValidatorContext:
     current_form_data: dict = field(default_factory=dict)
     available_forms: list[dict] = field(default_factory=list)
     available_categories: list[dict] = field(default_factory=list)
+    forms_lookup_complete: bool = False
+    categories_lookup_complete: bool = False
     existing_models: list[dict] = field(default_factory=list)
     auth_token: str | None = None
     thread_id: str | None = None

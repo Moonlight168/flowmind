@@ -11,6 +11,8 @@
     :session-id="sessionId"
     @update:model-value="emit('update:modelValue', $event)"
     @fill="emit('fill', $event)"
+    @preview="emit('preview', $event)"
+    @discard="emit('discard')"
     @progress="emit('progress', $event)"
     @designing="emit('designing', $event)"
   />
@@ -31,7 +33,7 @@ const props = defineProps({
   sessionId: { type: String, default: null }
 })
 
-const emit = defineEmits(['update:modelValue', 'fill', 'progress', 'designing'])
+const emit = defineEmits(['update:modelValue', 'fill', 'preview', 'discard', 'progress', 'designing'])
 
 const isDesign = computed(() => !!props.designType)
 const designRef = ref(null)

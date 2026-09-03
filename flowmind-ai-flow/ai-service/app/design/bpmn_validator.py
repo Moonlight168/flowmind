@@ -194,8 +194,10 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
     for gw in exclusive_gateways:
         gw_id = gw.get("id", "<unknown>")
         out_flows = flows_from.get(gw_id, [])
+        in_flows = flows_to.get(gw_id, [])
+        default_flow = gw.get("default")
 
-        if len(out_flows) < 2:
+        if len(out_flows) < 2 and not (len(in_flows) >= 2 and len(out_flows) == 1):
             errors.append(
                 ValidationError(
                     rule_id="V008",
@@ -204,8 +206,10 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
                 )
             )
 
-        # V009: 每条出线必须有 conditionExpression
+        # V009: 除默认分支外，每条排他分支必须有条件表达式。
         for flow_id in out_flows:
+            if flow_id == default_flow:
+                continue
             flow_elem = process.find(f"bpmn:sequenceFlow[@id='{flow_id}']", NSMAP)
             if flow_elem is not None:
                 cond = flow_elem.find("bpmn:conditionExpression", NSMAP)

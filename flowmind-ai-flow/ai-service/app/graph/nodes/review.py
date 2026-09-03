@@ -24,13 +24,13 @@ from app.design.validators import (
     ValidationError,
     ValidatorContext,
     ValidatorPipeline,
+    VForm3Validator,
 )
 from app.graph.nodes.base import node_handler
 from app.graph.state import AppState
 from app.infra.logger import logger
 from app.integrations.backend import (
     CategoryClient,
-    FlowModelClient,
     FormClient,
     request_cache,
 )
@@ -101,7 +101,7 @@ def review_node(state: AppState) -> AppState:
 
 
 def _build_context(state: AppState) -> ValidatorContext:
-    """构建校验上下文（后端查询失败时 service 内部兜底返回空列表，相关规则自动跳过）"""
+    """Fetch only the authoritative data required by this validation pipeline."""
     auth_token = get_auth_token()
     # 提取用户最近一次输入（用于基线删除意图判断）
     user_input = ""
@@ -109,22 +109,31 @@ def _build_context(state: AppState) -> ValidatorContext:
         if isinstance(msg, HumanMessage):
             user_input = msg.content or ""
             break
-    return ValidatorContext(
-        design_type=state.get("design_type", ""),
-        mode=state.get("mode", "design"),
-        current_form_data=state.get("current_form_data") or {},
-        available_forms=request_cache.get(
+    design_type = state.get("design_type", "")
+    mode = state.get("mode", "design")
+    available_forms = []
+    available_categories = []
+    if design_type == "flow_design" and mode == "design":
+        available_forms = request_cache.get(
             "backend:forms:",
             lambda: FormClient(auth_token=auth_token).search_forms(""),
-        ),
-        available_categories=request_cache.get(
+        )
+    if design_type == "category_design" or (
+        design_type == "flow_design" and mode == "basic"
+    ):
+        available_categories = request_cache.get(
             "backend:categories:",
             lambda: CategoryClient(auth_token=auth_token).search_categories(),
-        ),
-        existing_models=request_cache.get(
-            "backend:models:",
-            lambda: FlowModelClient(auth_token=auth_token).search_flow_models(),
-        ),
+        )
+    return ValidatorContext(
+        design_type=design_type,
+        mode=mode,
+        current_form_data=state.get("current_form_data") or {},
+        available_forms=available_forms,
+        available_categories=available_categories,
+        forms_lookup_complete=design_type == "flow_design" and mode == "design",
+        categories_lookup_complete=design_type == "category_design"
+        or (design_type == "flow_design" and mode == "basic"),
         auth_token=auth_token,
         user_input=user_input,
     )
@@ -139,7 +148,9 @@ def _build_pipeline(design_type: str, mode: str) -> ValidatorPipeline:
             [BaselineValidator(), NodeValidator(), EdgeValidator(), BPMNXMLValidator()]
         )
     if design_type == "form_design":
-        return ValidatorPipeline([BaselineValidator(), FormFieldValidator()])
+        return ValidatorPipeline(
+            [BaselineValidator(), FormFieldValidator(), VForm3Validator()]
+        )
     if design_type == "category_design":
         return ValidatorPipeline([BaselineValidator(), CategoryValidator()])
     return ValidatorPipeline([])

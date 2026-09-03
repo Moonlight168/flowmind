@@ -48,7 +48,7 @@ class CategoryValidator:
             for c in context.available_categories
             if c.get("code") is not None
         }
-        if available_codes and code:
+        if context.categories_lookup_complete and code:
             if context.design_type == "category_design":
                 # 新建：code 不应已存在
                 if code in available_codes:

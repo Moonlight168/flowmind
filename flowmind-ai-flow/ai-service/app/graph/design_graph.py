@@ -24,11 +24,12 @@ from langgraph.graph import END, StateGraph
 from app.config.settings import settings
 from app.core.exceptions import FlowDesignException
 from app.design.bpmn_parser import enrich_flow_baseline
+from app.design.operations import normalize_design_baseline
 from app.graph.nodes.finalize import finalize_node
 from app.graph.nodes.generate import generate_node
 from app.graph.nodes.review import review_node
 from app.graph.state import AppState
-from app.infra.checkpoint import checkpointer, thread_exists
+from app.infra.checkpoint import checkpointer
 from app.infra.logger import generate_trace_id, log_context, logger
 from app.infra.observability import (
     langchain_config,
@@ -108,7 +109,11 @@ def _result_router(state: AppState) -> str:
         return "format"
 
     # 成功 + 审查失败 + 未超重试次数 = 重试
-    if intent == "success" and not review_passed and review_retry_count < 3:
+    if (
+        intent == "success"
+        and not review_passed
+        and review_retry_count < settings.validation.review_max_retry_count
+    ):
         return "design"
 
     # 其他情况（错误 或 超重试）= 结束
@@ -158,6 +163,7 @@ def _prepare_design_call(
     trace_id: str | None,
     current_form_data: dict | None,
     mode: str,
+    allow_full_replace: bool,
     kwargs: dict,
 ) -> tuple[dict, str, AppState]:
     """准备 config 与 initial_state（invoke 与 stream 共用）"""
@@ -168,23 +174,22 @@ def _prepare_design_call(
     if not trace_id:
         trace_id = generate_trace_id()
 
-    is_first_call = not thread_exists(thread_id)
     # flow_design：前端可视化设计器只传 bpmn_xml 时，反解析为扁平 nodes/edges 基线，
     # 使 prompt 的增量语义与 BaselineValidator 真正生效（不把整段 XML 塞给模型）。
     if design_type == "flow_design":
         current_form_data = enrich_flow_baseline(current_form_data or {})
+    current_form_data = normalize_design_baseline(design_type, current_form_data or {})
     # messages 用 add_messages reducer，自动追加到 checkpoint 现有消息
     initial_state: AppState = {
         "messages": [HumanMessage(content=user_input)],
         "current_form_data": current_form_data or {},
+        "design_type": design_type,
+        "mode": mode,
+        "allow_full_replace": allow_full_replace,
+        "intent": "clarification",
+        "review_retry_count": 0,
+        "review_error_history": [],
     }
-    # design_type/mode 只在首次设置，后续从 checkpoint 恢复
-    if is_first_call:
-        initial_state["design_type"] = design_type
-        initial_state["mode"] = mode
-        initial_state["intent"] = "clarification"
-    else:
-        logger.debug(f"[design] 从 checkpoint 恢复 thread_id={thread_id}")
     return config, trace_id, initial_state
 
 
@@ -195,6 +200,7 @@ def invoke_design_workflow(
     trace_id: str | None = None,
     current_form_data: dict | None = None,
     mode: str = "design",
+    allow_full_replace: bool = False,
     **kwargs,
 ) -> dict:
     """设计 Workflow 调用入口（同步，返回最终 design_output）"""
@@ -205,6 +211,7 @@ def invoke_design_workflow(
         trace_id,
         current_form_data,
         mode,
+        allow_full_replace,
         kwargs,
     )
 
@@ -222,10 +229,16 @@ def invoke_design_workflow(
                 "mode": mode,
                 "user_input": user_input,
                 "current_form_data": current_form_data or {},
+                "allow_full_replace": allow_full_replace,
             },
             session_id=thread_id,
             trace_id=trace_id,
-            metadata={"design_type": design_type, "mode": mode, "stream": False},
+            metadata={
+                "design_type": design_type,
+                "mode": mode,
+                "stream": False,
+                "allow_full_replace": allow_full_replace,
+            },
             tags=["design", design_type, mode],
         ) as observation,
     ):
@@ -235,6 +248,7 @@ def invoke_design_workflow(
         if isinstance(result, dict):
             design_output = result.get("design_output", {})
             if design_output:
+                design_output["trace_id"] = trace_id
                 record_observation_output(observation, design_output)
                 logger.info(f"[invoke] 完成, intent={result.get('intent')}")
                 return design_output
@@ -253,6 +267,7 @@ def stream_design_workflow(
     trace_id: str | None = None,
     current_form_data: dict | None = None,
     mode: str = "design",
+    allow_full_replace: bool = False,
     **kwargs,
 ) -> Iterator[dict[str, Any]]:
     """流式设计 Workflow：逐个 yield 进度事件，最后 yield done 事件（含完整 design_output）"""
@@ -263,6 +278,7 @@ def stream_design_workflow(
         trace_id,
         current_form_data,
         mode,
+        allow_full_replace,
         kwargs,
     )
 
@@ -281,10 +297,16 @@ def stream_design_workflow(
                 "mode": mode,
                 "user_input": user_input,
                 "current_form_data": current_form_data or {},
+                "allow_full_replace": allow_full_replace,
             },
             session_id=thread_id,
             trace_id=trace_id,
-            metadata={"design_type": design_type, "mode": mode, "stream": True},
+            metadata={
+                "design_type": design_type,
+                "mode": mode,
+                "stream": True,
+                "allow_full_replace": allow_full_replace,
+            },
             tags=["design", design_type, mode, "stream"],
         ) as observation,
     ):
@@ -331,6 +353,8 @@ def stream_design_workflow(
         design_output = (
             (final_state.values or {}).get("design_output", {}) if final_state else {}
         )
+        if isinstance(design_output, dict):
+            design_output["trace_id"] = trace_id
         record_observation_output(observation, design_output)
         yield {
             "type": "done",

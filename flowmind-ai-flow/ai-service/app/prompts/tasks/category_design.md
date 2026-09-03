@@ -1,26 +1,12 @@
-设计流程分类。
+设计或修改流程分类。
 
-## 当前分类基本信息
+## 当前分类
 
 {flow_basic_info}
 
-## 设计规则
+输出 operations，且只使用 update_category：
+```json
+{"operations":[{"op":"update_category","changes":{"category_name":"请假审批","code":"leave_approval","remark":"员工请假流程"}}]}
+```
 
-- 设计前先用 search_categories(category_code=xxx) 验证 code 是否已存在
-- code 重复时**自动生成新的 code**（如 leave_approval_v2），不要询问用户
-- 当用户说"添加备注"、"备注"或类似表述时，**直接生成合适的 remark**，不需要询问用户
-- remark 由你根据 category_name 和业务场景自动生成
-- 其他字段的修改同理，不要重复询问已有信息
-
-## 输出格式（JSON）
-
-- category_name：分类名称，如"请假审批"
-- code：英文下划线命名，如"leave_approval"
-- remark：分类用途说明（可选，未提供时不设置）
-
-## 输出
-
-**重要**：直接输出 JSON 文本作为 AI 消息内容，不要尝试调用任何工具！
-**禁止**：不要在 JSON 前后添加任何解释、总结或额外文本！只输出纯 JSON！
-
-生成成功：`{"category_name": "...", "code": "...", "remark": "..."}`
+只在 changes 中包含用户要求修改或新建所必需的字段。创建或修改 code 前使用 search_categories 验证唯一性；发现冲突时应说明并追问，不得静默改成另一个 code。

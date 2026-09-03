@@ -8,6 +8,7 @@ FlowMind 智能流程设计服务 - VForm3 格式转换器
 
 import random
 import time
+from copy import deepcopy
 from typing import Any
 
 
@@ -79,6 +80,7 @@ FIELD_TYPES = {
 
 # 容器组件（formItemFlag=False）
 CONTAINER_TYPES = {"grid", "table", "tab", "card", "grid-col"}
+DISPLAY_TYPES = {"static-text", "html-text", "button", "divider", "alert"}
 
 
 def _build_field_options(
@@ -359,6 +361,8 @@ def _build_container_options(
 
 def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
     """转换单个 widget 为完整 VForm3 格式"""
+    if widget.get("id") is not None and widget.get("key") is not None:
+        return deepcopy(widget)
     widget_type = widget.get("type", "")
     ai_options = widget.get("options", {})
 
@@ -380,6 +384,16 @@ def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
             result["options"]["optionItems"] = ai_options["optionItems"]
         return result
 
+    elif widget_type in DISPLAY_TYPES:
+        return {
+            "key": generate_key(),
+            "type": widget_type,
+            "icon": icon,
+            "formItemFlag": False,
+            "options": _build_field_options(widget_type, ai_options),
+            "id": generate_id(widget_type),
+        }
+
     elif widget_type == "grid-col":
         # grid 列
         return {
@@ -388,7 +402,9 @@ def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
             "category": "container",
             "icon": "grid-col",
             "internal": True,
-            "widgetList": [],
+            "widgetList": [
+                _transform_widget(child) for child in widget.get("widgetList", [])
+            ],
             "options": {
                 "name": ai_options.get("name", ""),
                 "hidden": ai_options.get("hidden", False),
@@ -423,77 +439,82 @@ def _transform_widget(widget: dict[str, Any]) -> dict[str, Any]:
             result["cols"] = [_transform_widget(col) for col in cols]
 
         elif widget_type == "card":
-            result["widgetList"] = []
+            result["widgetList"] = [
+                _transform_widget(child) for child in widget.get("widgetList", [])
+            ]
             result["options"]["folded"] = ai_options.get("folded", False)
             result["options"]["showFold"] = True
             result["options"]["cardWidth"] = ai_options.get("cardWidth", "100%")
             result["options"]["shadow"] = ai_options.get("shadow", "never")
 
         elif widget_type == "tab":
-            # 处理 tab 的 tabs
-            tabs = widget.get("tabs", [])
-            default_tabs = [
-                {
-                    "type": "tab-pane",
-                    "category": "container",
-                    "icon": "tab-pane",
-                    "internal": True,
-                    "widgetList": [],
-                    "options": {
-                        "name": f"tab{i + 1}",
-                        "label": f"tab {i + 1}",
-                        "hidden": False,
-                        "active": i == 0,
-                        "disabled": False,
-                        "customClass": "",
-                    },
-                    "id": generate_id("tab-pane-"),
-                }
-                for i in range(len(tabs) if tabs else 1)
-            ]
-            result["tabs"] = default_tabs
+            result["tabs"] = _transform_tabs(widget.get("tabs") or [{}])
 
         elif widget_type == "table":
-            # 处理 table 的 rows
-            result["rows"] = [
-                {
-                    "cols": [
-                        {
-                            "type": "table-cell",
-                            "category": "container",
-                            "icon": "table-cell",
-                            "internal": True,
-                            "widgetList": [],
-                            "merged": False,
-                            "options": {
-                                "name": generate_id("table-cell-"),
-                                "cellWidth": "",
-                                "cellHeight": "",
-                                "colspan": 1,
-                                "rowspan": 1,
-                                "customClass": "",
-                            },
-                            "id": generate_id("table-cell-"),
-                        }
-                    ],
-                    "id": generate_id("table-row-"),
-                    "merged": False,
-                }
-            ]
+            result["rows"] = _transform_table_rows(widget.get("rows") or [{}])
 
         return result
 
-    else:
-        # 未知类型，作为字段处理
-        options = _build_field_options(widget_type, ai_options)
-        return {
-            "key": generate_key(),
-            "type": widget_type,
-            "icon": icon,
-            "formItemFlag": True,
-            "options": options,
-            "id": generate_id(widget_type),
+    raise ValueError(f"不支持的 VForm3 组件: {widget_type}")
+
+
+def _transform_tabs(tabs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for index, tab in enumerate(tabs):
+        options = tab.get("options") or {}
+        result.append(
+            {
+                "type": "tab-pane",
+                "category": "container",
+                "icon": "tab-pane",
+                "internal": True,
+                "widgetList": [
+                    _transform_widget(item) for item in tab.get("widgetList", [])
+                ],
+                "options": {
+                    "name": options.get("name", f"tab{index + 1}"),
+                    "label": options.get("label", f"tab {index + 1}"),
+                    "hidden": False,
+                    "active": index == 0,
+                    "disabled": False,
+                    "customClass": "",
+                },
+                "id": tab.get("id") or generate_id("tab-pane-"),
+            }
+        )
+    return result
+
+
+def _transform_table_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "cols": [_transform_table_cell(cell) for cell in row.get("cols", [{}])],
+            "id": row.get("id") or generate_id("table-row-"),
+            "merged": bool(row.get("merged", False)),
         }
+        for row in rows
+    ]
+
+
+def _transform_table_cell(cell: dict[str, Any]) -> dict[str, Any]:
+    options = cell.get("options") or {}
+    return {
+        "type": "table-cell",
+        "category": "container",
+        "icon": "table-cell",
+        "internal": True,
+        "widgetList": [_transform_widget(item) for item in cell.get("widgetList", [])],
+        "merged": bool(cell.get("merged", False)),
+        "options": {
+            "name": options.get("name", generate_id("table-cell-")),
+            "cellWidth": options.get("cellWidth", ""),
+            "cellHeight": options.get("cellHeight", ""),
+            "colspan": options.get("colspan", 1),
+            "rowspan": options.get("rowspan", 1),
+            "customClass": "",
+        },
+        "id": cell.get("id") or generate_id("table-cell-"),
+    }
 
 
 def _get_default_value(widget_type: str) -> Any:
@@ -536,20 +557,12 @@ def transform_to_vform3(
     current = current_form_data or {}
     # 转换 widgetList
     ai_widgets = ai_result.get("widgetList", [])
-    current_widgets = current.get("widgetList", [])
     transformed_widgets = [_transform_widget(w) for w in ai_widgets]
-
-    # 合并 widgetList：AI 没有的字段从 current 保留
-    if current_widgets and ai_widgets:
-        ai_keys = {w.get("field") for w in ai_widgets if w.get("field")}
-        for cw in current_widgets:
-            if cw.get("field") and cw.get("field") not in ai_keys:
-                transformed_widgets.append(cw)
 
     # 构建 formConfig
     ai_form_config = ai_result.get("formConfig", {}) or {}
     current_form_config = current.get("formConfig", {}) or {}
-    form_config = {
+    default_form_config = {
         "modelName": ai_form_config.get("modelName", "formData"),
         "refName": ai_form_config.get("refName", "vForm"),
         "rulesName": "rules",
@@ -567,12 +580,10 @@ def transform_to_vform3(
         "onFormDataChange": "",
         "onFormValidate": "",
     }
-    # 合并 current_form_config 中 AI 没有覆盖的字段
-    for k, v in current_form_config.items():
-        if k not in form_config or not form_config[k]:
-            form_config[k] = v
+    form_config = {**default_form_config, **current_form_config, **ai_form_config}
 
     return {
+        **{key: value for key, value in current.items() if key != "content"},
         "form_name": ai_result.get("form_name", "") or current.get("form_name", ""),
         "widgetList": transformed_widgets,
         "formConfig": form_config,

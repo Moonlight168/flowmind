@@ -46,10 +46,10 @@ class _FakeBackendService:
         pass
 
     def search_forms(self, *args, **kwargs):
-        return []
+        return [{"formId": "form1", "content": '{"widgetList":[]}'}]
 
     def search_categories(self, *args, **kwargs):
-        return []
+        return [{"categoryName": "报销", "code": "expense"}]
 
     def search_flow_models(self, *args, **kwargs):
         return []
@@ -60,12 +60,10 @@ def chain(monkeypatch):
     """准备完整链路：MemorySaver checkpoint + fake redis lock + 空后端"""
     mem = MemorySaver()
     monkeypatch.setattr(dw, "checkpointer", mem)
-    monkeypatch.setattr(dw, "thread_exists", lambda thread_id: False)
     monkeypatch.setattr(dw, "design_workflow", dw.create_design_workflow())
     monkeypatch.setattr(dw, "_get_redis_client", lambda: _FakeRedis())
     monkeypatch.setattr(review_node, "FormClient", _FakeBackendService)
     monkeypatch.setattr(review_node, "CategoryClient", _FakeBackendService)
-    monkeypatch.setattr(review_node, "FlowModelClient", _FakeBackendService)
     return dw
 
 
@@ -88,7 +86,7 @@ def _raise_model_unavailable(**kwargs: object) -> dict:
     raise httpx.ConnectError("unavailable")
 
 
-_FLOW_RESULT = {
+_FLOW_GRAPH = {
     "nodes": [
         {
             "id": "startEvent",
@@ -110,6 +108,7 @@ _FLOW_RESULT = {
         {"source": "node_approve", "target": "end"},
     ],
 }
+_FLOW_RESULT = {"operations": [{"op": "replace_graph", **_FLOW_GRAPH}]}
 
 
 def test_stream_design_workflow(chain, monkeypatch):
@@ -183,7 +182,20 @@ def test_flow_design_basic(chain, monkeypatch):
     """flow_design basic 模式：只生成基本信息，不生成 BPMN"""
     _mock_llm(
         monkeypatch,
-        [{"flow_name": "报销审批", "code": "expense", "description": "报销流程"}],
+        [
+            {
+                "operations": [
+                    {
+                        "op": "update_flow_metadata",
+                        "changes": {
+                            "flow_name": "报销审批",
+                            "code": "expense",
+                            "description": "报销流程",
+                        },
+                    }
+                ]
+            }
+        ],
     )
     result = invoke_design_workflow(
         "flow_design",
@@ -201,20 +213,25 @@ def test_flow_design_basic(chain, monkeypatch):
 def test_form_design_full_chain(chain, monkeypatch):
     """form_design 完整链路：design → review → format（transform_to_vform3）"""
     form_result = {
-        "form_name": "请假申请单",
-        "widgetList": [
+        "operations": [
             {
-                "type": "input",
-                "formItemFlag": True,
-                "options": {"name": "reason", "label": "请假事由"},
-            },
-            {
-                "type": "date",
-                "formItemFlag": True,
-                "options": {"name": "start_date", "label": "开始日期"},
-            },
-        ],
-        "formConfig": {"modelName": "leaveForm", "labelWidth": 100},
+                "op": "replace_form",
+                "form_name": "请假申请单",
+                "widgetList": [
+                    {
+                        "type": "input",
+                        "formItemFlag": True,
+                        "options": {"name": "reason", "label": "请假事由"},
+                    },
+                    {
+                        "type": "date",
+                        "formItemFlag": True,
+                        "options": {"name": "start_date", "label": "开始日期"},
+                    },
+                ],
+                "formConfig": {"modelName": "leaveForm", "labelWidth": 100},
+            }
+        ]
     }
     _mock_llm(monkeypatch, [form_result])
     result = invoke_design_workflow(
@@ -238,9 +255,16 @@ def test_category_design_full_chain(chain, monkeypatch):
         monkeypatch,
         [
             {
-                "category_name": "请假审批",
-                "code": "leave_approval",
-                "remark": "请假类流程",
+                "operations": [
+                    {
+                        "op": "update_category",
+                        "changes": {
+                            "category_name": "请假审批",
+                            "code": "leave_approval",
+                            "remark": "请假类流程",
+                        },
+                    }
+                ]
             }
         ],
     )
@@ -282,7 +306,13 @@ def test_review_rejects_invalid_then_retry(chain, monkeypatch):
             {"source": "orphan", "target": "orphan"},
         ],
     }
-    _mock_llm(monkeypatch, [invalid, _FLOW_RESULT])
+    _mock_llm(
+        monkeypatch,
+        [
+            {"operations": [{"op": "replace_graph", **invalid}]},
+            _FLOW_RESULT,
+        ],
+    )
     result = invoke_design_workflow(
         "flow_design",
         "设计请假审批流程",
@@ -296,7 +326,7 @@ def test_review_rejects_invalid_then_retry(chain, monkeypatch):
 
 
 def test_review_dead_loop(chain, monkeypatch):
-    """连续相同错误 → 死循环检测 → 返回半成品草稿（友好降级，不再冷冰冰 error）"""
+    """连续相同错误会安全失败，且不返回未通过校验的草稿。"""
     invalid = {
         "nodes": [
             {"id": "startEvent", "name": "开始", "type": "START_EVENT"},  # 缺 form_key
@@ -322,7 +352,8 @@ def test_review_dead_loop(chain, monkeypatch):
         ],
     }
     # 始终返回相同非法结果，触发死循环检测
-    _mock_llm(monkeypatch, [invalid, invalid, invalid, invalid])
+    invalid_result = {"operations": [{"op": "replace_graph", **invalid}]}
+    _mock_llm(monkeypatch, [invalid_result] * 4)
     result = invoke_design_workflow(
         "flow_design",
         "设计请假审批流程",
@@ -330,10 +361,6 @@ def test_review_dead_loop(chain, monkeypatch):
         current_form_data={"modelName": "请假审批", "code": "leave"},
         mode="design",
     )
-    # 死循环检测触发，返回半成品草稿供手动调整
-    assert result["partial"] is True
-    assert result["form_data"] is not None
-    assert not result["form_data"].get("bpmn_xml")  # 缺 form_key，不得标为可导入
-    assert "补全后再导入" in result["message"]
-    assert all(node["id"] != "orphan" for node in result["form_data"]["nodes"])
-    assert all(edge["source"] != "missing" for edge in result["form_data"]["edges"])
+    assert result["status"] == "error"
+    assert result["form_data"] is None
+    assert result["validation"]["dead_loop"] is True

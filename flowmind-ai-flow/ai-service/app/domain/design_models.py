@@ -1,18 +1,25 @@
+"""Structured AI design operations.
+
+The model describes a change set. The application applies it to a copy of the
+current artifact and validates the materialized result before it can be used.
 """
-FlowMind 智能流程设计服务 - Pydantic 设计 schema
 
-结构化输出用：with_structured_output 约束 LLM 输出字段合法。
-extra="forbid" 等价 JSON Schema 的 additionalProperties: false。
-"""
+from typing import Annotated, Any, Literal
 
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class FlowNode(BaseModel):
+class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+
+class FlowCondition(StrictModel):
+    field: str
+    operator: Literal["eq", "ne", "gt", "ge", "lt", "le"]
+    value: Any
+
+
+class FlowNode(StrictModel):
     type: Literal[
         "START_EVENT",
         "END_EVENT",
@@ -29,56 +36,165 @@ class FlowNode(BaseModel):
     form_key: str | None = None
     assignee: str | None = None
     candidate_groups: list[str] | None = None
+    candidate_users: list[str] | None = None
     text: str | None = None
     data_type: str | None = None
 
 
-class FlowEdge(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FlowEdge(StrictModel):
+    id: str | None = None
+    name: str | None = None
     source: str
     target: str
-    condition: str | None = None
+    condition: FlowCondition | str | None = None
+    is_default: bool = False
 
 
-class FlowDesign(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ReplaceGraphOperation(StrictModel):
+    op: Literal["replace_graph"]
     nodes: list[FlowNode]
-    edges: list[FlowEdge] = []
+    edges: list[FlowEdge] = Field(default_factory=list)
 
 
-class FormWidget(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AddFlowNodeOperation(StrictModel):
+    op: Literal["add_node"]
+    node: FlowNode
+    after_id: str | None = None
 
+
+class UpdateFlowNodeOperation(StrictModel):
+    op: Literal["update_node"]
+    node_id: str
+    changes: dict[str, Any]
+
+
+class RemoveFlowNodeOperation(StrictModel):
+    op: Literal["remove_node"]
+    node_id: str
+
+
+class AddFlowEdgeOperation(StrictModel):
+    op: Literal["add_edge"]
+    edge: FlowEdge
+
+
+class UpdateFlowEdgeOperation(StrictModel):
+    op: Literal["update_edge"]
+    edge_id: str | None = None
+    source: str | None = None
+    target: str | None = None
+    changes: dict[str, Any]
+
+
+class RemoveFlowEdgeOperation(StrictModel):
+    op: Literal["remove_edge"]
+    edge_id: str | None = None
+    source: str | None = None
+    target: str | None = None
+
+
+FlowOperation = Annotated[
+    ReplaceGraphOperation
+    | AddFlowNodeOperation
+    | UpdateFlowNodeOperation
+    | RemoveFlowNodeOperation
+    | AddFlowEdgeOperation
+    | UpdateFlowEdgeOperation
+    | RemoveFlowEdgeOperation,
+    Field(discriminator="op"),
+]
+
+
+class FlowDesign(StrictModel):
+    operations: list[FlowOperation] = Field(min_length=1)
+
+
+class FormWidget(StrictModel):
     type: str
-    formItemFlag: bool  # noqa: N815 - VForm3 字段名必须 camelCase
-    options: dict  # options 字段过多，内部不逐个锁，用 dict
+    formItemFlag: bool  # noqa: N815 - VForm3 uses camelCase
+    options: dict[str, Any]
+    id: str | None = None
+    key: int | str | None = None
+    widgetList: list[dict[str, Any]] | None = None  # noqa: N815
+    cols: list[dict[str, Any]] | None = None
+    tabs: list[dict[str, Any]] | None = None
+    rows: list[dict[str, Any]] | None = None
+    category: str | None = None
+    internal: bool | None = None
 
 
-class FormDesign(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ReplaceFormOperation(StrictModel):
+    op: Literal["replace_form"]
     form_name: str
-    node_role: Literal["applicant", "approver", "cc"] | None = None
-    widgetList: list[FormWidget]  # noqa: N815 - VForm3 字段名必须 camelCase
-    formConfig: dict | None = None  # noqa: N815 - VForm3 字段名必须 camelCase
+    widgetList: list[FormWidget]  # noqa: N815
+    formConfig: dict[str, Any] | None = None  # noqa: N815
 
 
-class CategoryDesign(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AddFormWidgetOperation(StrictModel):
+    op: Literal["add_widget"]
+    widget: FormWidget
+    after_name: str | None = None
 
-    category_name: str
-    code: str
+
+class UpdateFormWidgetOperation(StrictModel):
+    op: Literal["update_widget"]
+    widget_name: str
+    changes: dict[str, Any]
+
+
+class RemoveFormWidgetOperation(StrictModel):
+    op: Literal["remove_widget"]
+    widget_name: str
+
+
+class MoveFormWidgetOperation(StrictModel):
+    op: Literal["move_widget"]
+    widget_name: str
+    after_name: str | None = None
+
+
+FormOperation = Annotated[
+    ReplaceFormOperation
+    | AddFormWidgetOperation
+    | UpdateFormWidgetOperation
+    | RemoveFormWidgetOperation
+    | MoveFormWidgetOperation,
+    Field(discriminator="op"),
+]
+
+
+class FormDesign(StrictModel):
+    operations: list[FormOperation] = Field(min_length=1)
+
+
+class CategoryChanges(StrictModel):
+    category_name: str | None = None
+    code: str | None = None
     remark: str | None = None
 
 
-class BasicDesign(BaseModel):
-    """flow_design basic 模式：仅流程基本信息"""
+class UpdateCategoryOperation(StrictModel):
+    op: Literal["update_category"]
+    changes: CategoryChanges
 
-    model_config = ConfigDict(extra="forbid")
 
-    flow_name: str
-    code: str
+class CategoryDesign(StrictModel):
+    operations: list[UpdateCategoryOperation] = Field(min_length=1)
+
+
+class FlowMetadataChanges(StrictModel):
+    flow_name: str | None = None
+    code: str | None = None
     description: str | None = None
     flow_key: str | None = None
+
+
+class UpdateFlowMetadataOperation(StrictModel):
+    op: Literal["update_flow_metadata"]
+    changes: FlowMetadataChanges
+
+
+class BasicDesign(StrictModel):
+    """Operations for the basic-information mode of flow design."""
+
+    operations: list[UpdateFlowMetadataOperation] = Field(min_length=1)

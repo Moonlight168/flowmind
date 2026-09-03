@@ -1,17 +1,11 @@
-"""
-FlowMind 智能流程设计服务 - 结构化生成主路径单元测试
+"""Structured generation main-path tests."""
 
-mock create_react_agent，验证 ReAct + response_format 结构化输出路径。
-"""
-
-import app.design.generation as react_agent_module
+import app.design.generation as generation_module
 from app.design.generation import run_react_agent
 from app.domain.design_models import BasicDesign, FlowDesign
 
 
 class _FakeAgent:
-    """mock create_react_agent 返回的 agent：invoke 返回 structured_response"""
-
     def __init__(self, response):
         self._response = response
 
@@ -31,7 +25,7 @@ def _mock_runtime(monkeypatch):
             return operation(object())
 
     runtime = _Runtime()
-    monkeypatch.setattr(react_agent_module, "get_model_runtime", lambda: runtime)
+    monkeypatch.setattr(generation_module, "get_model_runtime", lambda: runtime)
     return runtime
 
 
@@ -45,52 +39,54 @@ def _mock_agent(monkeypatch, response, captured):
 
 
 def test_structured_output_success(monkeypatch):
-    """ReAct 结构化输出成功 → model_dump"""
     obj = FlowDesign(
-        nodes=[
+        operations=[
             {
-                "type": "START_EVENT",
-                "id": "startEvent",
-                "name": "开始",
-                "form_key": "form1",
-            },
-            {
-                "type": "USER_TASK",
-                "id": "node_approve",
-                "name": "审批",
-                "candidate_groups": ["ROLE1"],
-            },
-            {"type": "END_EVENT", "id": "endEvent", "name": "结束"},
-        ],
-        edges=[{"source": "start", "target": "node_approve"}],
+                "op": "replace_graph",
+                "nodes": [
+                    {"type": "START_EVENT", "id": "startEvent", "name": "start"},
+                    {"type": "END_EVENT", "id": "endEvent", "name": "end"},
+                ],
+                "edges": [{"source": "start", "target": "end"}],
+            }
+        ]
     )
     captured = {}
     _mock_runtime(monkeypatch)
     _mock_agent(monkeypatch, obj, captured)
+
     result = run_react_agent("flow_design", [], current_form_data={})
-    assert result["nodes"][0]["id"] == "startEvent"
-    assert len(result["nodes"]) == 3
+
+    assert result["operations"][0]["nodes"][0]["id"] == "startEvent"
     assert captured["response_format"] is FlowDesign
 
 
 def test_structured_output_retry_then_error(monkeypatch):
-    """结构化输出失败 → 重试 3 次 → error（不降级）"""
     captured = {}
     runtime = _mock_runtime(monkeypatch)
-    _mock_agent(monkeypatch, ValueError("结构化输出失败"), captured)
+    _mock_agent(monkeypatch, ValueError("invalid structured output"), captured)
+
     result = run_react_agent("flow_design", [], current_form_data={})
+
     assert result["intent"] == "error"
-    assert runtime.calls == 3  # 结构化内容重试 3 次
+    assert runtime.calls == 3
 
 
 def test_basic_mode_uses_basic_schema(monkeypatch):
-    """basic 模式用 BasicDesign（flow_name/code）+ 仅分类工具"""
-    obj = BasicDesign(flow_name="报销审批", code="expense")
+    obj = BasicDesign(
+        operations=[
+            {
+                "op": "update_flow_metadata",
+                "changes": {"flow_name": "expense approval", "code": "expense"},
+            }
+        ]
+    )
     captured = {}
     _mock_runtime(monkeypatch)
     _mock_agent(monkeypatch, obj, captured)
+
     result = run_react_agent("flow_design", [], current_form_data={}, mode="basic")
-    assert result["flow_name"] == "报销审批"
-    assert result["code"] == "expense"
+
+    assert result["operations"][0]["changes"]["code"] == "expense"
     assert captured["response_format"] is BasicDesign
-    assert {t.name for t in captured["tools"]} == {"search_categories"}
+    assert {tool.name for tool in captured["tools"]} == {"search_categories"}

@@ -29,14 +29,19 @@ def _case(case_id: str = "flow-linear") -> GoldenCase:
         {
             "id": case_id,
             "category": "flow_design",
+            "source": "curated",
             "input": {
-                "design_type": "flow_design",
-                "user_input": "设计请假审批流程",
-                "current_form_data": {},
-                "mode": "design",
+                "turns": [
+                    {
+                        "design_type": "flow_design",
+                        "user_input": "设计请假审批流程",
+                        "current_form_data": {},
+                        "mode": "design",
+                    }
+                ]
             },
             "expected_output": {
-                "intent": "success",
+                "status": "ready",
                 "required_paths": ["form_data.nodes", "form_data.bpmn_xml"],
                 "min_counts": {"form_data.nodes": 3},
                 "required_node_types": ["START_EVENT", "USER_TASK", "END_EVENT"],
@@ -95,7 +100,7 @@ def test_select_exact_case() -> None:
 def test_evaluate_contract_scores_stable_structure() -> None:
     expected = _case().expected_output.model_dump()
     output = {
-        "intent": "success",
+        "status": "ready",
         "form_data": {
             "nodes": [
                 {"type": "START_EVENT"},
@@ -109,7 +114,7 @@ def test_evaluate_contract_scores_stable_structure() -> None:
     scores = evaluate_contract(output=output, expected_output=expected)
     score_values = {score.name: score.value for score in scores}
 
-    assert score_values["intent_match"] == 1
+    assert score_values["status_match"] == 1
     assert score_values["required_fields"] == 1
     assert score_values["minimum_counts"] == 1
     assert score_values["node_type_coverage"] == 1
@@ -119,12 +124,12 @@ def test_evaluate_contract_scores_stable_structure() -> None:
 def test_evaluate_contract_scores_fallback_contract() -> None:
     scores = evaluate_contract(
         output={
-            "intent": "error",
+            "status": "error",
             "error_type": "internal",
             "message": "AI 服务暂时异常，请稍后重试",
         },
         expected_output={
-            "intent": "error",
+            "status": "error",
             "error_type": "internal",
             "message_contains": ["AI 服务暂时异常"],
         },
@@ -144,7 +149,7 @@ def test_sync_dataset_uses_stable_ids() -> None:
 
     assert first[0]["id"] == second[0]["id"]
     assert first[0]["metadata"]["case_id"] == "flow-linear"
-    assert first[0]["input"]["design_type"] == "flow_design"
+    assert first[0]["input"]["turns"][0]["design_type"] == "flow_design"
 
 
 @pytest.mark.parametrize(
@@ -193,7 +198,7 @@ def test_workflow_task_calls_production_contract_and_cleans_up(
     def invoke_workflow(**kwargs: object) -> dict:
         captured.update(kwargs)
         captured["auth_token"] = get_auth_token()
-        return {"intent": "success", "form_data": {}}
+        return {"status": "ready", "intent": "success", "form_data": {}}
 
     monkeypatch.setattr(golden_dataset, "invoke_design_workflow", invoke_workflow)
     monkeypatch.setattr(
@@ -211,7 +216,7 @@ def test_workflow_task_calls_production_contract_and_cleans_up(
     assert captured["design_type"] == "flow_design"
     assert captured["auth_token"] == "token-for-test"
     assert cleaned == [captured["thread_id"]]
-    assert result["intent"] == "success"
+    assert result["status"] == "ready"
     assert get_auth_token() is None
 
 
@@ -239,14 +244,19 @@ def test_repository_dataset_has_unique_coverage() -> None:
     cases = load_golden_cases(dataset)
 
     assert len(cases) >= 8
-    assert {case.input.design_type for case in cases} == {
+    assert {turn.design_type for case in cases for turn in case.input.turns} == {
         "flow_design",
         "form_design",
         "category_design",
     }
-    assert {case.input.mode for case in cases} == {"basic", "design"}
-    assert any(case.expected_output.intent == "clarification" for case in cases)
+    assert {turn.mode for case in cases for turn in case.input.turns} == {
+        "basic",
+        "design",
+    }
+    assert any(case.expected_output.status == "needs_input" for case in cases)
     assert any(case.expected_output.fallback_output for case in cases)
+    assert any(len(case.input.turns) > 1 for case in cases)
+    assert {case.source for case in cases} == {"real_anonymized", "curated"}
 
 
 def test_cli_selects_one_case() -> None:

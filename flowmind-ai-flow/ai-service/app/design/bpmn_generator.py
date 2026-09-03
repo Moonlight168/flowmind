@@ -4,7 +4,12 @@ FlowMind 智能审批服务 - BPMN XML 生成器
 本模块提供将 nodes 结构转换为 BPMN XML 的功能。
 """
 
+import json
+import re
+
 import lxml.etree as etree
+
+Bounds = tuple[float, float, float, float]
 
 GENERATE_BPMN_XML_SCHEMA = {
     "type": "object",
@@ -63,7 +68,9 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
         _create_auto_edges(process, ns, nodes, node_ids)
 
     # 生成 BPMNDI 画布布局
-    _create_bpmn_diagram(definitions, ns, process_id, nodes, node_ids, custom_edges)
+    _create_layered_bpmn_diagram(
+        definitions, ns, process_id, nodes, node_ids, custom_edges
+    )
 
     return etree.tostring(
         definitions, encoding="utf-8", xml_declaration=True, pretty_print=True
@@ -422,7 +429,7 @@ def _create_custom_edges(
     outgoing_map: dict[str, list[str]] = {}
 
     for i, edge in enumerate(edges):
-        flow_id = f"Flow_{i + 1}"
+        flow_id = edge.get("id") or f"Flow_{i + 1}"
         source = edge["source"]
         target = edge["target"]
 
@@ -444,6 +451,12 @@ def _create_custom_edges(
 
         # 创建 sequenceFlow
         flow_attrs = {"id": flow_id, "sourceRef": source_id, "targetRef": target_id}
+        if edge.get("name"):
+            flow_attrs["name"] = edge["name"]
+        if edge.get("is_default"):
+            source_element = process.find(f".//*[@id='{source_id}']")
+            if source_element is not None:
+                source_element.set("default", flow_id)
         if edge.get("condition"):
             condition_expr = etree.SubElement(
                 process, f"{{{bpmn}}}sequenceFlow", **flow_attrs
@@ -451,7 +464,7 @@ def _create_custom_edges(
             condition_elem = etree.SubElement(
                 condition_expr, f"{{{bpmn}}}conditionExpression"
             )
-            condition_elem.text = edge["condition"]
+            condition_elem.text = _compile_condition(edge["condition"])
             condition_elem.set(
                 "{http://www.w3.org/2001/XMLSchema-instance}type",
                 "bpmn2:tFormalExpression",
@@ -473,7 +486,29 @@ def _create_custom_edges(
                 etree.SubElement(elem, f"{{{bpmn}}}outgoing").text = fid
 
 
-def _create_bpmn_diagram(
+def _compile_condition(condition: dict | str) -> str:
+    """Compile a typed condition to a Flowable expression; keep legacy strings."""
+    if isinstance(condition, str):
+        return condition
+    field = str(condition.get("field", ""))
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", field):
+        raise ValueError(f"非法条件字段: {field}")
+    operator = condition.get("operator")
+    symbols = {
+        "eq": "==",
+        "ne": "!=",
+        "gt": ">",
+        "ge": ">=",
+        "lt": "<",
+        "le": "<=",
+    }
+    if operator not in symbols:
+        raise ValueError(f"暂不支持的条件操作符: {operator}")
+    value = json.dumps(condition.get("value"), ensure_ascii=False)
+    return f"${{{field} {symbols[operator]} {value}}}"
+
+
+def _create_layered_bpmn_diagram(
     definitions: etree._Element,
     ns: dict[str, str],
     process_id: str,
@@ -481,11 +516,8 @@ def _create_bpmn_diagram(
     node_ids: list[str],
     custom_edges: list[dict],
 ) -> None:
-    """生成 BPMNDI 画布布局信息"""
-    bpmndi = ns["bpmndi"]
-    dc = ns["dc"]
-    di = ns["di"]
-
+    """Create a deterministic left-to-right diagram with separated branches."""
+    bpmndi, dc, di = ns["bpmndi"], ns["dc"], ns["di"]
     diagram = etree.SubElement(
         definitions, f"{{{bpmndi}}}BPMNDiagram", id="BPMNDiagram_1"
     )
@@ -493,168 +525,165 @@ def _create_bpmn_diagram(
         diagram, f"{{{bpmndi}}}BPMNPlane", id="BPMNPlane_1", bpmnElement=process_id
     )
 
-    # 节点布局参数
-    start_x = 180
-    start_y = 200
-    node_width = 100
-    node_height = 80
-    gap_x = 170
-    event_size = 36
+    canonical = _canonical_node_ids(nodes, node_ids)
+    normalized_edges = _normalize_di_edges(nodes, node_ids, custom_edges, canonical)
+    bounds = _calculate_di_bounds(nodes, node_ids, normalized_edges, canonical)
+    _append_di_shapes(plane, bpmndi, dc, bounds)
+    _append_di_edges(plane, bpmndi, di, normalized_edges, bounds)
 
-    # 开始事件
-    start_shape = etree.SubElement(
-        plane,
-        f"{{{bpmndi}}}BPMNShape",
-        id="StartEvent_1_di",
-        bpmnElement="StartEvent_1",
+
+def _normalize_di_edges(
+    nodes: list[dict],
+    node_ids: list[str],
+    custom_edges: list[dict],
+    canonical: dict[str, str],
+) -> list[dict]:
+    edges = custom_edges or _build_auto_edges_list(nodes, node_ids)
+    return [
+        {
+            **edge,
+            "source": canonical.get(edge["source"], edge["source"]),
+            "target": canonical.get(edge["target"], edge["target"]),
+        }
+        for edge in edges
+    ]
+
+
+def _calculate_di_bounds(
+    nodes: list[dict],
+    node_ids: list[str],
+    edges: list[dict],
+    canonical: dict[str, str],
+) -> dict[str, Bounds]:
+    levels = _calculate_levels(edges)
+    drawable_ids = [
+        canonical[node_id]
+        for node, node_id in zip(nodes, node_ids, strict=False)
+        if node.get("type", "").upper() not in {"START_EVENT", "END_EVENT"}
+    ]
+    for index, node_id in enumerate(drawable_ids, start=1):
+        levels.setdefault(node_id, index)
+    levels["StartEvent_1"] = 0
+    levels["EndEvent_1"] = (
+        max([levels.get(node_id, 0) for node_id in drawable_ids] or [0]) + 1
     )
-    etree.SubElement(
-        start_shape,
-        f"{{{dc}}}Bounds",
-        x=str(start_x),
-        y=str(start_y + (node_height - event_size) // 2),
-        width=str(event_size),
-        height=str(event_size),
-    )
 
-    # 节点（跳过 START_EVENT/END_EVENT，它们由上方固定的 StartEvent_1/EndEvent_1 shape 表示，
-    # 避免 DI 图残留重复事件图形）
-    for i, (node, node_id) in enumerate(zip(nodes, node_ids, strict=False)):
-        node_type = node.get("type", "USER_TASK").upper()
-        if node_type in ("START_EVENT", "END_EVENT"):
-            continue
-        node_x = start_x + (i + 1) * gap_x
+    ids_by_level = _group_ids_by_level(drawable_ids, levels)
+    bounds: dict[str, Bounds] = {
+        "StartEvent_1": (180, 222, 36, 36),
+        "EndEvent_1": (180 + levels["EndEvent_1"] * 220, 222, 36, 36),
+    }
+    node_by_canonical = {
+        canonical[node_id]: node
+        for node, node_id in zip(nodes, node_ids, strict=False)
+        if canonical[node_id] not in {"StartEvent_1", "EndEvent_1"}
+    }
+    for level, level_ids in ids_by_level.items():
+        for row, node_id in enumerate(level_ids):
+            node = node_by_canonical[node_id]
+            node_type = node.get("type", "USER_TASK").upper()
+            width, height = (50, 50) if "GATEWAY" in node_type else (100, 80)
+            y = 220 + (row - (len(level_ids) - 1) / 2) * 150
+            bounds[node_id] = (180 + level * 220, y, width, height)
+    return bounds
 
+
+def _group_ids_by_level(
+    node_ids: list[str], levels: dict[str, int]
+) -> dict[int, list[str]]:
+    grouped: dict[int, list[str]] = {}
+    for node_id in node_ids:
+        grouped.setdefault(levels[node_id], []).append(node_id)
+    return grouped
+
+
+def _append_di_shapes(
+    plane: etree._Element,
+    bpmndi: str,
+    dc: str,
+    bounds: dict[str, Bounds],
+) -> None:
+    for node_id, (x, y, width, height) in bounds.items():
         shape = etree.SubElement(
-            plane, f"{{{bpmndi}}}BPMNShape", id=f"{node_id}_di", bpmnElement=node_id
+            plane,
+            f"{{{bpmndi}}}BPMNShape",
+            id=f"{node_id}_di",
+            bpmnElement=node_id,
+        )
+        etree.SubElement(
+            shape,
+            f"{{{dc}}}Bounds",
+            x=str(x),
+            y=str(y),
+            width=str(width),
+            height=str(height),
         )
 
-        if node_type == "USER_TASK":
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x),
-                y=str(start_y),
-                width=str(node_width),
-                height=str(node_height),
-            )
-        elif node_type in (
-            "EXCLUSIVE_GATEWAY",
-            "PARALLEL_GATEWAY",
-            "INCLUSIVE_GATEWAY",
-            "COMPLEX_GATEWAY",
-            "EVENT_GATEWAY",
-        ):
-            gw_size = 50
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x + (node_width - gw_size) // 2),
-                y=str(start_y + (node_height - gw_size) // 2),
-                width=str(gw_size),
-                height=str(gw_size),
-            )
-        elif node_type == "SUB_PROCESS":
-            sub_width = 300
-            sub_height = 200
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x),
-                y=str(start_y - (sub_height - node_height) // 2),
-                width=str(sub_width),
-                height=str(sub_height),
-            )
-        elif node_type in ("DATA_OBJECT", "DATA_STORE"):
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x),
-                y=str(start_y),
-                width=str(50),
-                height=str(60),
-            )
-        elif node_type == "PARTICIPANT":
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x),
-                y=str(start_y - 20),
-                width=str(node_width + 20),
-                height=str(node_height + 40),
-            )
-        elif node_type == "GROUP":
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x - 10),
-                y=str(start_y - 10),
-                width=str(node_width + 20),
-                height=str(node_height + 20),
-            )
-        else:
-            etree.SubElement(
-                shape,
-                f"{{{dc}}}Bounds",
-                x=str(node_x),
-                y=str(start_y + (node_height - event_size) // 2),
-                width=str(event_size),
-                height=str(event_size),
-            )
 
-    # 结束事件
-    end_x = start_x + (len(nodes) + 1) * gap_x
-    end_shape = etree.SubElement(
-        plane, f"{{{bpmndi}}}BPMNShape", id="EndEvent_1_di", bpmnElement="EndEvent_1"
-    )
-    etree.SubElement(
-        end_shape,
-        f"{{{dc}}}Bounds",
-        x=str(end_x),
-        y=str(start_y + (node_height - event_size) // 2),
-        width=str(event_size),
-        height=str(event_size),
-    )
-
-    # 连线布局
-    edges_to_draw = (
-        custom_edges if custom_edges else _build_auto_edges_list(nodes, node_ids)
-    )
-    for i, edge in enumerate(edges_to_draw):
-        flow_id = edge.get("flow_id", f"Flow_{i + 1}")
-        source = edge["source"]
-        target = edge["target"]
-
-        source_x, source_y = _get_node_position(
-            source,
-            start_x,
-            start_y,
-            node_width,
-            node_height,
-            gap_x,
-            node_ids,
-            event_size,
-        )
-        target_x, target_y = _get_node_position(
-            target,
-            start_x,
-            start_y,
-            node_width,
-            node_height,
-            gap_x,
-            node_ids,
-            event_size,
-        )
-
+def _append_di_edges(
+    plane: etree._Element,
+    bpmndi: str,
+    di: str,
+    edges: list[dict],
+    bounds: dict[str, Bounds],
+) -> None:
+    for index, edge in enumerate(edges, start=1):
+        flow_id = edge.get("id") or edge.get("flow_id") or f"Flow_{index}"
+        source_bounds = bounds.get(edge["source"])
+        target_bounds = bounds.get(edge["target"])
+        if not source_bounds or not target_bounds:
+            continue
+        waypoints = _edge_waypoints(source_bounds, target_bounds)
         bpmn_edge = etree.SubElement(
-            plane, f"{{{bpmndi}}}BPMNEdge", id=f"{flow_id}_di", bpmnElement=flow_id
+            plane,
+            f"{{{bpmndi}}}BPMNEdge",
+            id=f"{flow_id}_di",
+            bpmnElement=flow_id,
         )
-        etree.SubElement(
-            bpmn_edge, f"{{{di}}}waypoint", x=str(source_x), y=str(source_y)
-        )
-        etree.SubElement(
-            bpmn_edge, f"{{{di}}}waypoint", x=str(target_x), y=str(target_y)
-        )
+        for x, y in waypoints:
+            etree.SubElement(bpmn_edge, f"{{{di}}}waypoint", x=str(x), y=str(y))
+
+
+def _edge_waypoints(
+    source_bounds: Bounds, target_bounds: Bounds
+) -> list[tuple[float, float]]:
+    source = (
+        source_bounds[0] + source_bounds[2],
+        source_bounds[1] + source_bounds[3] / 2,
+    )
+    target = (target_bounds[0], target_bounds[1] + target_bounds[3] / 2)
+    if source[1] == target[1]:
+        return [source, target]
+    middle_x = (source[0] + target[0]) / 2
+    return [source, (middle_x, source[1]), (middle_x, target[1]), target]
+
+
+def _canonical_node_ids(nodes: list[dict], node_ids: list[str]) -> dict[str, str]:
+    canonical = {"start": "StartEvent_1", "end": "EndEvent_1"}
+    for node, node_id in zip(nodes, node_ids, strict=False):
+        node_type = node.get("type", "").upper()
+        if node_type == "START_EVENT":
+            canonical[node_id] = "StartEvent_1"
+        elif node_type == "END_EVENT":
+            canonical[node_id] = "EndEvent_1"
+        else:
+            canonical[node_id] = node_id
+    return canonical
+
+
+def _calculate_levels(edges: list[dict]) -> dict[str, int]:
+    adjacency: dict[str, list[str]] = {}
+    for edge in edges:
+        adjacency.setdefault(edge["source"], []).append(edge["target"])
+    levels = {"StartEvent_1": 0}
+    queue = ["StartEvent_1"]
+    while queue:
+        source = queue.pop(0)
+        for target in adjacency.get(source, []):
+            if target not in levels:
+                levels[target] = levels[source] + 1
+                queue.append(target)
+    return levels
 
 
 def _build_auto_edges_list(nodes: list[dict], node_ids: list[str]) -> list[dict]:
@@ -674,26 +703,3 @@ def _build_auto_edges_list(nodes: list[dict], node_ids: list[str]) -> list[dict]
     else:
         edges.append({"flow_id": "Flow_End", "source": "start", "target": "end"})
     return edges
-
-
-def _get_node_position(
-    node_ref: str,
-    start_x: int,
-    start_y: int,
-    node_width: int,
-    node_height: int,
-    gap_x: int,
-    node_ids: list[str],
-    event_size: int,
-) -> tuple[int, int]:
-    """获取节点在画布上的连接点坐标"""
-    if node_ref == "start":
-        return (start_x + event_size, start_y + node_height // 2)
-    elif node_ref == "end":
-        end_x = start_x + (len(node_ids) + 1) * gap_x
-        return (end_x, start_y + node_height // 2)
-    elif node_ref in node_ids:
-        idx = node_ids.index(node_ref)
-        node_x = start_x + (idx + 1) * gap_x
-        return (node_x + node_width, start_y + node_height // 2)
-    return (start_x, start_y)

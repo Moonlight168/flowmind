@@ -18,6 +18,7 @@ from app.design.validators.edge_validator import EdgeValidator
 from app.design.validators.form_field_validator import FormFieldValidator
 from app.design.validators.node_validator import NodeValidator
 from app.design.validators.pipeline import ValidatorPipeline
+from app.design.validators.vform3_validator import VForm3Validator
 
 __all__ = [
     "BPMNXMLValidator",
@@ -26,6 +27,7 @@ __all__ = [
     "EdgeValidator",
     "FormFieldValidator",
     "NodeValidator",
+    "VForm3Validator",
     "ValidationError",
     "ValidationResult",
     "ValidationSeverity",
