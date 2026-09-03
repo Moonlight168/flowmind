@@ -163,6 +163,8 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
     def _save_chat_thread(self, thread_id: str, checkpoint: Checkpoint) -> None:
         """保存简化版对话数据"""
+        if not thread_id.startswith("chat:"):
+            return
         try:
             # 提取第一条用户消息作为预览
             preview = "新对话"

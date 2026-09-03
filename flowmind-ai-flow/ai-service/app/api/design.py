@@ -24,6 +24,7 @@ from app.infra.logger import generate_trace_id, set_trace_id
 
 router = APIRouter(prefix="/design", tags=["设计"])
 STREAM_ERRORS = (RuntimeError, ValueError, TypeError, FlowDesignException)
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 def _safe_stream_error(trace_id: str) -> str:
@@ -36,6 +37,12 @@ def _safe_stream_error(trace_id: str) -> str:
         "trace_id": trace_id,
     }
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _sse_response(content: Any) -> StreamingResponse:
+    return StreamingResponse(
+        content, media_type="text/event-stream", headers=SSE_HEADERS
+    )
 
 
 def _design_thread_id(
@@ -77,7 +84,7 @@ def design_category(
         except STREAM_ERRORS:
             yield _safe_stream_error(trace_id)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return _sse_response(event_stream())
 
 
 @router.post("/flow")
@@ -110,7 +117,7 @@ def design_flow(
         except STREAM_ERRORS:
             yield _safe_stream_error(trace_id)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return _sse_response(event_stream())
 
 
 @router.post("/form")
@@ -139,7 +146,7 @@ def design_form(
         except STREAM_ERRORS:
             yield _safe_stream_error(trace_id)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return _sse_response(event_stream())
 
 
 @router.delete("/state/{design_type}", response_model=ResponseVO[dict[str, Any]])

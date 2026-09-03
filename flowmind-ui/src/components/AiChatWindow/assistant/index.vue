@@ -118,7 +118,6 @@
           v-for="(message, index) in messages"
           :key="message.id"
           :message="message"
-          @control-intent="handleControlIntent($event, index)"
         />
         <!-- 加载状态 -->
         <div v-if="isLoading && !hasStreamingContent" class="message assistant flex gap-3 mb-4">
@@ -174,7 +173,7 @@
 import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ChatDotRound, Close, Delete, Plus, List, MoreFilled, Check } from '@element-plus/icons-vue'
-import { aiFormChat, aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
+import { aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
 import MessageItem from './MessageItem.vue'
@@ -233,6 +232,7 @@ const isResizing = ref(false)
 const resizeDirection = ref('')
 const resizeStart = ref({ x: 0, y: 0 })
 const resizeStartSize = ref({ width: 0, height: 0 })
+const requestController = ref(null)
 
 // 最小窗口尺寸
 const MIN_WIDTH = 300
@@ -251,6 +251,7 @@ function initWindowPosition() {
 // 切换窗口可见性
 async function toggleVisible() {
   isVisible.value = !isVisible.value
+  if (!isVisible.value) requestController.value?.abort()
   if (isVisible.value) {
     // 恢复已有会话
     if (aiSession.hasActiveSession) {
@@ -553,6 +554,8 @@ async function sendMessage() {
   hasStreamingContent.value = false
   scrollToBottom()
   let aiMessageIndex = -1
+  const controller = new AbortController()
+  requestController.value = controller
 
   try {
     await aiFormChatStream({
@@ -586,9 +589,10 @@ async function sendMessage() {
       } else if (event.type === 'error') {
         throw new Error(event.message || '流式响应失败')
       }
-    })
+    }, controller.signal)
 
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.error('AI 对话失败:', error)
     if (aiMessageIndex === -1) {
       messages.value.push(createMessage({
@@ -600,158 +604,8 @@ async function sendMessage() {
     }
     scrollToBottom()
   } finally {
+    if (requestController.value === controller) requestController.value = null
     hasStreamingContent.value = false
-    isLoading.value = false
-  }
-}
-
-// 处理确认/修改/取消操作
-async function handleControlIntent(controlPayload, messageIndex) {
-  if (isLoading.value) return
-
-  const controlIntent = typeof controlPayload === 'string'
-    ? controlPayload
-    : controlPayload?.intent
-  const confirmationId = typeof controlPayload === 'object'
-    ? (controlPayload?.confirmationId ?? controlPayload?.confirmation_id ?? null)
-    : null
-
-  if (!controlIntent) return
-
-  // 将按钮消息标记为已处理，隐藏按钮
-  messages.value[messageIndex] = {
-    ...messages.value[messageIndex],
-    workflow_status: null,
-    confirmation: null,
-    confirmation_id: null
-  }
-
-  // modify 操作：弹出 $prompt 输入框获取用户修改意见
-  // 用户输入的意见会通过 user_input 字段发送到后端
-  if (controlIntent === 'modify') {
-    try {
-      const modifyInput = await proxy.$prompt('请输入您的修改意见：', '修改分类', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        inputPlaceholder: '请详细描述您希望如何修改...',
-        inputType: 'textarea',
-        distinguishCancelAndClose: true
-      })
-
-      // 用户取消则不发送请求
-      if (modifyInput.action === 'cancel' || !modifyInput.value) {
-        // 恢复按钮显示
-        messages.value[messageIndex] = {
-          ...messages.value[messageIndex],
-          workflow_status: 'awaiting_confirm',
-          confirmation: { type: 'confirmation', action: 'awaiting_category_confirm', options: ['confirm', 'modify', 'cancel'] },
-          confirmation_id: confirmationId
-        }
-        return
-      }
-
-      // 用户输入了修改意见，发送请求
-      isLoading.value = true
-      scrollToBottom()
-
-      const ctrlResponse = await aiFormChat({
-        control_intent: controlIntent,
-        confirmation_id: confirmationId,
-        thread_id: aiSession.threadId,
-        user_input: modifyInput.value
-      })
-
-      const ctrlResultData = ctrlResponse.data || ctrlResponse
-      if (ctrlResultData.thread_id) {
-        aiSession.initializeSession({
-          threadId: ctrlResultData.thread_id,
-          targetPageType: null
-        })
-      }
-
-      const aiMessage = createMessage({
-        role: 'assistant',
-        content: ctrlResultData.response || '服务未返回有效响应,请稍后重试。',
-        redirect: ctrlResultData.redirect,
-        bpmnXml: ctrlResultData.bpmn_xml,
-        modelName: ctrlResultData.model_name,
-        category: ctrlResultData.category,
-        formJson: ctrlResultData.form_json,
-        formName: ctrlResultData.form_name,
-        workflow_status: ctrlResultData.workflow_status,
-        confirmation: ctrlResultData.confirmation,
-        confirmation_id: ctrlResultData.confirmation_id || ctrlResultData.confirmation?.confirmation_id || null
-      })
-
-      messages.value.push(aiMessage)
-      scrollToBottom()
-      return
-    } catch (error) {
-      if (error !== 'cancel' && error !== 'close') {
-        console.error('修改操作失败:', error)
-        ElMessage.error('修改操作失败，请稍后重试')
-      }
-      // 恢复按钮显示
-      messages.value[messageIndex] = {
-        ...messages.value[messageIndex],
-        workflow_status: 'awaiting_confirm',
-        confirmation: { type: 'confirmation', action: 'awaiting_category_confirm', options: ['confirm', 'modify', 'cancel'] },
-        confirmation_id: confirmationId
-      }
-      isLoading.value = false
-      return
-    }
-  }
-
-  // 其他操作（确认/新建/取消）
-  const intentLabels = { confirm: '确认', create_same_name: '新建', create: '新建', modify: '修改', cancel: '取消' }
-  messages.value.push(createMessage({
-    role: 'user',
-    content: intentLabels[controlIntent] || controlIntent
-  }))
-
-  isLoading.value = true
-  scrollToBottom()
-
-  try {
-    const ctrlResponse = await aiFormChat({
-      control_intent: controlIntent,
-      confirmation_id: confirmationId,
-      thread_id: aiSession.threadId
-    })
-
-    const ctrlResultData = ctrlResponse.data || ctrlResponse
-    if (ctrlResultData.thread_id) {
-      aiSession.initializeSession({
-        threadId: ctrlResultData.thread_id,
-        targetPageType: null
-      })
-    }
-
-    const aiMessage = createMessage({
-      role: 'assistant',
-      content: ctrlResultData.response || 'AI 服务未返回有效响应,请稍后重试。',
-      redirect: ctrlResultData.redirect,
-      bpmnXml: ctrlResultData.bpmn_xml,
-      modelName: ctrlResultData.model_name,
-      category: ctrlResultData.category,
-      formJson: ctrlResultData.form_json,
-      formName: ctrlResultData.form_name,
-      workflow_status: ctrlResultData.workflow_status,
-      confirmation: ctrlResultData.confirmation,
-      confirmation_id: ctrlResultData.confirmation_id || ctrlResultData.confirmation?.confirmation_id || null
-    })
-
-    messages.value.push(aiMessage)
-    scrollToBottom()
-  } catch (error) {
-    console.error('操作失败:', error)
-    messages.value.push(createMessage({
-      role: 'assistant',
-      content: '抱歉，操作处理失败，请稍后重试。'
-    }))
-    scrollToBottom()
-  } finally {
     isLoading.value = false
   }
 }
@@ -778,6 +632,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  requestController.value?.abort()
   window.removeEventListener('open-ai-assistant', handleOpenAssistant)
 })
 

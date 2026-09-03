@@ -2,6 +2,9 @@
 FlowMind 智能流程设计服务 - Markdown 提示词单元测试
 """
 
+import json
+from pathlib import Path
+
 from app.config.llm_task import Task, get_all_task_configs
 from app.design.tools import (
     search_categories,
@@ -86,3 +89,14 @@ def test_review_feedback_is_rendered_from_markdown() -> None:
 
     assert feedback.startswith(load_prompt("agents/review_feedback.md").splitlines()[0])
     assert '排他网关 "金额判断"(id=Gateway_1) 当前只有 1 条出边' in feedback
+
+
+def test_all_runtime_prompts_are_explicitly_versioned() -> None:
+    prompt_root = Path(__file__).parents[2] / "app" / "prompts"
+    registry = json.loads((prompt_root / "versions.json").read_text(encoding="utf-8"))
+    registered = set(registry["prompts"])
+    markdown_files = {
+        path.relative_to(prompt_root).as_posix() for path in prompt_root.rglob("*.md")
+    }
+
+    assert markdown_files == registered

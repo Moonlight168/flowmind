@@ -74,7 +74,7 @@
     </div>
 
     <div class="dialog-footer">
-      <el-checkbox v-if="mode === 'design'" v-model="allowFullReplace" :disabled="loading">
+      <el-checkbox v-if="mode === 'design' && designType !== 'category'" v-model="allowFullReplace" :disabled="loading">
         全部重新生成
       </el-checkbox>
       <el-input
@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { designStream, clearDesignState } from '@/api/workflow/design'
 import { ChatDotRound, Plus } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
@@ -143,18 +143,18 @@ const messages = ref([])
 const loading = ref(false)
 const progressText = ref('')
 const pendingPreview = ref(null)
-const previewBaselineHadDesign = ref(false)
 const previewBaseline = ref(null)
 const allowFullReplace = ref(false)
 const messagesContainer = ref(null)
+const requestController = ref(null)
 // 统一维护当前表单数据：AI 更新和外部修改都同步到这里
 const currentFormData = ref({})
 
 // 监听外部 formData 变化，同步到 currentFormData
 watch(() => props.formData, (newVal) => {
   if (newVal && Object.keys(newVal).length > 0) {
-    // 合并外部数据，保留 AI 已返回的数据
-    currentFormData.value = { ...currentFormData.value, ...newVal }
+    // 父页面保存后的数据是权威基线，完整替换可避免已删除字段被旧会话带回。
+    currentFormData.value = cloneData(newVal)
   }
 }, { deep: true, immediate: true })
 
@@ -178,12 +178,14 @@ function renderMarkdown(content) {
 }
 
 // 新建对象无业务标识时生成临时会话 id，保证不同对象会话/版本历史不串扰
-const localSessionId = ref('')
+const localSessionId = ref(
+  props.formData?.code || 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+)
 
 // 流程标识：优先用 formData 业务标识，否则 sessionId，否则临时 id，否则 'new'
 const flowKey = computed(() => {
   const fd = props.formData || {}
-  return fd.modelId || fd.modelKey || fd.formId || fd.code || props.sessionId || localSessionId.value || 'new'
+  return fd.modelId || fd.modelKey || fd.formId || props.sessionId || localSessionId.value
 })
 
 const storageKey = computed(() => {
@@ -207,9 +209,13 @@ function getVersions() {
 
 function saveVersion(formData) {
   const versions = getVersions()
-  versions.push(formData)
-  if (versions.length > VERSION_LIMIT) versions.shift()
+  versions.push(cloneData(formData))
+  if (versions.length > VERSION_LIMIT) versions.splice(1, 1)
   sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
+}
+
+function ensureBaselineVersion() {
+  if (getVersions().length === 0) saveVersion(currentFormData.value)
 }
 
 function rollbackTo(target) {
@@ -217,8 +223,8 @@ function rollbackTo(target) {
   const idx = target === 'start' ? 0 : versions.length - 2  // "prev" = 倒数第二
   const version = versions[idx]
   if (version) {
-    currentFormData.value = version
-    emit('fill', version)
+    currentFormData.value = cloneData(version)
+    emit('fill', currentFormData.value)
     // 截断到目标版本（丢弃之后的），这样连续"上一步"能逐级回退
     sessionStorage.setItem(versionKey.value, JSON.stringify(versions.slice(0, idx + 1)))
     return true
@@ -227,18 +233,12 @@ function rollbackTo(target) {
 }
 
 onMounted(() => {
-  localSessionId.value = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
     try {
       const state = JSON.parse(saved)
       messages.value = state.messages || []
-      // 恢复已保存的表单数据
-      if (state.currentFormData && Object.keys(state.currentFormData).length > 0) {
-        currentFormData.value = state.currentFormData
-      } else {
-        currentFormData.value = { ...props.formData }
-      }
+      currentFormData.value = cloneData(props.formData)
     } catch (e) {
       console.error('恢复聊天记录失败:', e)
       currentFormData.value = { ...props.formData }
@@ -256,11 +256,7 @@ watch(visible, (val) => {
       try {
         const state = JSON.parse(saved)
         messages.value = state.messages || []
-        if (state.currentFormData && Object.keys(state.currentFormData).length > 0) {
-          currentFormData.value = state.currentFormData
-        } else {
-          currentFormData.value = { ...props.formData }
-        }
+        currentFormData.value = cloneData(props.formData)
       } catch (e) {
         currentFormData.value = { ...props.formData }
       }
@@ -268,6 +264,7 @@ watch(visible, (val) => {
       currentFormData.value = { ...props.formData }
     }
   } else {
+    requestController.value?.abort()
     discardPreview()
     // 弹窗关闭时：保存状态
     sessionStorage.setItem(storageKey.value, JSON.stringify({
@@ -300,6 +297,8 @@ async function handleSend() {
   loading.value = true
   progressText.value = ''
   emit('designing', true)
+  const controller = new AbortController()
+  requestController.value = controller
 
   try {
     await designStream(props.designType, {
@@ -322,23 +321,12 @@ async function handleSend() {
             messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
           }
           scrollToBottom()
-        } else if (data.kind === 'reset') {
-          currentFormData.value = { ...props.formData }
-          emit('fill', currentFormData.value)
-          sessionStorage.removeItem(versionKey.value)
-          messages.value.push({ role: 'assistant', content: data.message || '已清空，重新开始' })
-          scrollToBottom()
         } else if (data.status === 'ready' && data.form_data != null) {
           previewBaseline.value = cloneData(currentFormData.value)
-          previewBaselineHadDesign.value = Boolean(
-            currentFormData.value.nodes?.length ||
-            currentFormData.value.widgetList?.length ||
-            currentFormData.value.content
-          )
           pendingPreview.value = data
           emit('preview', data.form_data)
         }
-        if (data.message && data.kind !== 'rollback' && data.kind !== 'reset') {
+        if (data.message && data.kind !== 'rollback') {
           messages.value.push({ role: 'assistant', content: data.message })
           scrollToBottom()
         }
@@ -351,12 +339,14 @@ async function handleSend() {
         messages: messages.value,
         currentFormData: currentFormData.value
       }))
-    })
+    }, controller.signal)
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.error('AI 设计失败:', error)
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
     scrollToBottom()
   } finally {
+    if (requestController.value === controller) requestController.value = null
     allowFullReplace.value = false
     loading.value = false
     progressText.value = ''
@@ -371,6 +361,8 @@ function scrollToBottom() {
     }
   }, 0)
 }
+
+onBeforeUnmount(() => requestController.value?.abort())
 
 function operationLabel(operation) {
   const labels = {
@@ -390,26 +382,12 @@ function cloneData(value) {
 
 async function applyPreview() {
   if (!pendingPreview.value) return
-  const replacesAll = pendingPreview.value.operations?.some(operation =>
-    ['replace_graph', 'replace_form'].includes(operation.op)
-  )
-  if (replacesAll && previewBaselineHadDesign.value) {
-    try {
-      await ElMessageBox.confirm(
-        '该操作会替换当前全部设计，是否确认应用？',
-        '二次确认',
-        { type: 'warning', confirmButtonText: '确认替换', cancelButtonText: '取消' }
-      )
-    } catch {
-      return
-    }
-  }
+  ensureBaselineVersion()
   const formData = pendingPreview.value.form_data
-  currentFormData.value = formData
+  currentFormData.value = cloneData(formData)
   emit('fill', formData)
   saveVersion(formData)
   pendingPreview.value = null
-  previewBaselineHadDesign.value = false
   previewBaseline.value = null
   visible.value = false
 }
@@ -418,7 +396,6 @@ function discardPreview() {
   if (!pendingPreview.value) return
   if (previewBaseline.value) currentFormData.value = cloneData(previewBaseline.value)
   pendingPreview.value = null
-  previewBaselineHadDesign.value = false
   previewBaseline.value = null
   emit('discard')
 }

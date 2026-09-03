@@ -78,6 +78,63 @@ def test_edge_silent_delete_blocked():
     assert any(e.rule_id == "BASE_B002" for e in result.errors)
 
 
+def test_add_node_may_split_the_original_outgoing_edge():
+    ctx = ValidatorContext(
+        design_type="flow_design",
+        current_form_data={
+            "nodes": [{"id": "a"}, {"id": "b"}],
+            "edges": [{"source": "a", "target": "b"}],
+        },
+        user_input="在 a 后增加审批节点",
+    )
+    output = {
+        "nodes": [{"id": "a"}, {"id": "new"}, {"id": "b"}],
+        "edges": [
+            {"source": "a", "target": "new"},
+            {"source": "new", "target": "b"},
+        ],
+        "operations": [{"op": "add_node", "after_id": "a", "node": {"id": "new"}}],
+    }
+
+    assert BaselineValidator().validate(output, ctx).is_valid
+
+    output["edges"].pop()
+    assert not BaselineValidator().validate(output, ctx).is_valid
+
+
+def test_confirmed_full_replacements_skip_baseline_retention_checks():
+    flow_context = ValidatorContext(
+        design_type="flow_design",
+        current_form_data={"nodes": [{"id": "old"}]},
+        allow_full_replace=True,
+    )
+    form_context = ValidatorContext(
+        design_type="form_design",
+        current_form_data={"widgetList": [{"options": {"name": "old"}}]},
+        allow_full_replace=True,
+    )
+
+    assert (
+        BaselineValidator()
+        .validate(
+            {"nodes": [{"id": "new"}], "operations": [{"op": "replace_graph"}]},
+            flow_context,
+        )
+        .is_valid
+    )
+    assert (
+        BaselineValidator()
+        .validate(
+            {
+                "widgetList": [{"options": {"name": "new"}}],
+                "operations": [{"op": "replace_form"}],
+            },
+            form_context,
+        )
+        .is_valid
+    )
+
+
 def test_form_widget_silent_delete_blocked():
     """静默删表单字段 → 拦截"""
     ctx = ValidatorContext(
@@ -97,8 +154,8 @@ def test_form_widget_silent_delete_blocked():
     assert any(e.rule_id == "BASE_B003" for e in result.errors)
 
 
-def test_category_code_change_blocked():
-    """静默改分类 code → 拦截"""
+def test_category_code_change_is_checked_by_category_validator():
+    """分类编码允许修改，唯一性由 CategoryValidator 负责。"""
     ctx = ValidatorContext(
         design_type="category_design",
         mode="design",
@@ -107,5 +164,4 @@ def test_category_code_change_blocked():
     )
     output = {"category_name": "请假", "code": "changed_code"}
     result = BaselineValidator().validate(output, ctx)
-    assert not result.is_valid
-    assert any(e.rule_id == "BASE_B004" for e in result.errors)
+    assert result.is_valid

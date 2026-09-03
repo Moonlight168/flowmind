@@ -42,18 +42,22 @@ def generate_node(state: AppState) -> AppState:
         state["design_output"] = {"message": "请明确您的需求"}
         return state
 
-    # 阶段1：意图判别（clarification/rollback/reset 提前分流，不调生成）
-    intent = discriminate_intent(
-        user_input,
-        baseline_summary=_baseline_summary(current_form_data, design_type),
+    # 阶段1：意图判别（clarification/rollback 提前分流，不调生成）
+    intent = (
+        discriminate_intent(
+            user_input,
+            baseline_summary=_baseline_summary(current_form_data, design_type),
+        )
+        if not state.get("review_retry_count")
+        else None
     )
-    if intent.kind == "clarification":
+    if intent and intent.kind == "clarification":
         msg = intent.message or "请更具体地描述您的需求"
         state["intent"] = "clarification"
         state["design_output"] = {"intent": "clarification", "message": msg}
         state["messages"].append(AIMessage(content=msg))
         return state
-    if intent.kind == "rollback":
+    if intent and intent.kind == "rollback":
         state["intent"] = "clarification"  # 走 format 跳过 review
         state["design_output"] = {
             "intent": "clarification",
@@ -63,16 +67,6 @@ def generate_node(state: AppState) -> AppState:
         }
         state["messages"].append(AIMessage(content="已回到指定版本"))
         return state
-    if intent.kind == "reset":
-        state["intent"] = "clarification"
-        state["design_output"] = {
-            "intent": "clarification",
-            "kind": "reset",
-            "message": "已清空，重新开始",
-        }
-        state["messages"].append(AIMessage(content="已清空，重新开始"))
-        return state
-
     # 构建对话历史（从 messages 提取，移除 system 和 最后一条 user）
     conversation_history = []
     for msg in state.get("messages", []):
@@ -93,54 +87,9 @@ def generate_node(state: AppState) -> AppState:
                 )
                 break
 
-    result = run_react_agent(
-        design_type=design_type,
-        messages=conversation_history,  # 传入对话历史
-        current_form_data=current_form_data,
-        task_name=design_type,
-        mode=mode,
+    result = _generate_design_result(
+        state, design_type, current_form_data, conversation_history, mode
     )
-
-    if "operations" in result:
-        operations = result["operations"]
-        if _contains_forbidden_replace(state, operations):
-            state["intent"] = "error"
-            state["design_output"] = {
-                "intent": "error",
-                "message": "检测到全量替换操作，但本次请求未获得用户明确授权",
-                "error_type": "full_replace_not_confirmed",
-                "retryable": False,
-            }
-            return state
-        try:
-            materialized = apply_design_operations(
-                design_type,
-                current_form_data,
-                operations,
-                mode=mode,
-            )
-        except ValueError as exc:
-            logger.warning("[design] operation application failed: %s", exc)
-            state["intent"] = "error"
-            state["design_output"] = {
-                "intent": "error",
-                "message": str(exc),
-                "error_type": "invalid_operation",
-                "retryable": False,
-                "operation_count": len(operations),
-            }
-            return state
-        result = {
-            **materialized,
-            "operations": operations,
-            "operation_count": len(operations),
-        }
-        logger.info(
-            "[design] operations applied, type=%s, mode=%s, count=%s",
-            design_type,
-            mode,
-            len(operations),
-        )
 
     logger.debug(f"[design] LLM 返回: {str(result)[:200]}")
 
@@ -162,6 +111,86 @@ def generate_node(state: AppState) -> AppState:
     state["messages"].append(AIMessage(content=ai_message))
 
     return state
+
+
+def _generate_design_result(
+    state: AppState,
+    design_type: str,
+    current_form_data: dict,
+    conversation_history: list[dict],
+    mode: str,
+) -> dict:
+    for attempt in range(2):
+        result = run_react_agent(
+            design_type=design_type,
+            messages=conversation_history,
+            current_form_data=current_form_data,
+            task_name=design_type,
+            mode=mode,
+        )
+        if "operations" not in result:
+            return result
+        try:
+            return _materialize_result(
+                state, result, design_type, current_form_data, mode
+            )
+        except ValueError as exc:
+            logger.warning("[design] operation application failed: %s", exc)
+            if attempt == 0:
+                conversation_history.append(_operation_retry_feedback(exc))
+    operations = result.get("operations") or []
+    return _invalid_operation_result(operations)
+
+
+def _invalid_operation_result(operations: list[dict]) -> dict:
+    return {
+        "intent": "error",
+        "message": "生成的变更无法应用，请明确要修改的节点或字段后重试",
+        "error_type": "invalid_operation",
+        "retryable": True,
+        "operation_count": len(operations),
+    }
+
+
+def _materialize_result(
+    state: AppState,
+    result: dict,
+    design_type: str,
+    current_form_data: dict,
+    mode: str,
+) -> dict:
+    operations = result["operations"]
+    if _contains_forbidden_replace(state, operations):
+        return {
+            "intent": "error",
+            "message": "检测到全量替换操作，但本次请求未获得用户明确授权",
+            "error_type": "full_replace_not_confirmed",
+            "retryable": False,
+        }
+    materialized = apply_design_operations(
+        design_type, current_form_data, operations, mode=mode
+    )
+    logger.info(
+        "[design] operations applied, type=%s, mode=%s, count=%s",
+        design_type,
+        mode,
+        len(operations),
+    )
+    return {
+        **materialized,
+        "operations": operations,
+        "operation_count": len(operations),
+    }
+
+
+def _operation_retry_feedback(exc: ValueError) -> dict[str, str]:
+    return {
+        "role": "assistant",
+        "content": (
+            f"操作无法应用：{exc}。请只修正目标标识或操作参数，"
+            "不要扩大用户要求的修改范围。"
+        ),
+    }
 
 
 def _contains_forbidden_replace(state: AppState, operations: list[dict]) -> bool:

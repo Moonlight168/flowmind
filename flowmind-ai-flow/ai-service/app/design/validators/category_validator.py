@@ -43,13 +43,18 @@ class CategoryValidator:
             )
 
         # CAT_C003: code 唯一性（依赖 available_categories，空则跳过）
-        available_codes = {
-            str(c.get("code"))
-            for c in context.available_categories
-            if c.get("code") is not None
-        }
+        current_id = context.current_form_data.get(
+            "categoryId", context.current_form_data.get("id")
+        )
+        current_code = context.current_form_data.get("code")
         if context.categories_lookup_complete and code:
             if context.design_type == "category_design":
+                other_categories = [
+                    category
+                    for category in context.available_categories
+                    if not _is_current_category(category, current_id, current_code)
+                ]
+                available_codes = _category_codes(other_categories)
                 # 新建：code 不应已存在
                 if code in available_codes:
                     errors.append(
@@ -59,7 +64,7 @@ class CategoryValidator:
                     )
             elif context.design_type == "flow_design" and context.mode == "basic":
                 # 选用：code 应已存在
-                if code not in available_codes:
+                if code not in _category_codes(context.available_categories):
                     errors.append(
                         ValidationError(
                             "CAT_C003",
@@ -77,20 +82,21 @@ class CategoryValidator:
                 )
             )
 
-        # CAT_C005: category_name 重名（仅 category_design）
-        if (
-            context.design_type == "category_design"
-            and name
-            and context.available_categories
-        ):
-            existing_names = {
-                c.get("categoryName")
-                for c in context.available_categories
-                if c.get("categoryName")
-            }
-            if name in existing_names:
-                errors.append(
-                    ValidationError("CAT_C005", f"分类名称 '{name}' 与已有分类重名")
-                )
-
         return ValidationResult.from_errors(errors + warnings)
+
+
+def _is_current_category(
+    category: dict, current_id: object | None, current_code: object | None
+) -> bool:
+    category_id = category.get("categoryId", category.get("id"))
+    if current_id is not None and category_id is not None:
+        return str(category_id) == str(current_id)
+    return current_code is not None and str(category.get("code")) == str(current_code)
+
+
+def _category_codes(categories: list[dict]) -> set[str]:
+    return {
+        str(category.get("code"))
+        for category in categories
+        if category.get("code") is not None
+    }

@@ -260,6 +260,79 @@ def test_flow_basic_category_must_come_from_authoritative_list():
     assert any(e.rule_id == "CAT_C003" for e in result.errors)
 
 
+def test_flow_basic_may_select_the_current_category():
+    result = CategoryValidator().validate(
+        {"flow_name": "请假", "code": "leave"},
+        _ctx(
+            "flow_design",
+            mode="basic",
+            current_form_data={"categoryId": 7, "code": "leave"},
+            categories_lookup_complete=True,
+            available_categories=[{"categoryId": 7, "code": "leave"}],
+        ),
+    )
+
+    assert result.is_valid
+
+
+def test_category_edit_excludes_itself_and_allows_duplicate_name():
+    result = CategoryValidator().validate(
+        {"category_name": "通用审批", "code": "leave_v2"},
+        _ctx(
+            "category_design",
+            current_form_data={"categoryId": 7, "code": "leave"},
+            categories_lookup_complete=True,
+            available_categories=[
+                {"categoryId": 7, "categoryName": "通用审批", "code": "leave_v2"},
+                {"categoryId": 8, "categoryName": "通用审批", "code": "expense"},
+            ],
+        ),
+    )
+
+    assert result.is_valid
+
+
+def test_category_edit_rejects_code_owned_by_another_category():
+    result = CategoryValidator().validate(
+        {"category_name": "请假", "code": "expense"},
+        _ctx(
+            "category_design",
+            current_form_data={"categoryId": 7, "code": "leave"},
+            categories_lookup_complete=True,
+            available_categories=[
+                {"categoryId": 7, "categoryName": "请假", "code": "leave"},
+                {"categoryId": 8, "categoryName": "报销", "code": "expense"},
+            ],
+        ),
+    )
+
+    assert any(error.rule_id == "CAT_C003" for error in result.errors)
+
+
+def test_candidate_group_must_exist_in_backend_roles():
+    output = {
+        "nodes": [
+            {
+                "id": "task",
+                "name": "审批",
+                "type": "USER_TASK",
+                "candidate_groups": ["ROLE99"],
+            }
+        ],
+        "edges": [],
+    }
+    result = NodeValidator().validate(
+        output,
+        _ctx(
+            "flow_design",
+            roles_lookup_complete=True,
+            available_roles=[{"roleId": 2, "roleName": "财务"}],
+        ),
+    )
+
+    assert any(error.rule_id == "NODE_N009" for error in result.errors)
+
+
 # ---------- ValidatorPipeline ----------
 
 

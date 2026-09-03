@@ -4,6 +4,7 @@
 """
 
 import json
+from collections.abc import Iterator
 from copy import deepcopy
 from typing import Any
 
@@ -109,10 +110,12 @@ def _insert_after(edges: list[dict[str, Any]], after_id: str, node_id: str) -> N
     original = outgoing[0]
     target = original.get("target")
     edges.remove(original)
+    continued = deepcopy(original)
+    continued["source"] = node_id
     edges.extend(
         [
             {"source": after_id, "target": node_id},
-            {"source": node_id, "target": target},
+            {**continued, "target": target},
         ]
     )
 
@@ -202,17 +205,20 @@ def _add_form_widget(result: dict[str, Any], operation: dict[str, Any]) -> None:
 def _change_form_widget(result: dict[str, Any], operation: dict[str, Any]) -> None:
     widgets = result.setdefault("widgetList", [])
     name = operation.get("widget_name")
-    widget = _find_widget(widgets, name)
-    if widget is None:
+    location = _find_widget_location(widgets, name)
+    if location is None:
         raise ValueError(f"要修改的表单字段不存在: {name}")
+    container, widget = location
     op = operation.get("op")
     if op == "remove_widget":
-        widgets.remove(widget)
+        container.remove(widget)
     elif op == "move_widget":
-        widgets.remove(widget)
-        widgets.insert(
-            _widget_insert_index(widgets, operation.get("after_name")), widget
-        )
+        after_name = operation.get("after_name")
+        destination = _find_widget_location(widgets, after_name) if after_name else None
+        if destination is not None and destination[0] is not container:
+            raise ValueError("嵌套字段只能在同一容器内移动")
+        container.remove(widget)
+        container.insert(_widget_insert_index(container, after_name), widget)
     else:
         changes = deepcopy(operation.get("changes") or {})
         option_changes = changes.pop("options", None)
@@ -240,13 +246,47 @@ def _widget_name(widget: dict[str, Any]) -> str:
 def _find_widget(
     widgets: list[dict[str, Any]], name: str | None
 ) -> dict[str, Any] | None:
-    return next((widget for widget in widgets if _widget_name(widget) == name), None)
+    location = _find_widget_location(widgets, name)
+    return location[1] if location else None
+
+
+def _find_widget_location(
+    widgets: list[dict[str, Any]], name: str | None
+) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    for widget in widgets:
+        if _widget_name(widget) == name:
+            return widgets, widget
+        for children in _widget_child_lists(widget):
+            location = _find_widget_location(children, name)
+            if location:
+                return location
+    return None
+
+
+def _widget_child_lists(widget: dict[str, Any]) -> Iterator[list[dict[str, Any]]]:
+    direct = widget.get("widgetList")
+    if isinstance(direct, list):
+        yield direct
+    for key in ("cols", "tabs", "rows"):
+        for child in widget.get(key) or []:
+            children = child.get("widgetList") if isinstance(child, dict) else None
+            if isinstance(children, list):
+                yield children
+            if key == "rows" and isinstance(child, dict):
+                for cell in child.get("cols") or child.get("cells") or []:
+                    cell_children = (
+                        cell.get("widgetList") if isinstance(cell, dict) else None
+                    )
+                    if isinstance(cell_children, list):
+                        yield cell_children
 
 
 def _widget_insert_index(widgets: list[dict[str, Any]], after_name: str | None) -> int:
     if not after_name:
         return len(widgets)
-    previous = _find_widget(widgets, after_name)
+    previous = next(
+        (widget for widget in widgets if _widget_name(widget) == after_name), None
+    )
     if previous is None:
         raise ValueError(f"插入位置字段不存在: {after_name}")
     return widgets.index(previous) + 1

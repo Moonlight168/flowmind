@@ -13,6 +13,19 @@ from typing import Any
 
 from lxml import etree
 
+OPAQUE_BPMN_NODE_TYPES = frozenset(
+    {
+        "serviceTask",
+        "scriptTask",
+        "manualTask",
+        "businessRuleTask",
+        "sendTask",
+        "receiveTask",
+        "callActivity",
+        "subProcess",
+    }
+)
+
 # 元素 localname -> FlowNode.type（与 domain/design_models.py 的 Literal 对齐）
 _NODE_TYPE_MAP = {
     "startEvent": "START_EVENT",
@@ -24,6 +37,9 @@ _NODE_TYPE_MAP = {
     "complexGateway": "COMPLEX_GATEWAY",
     "eventBasedGateway": "EVENT_GATEWAY",
     "intermediateThrowEvent": "INTERMEDIATE_THROW_EVENT",
+    # 生成器暂不编辑这些节点，但需要把它们作为占位节点保留在图中，
+    # 避免与它们相连的 sequenceFlow 在增量校验前变成悬空引用。
+    **dict.fromkeys(OPAQUE_BPMN_NODE_TYPES, "INTERMEDIATE_THROW_EVENT"),
 }
 
 
@@ -54,30 +70,46 @@ def _parse_node(el: etree._Element, node_type: str) -> dict[str, Any]:
         "id": el.get("id") or "",
         "name": el.get("name") or "",
     }
-    if node_type == "USER_TASK":
+    if node_type in {"START_EVENT", "USER_TASK"}:
         form_key = _attr(el, "formKey")
         if form_key:
             node["form_key"] = form_key
-        assignee = _attr(el, "assignee")
-        if assignee:
-            node["assignee"] = assignee
-        groups = _attr(el, "candidateGroups")
-        if groups:
-            node["candidate_groups"] = [
-                g.strip() for g in groups.split(",") if g.strip()
-            ]
-        data_type = _attr(el, "dataType")
-        if data_type:
-            node["data_type"] = data_type
+    if node_type == "USER_TASK":
+        _copy_user_task_attributes(el, node)
     return node
 
 
-def _parse_edge(el: etree._Element) -> dict[str, Any] | None:
+def _copy_user_task_attributes(el: etree._Element, node: dict[str, Any]) -> None:
+    scalar_fields = {
+        "assignee": "assignee",
+        "text": "text",
+        "dataType": "data_type",
+    }
+    for attribute, field in scalar_fields.items():
+        if value := _attr(el, attribute):
+            node[field] = value
+    for attribute, field in (
+        ("candidateGroups", "candidate_groups"),
+        ("candidateUsers", "candidate_users"),
+    ):
+        if value := _attr(el, attribute):
+            node[field] = [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _parse_edge(
+    el: etree._Element, default_flow_ids: set[str]
+) -> dict[str, Any] | None:
     source = el.get("sourceRef")
     target = el.get("targetRef")
     if not source or not target:
         return None
     edge: dict[str, Any] = {"source": source, "target": target}
+    if el.get("id"):
+        edge["id"] = el.get("id")
+    if el.get("name"):
+        edge["name"] = el.get("name")
+    if el.get("id") in default_flow_ids:
+        edge["is_default"] = True
     condition = _child_text(el, "conditionExpression")
     if condition and condition.strip():
         edge["condition"] = condition.strip()
@@ -96,10 +128,27 @@ def parse_bpmn_to_flat(bpmn_xml: str) -> dict[str, Any] | None:
     except (etree.XMLSyntaxError, ValueError):
         return None
 
+    process = next(
+        (element for element in root.iter() if _localname(element.tag) == "process"),
+        None,
+    )
+    if process is None:
+        return None
+    default_flow_ids = {
+        default_id for element in process if (default_id := _attr(element, "default"))
+    }
+
+    nodes, edges = _parse_process_elements(process, default_flow_ids)
+    return {"nodes": nodes, "edges": edges} if nodes else None
+
+
+def _parse_process_elements(
+    process: etree._Element, default_flow_ids: set[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse only direct children; subprocess internals remain opaque."""
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
-
-    for el in root.iter():
+    for el in process:
         local = _localname(el.tag)
         node_type = _NODE_TYPE_MAP.get(local)
         if node_type is not None:
@@ -107,11 +156,10 @@ def parse_bpmn_to_flat(bpmn_xml: str) -> dict[str, Any] | None:
             if node["id"]:
                 nodes.append(node)
         elif local == "sequenceFlow":
-            edge = _parse_edge(el)
+            edge = _parse_edge(el, default_flow_ids)
             if edge is not None:
                 edges.append(edge)
-
-    return {"nodes": nodes, "edges": edges} if nodes else None
+    return nodes, edges
 
 
 def enrich_flow_baseline(current_form_data: dict[str, Any] | None) -> dict[str, Any]:

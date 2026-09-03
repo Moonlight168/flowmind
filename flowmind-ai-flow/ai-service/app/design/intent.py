@@ -1,7 +1,7 @@
 """
 FlowMind 智能流程设计服务 - 意图判别
 
-阶段1：区分 design / clarification / rollback / reset。
+阶段1：区分 design / clarification / rollback。
 判别失败默认 design（宁可多预取，不漏真实设计意图）。
 """
 
@@ -18,7 +18,7 @@ from app.prompts.loader import render_prompt
 class Intent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["design", "clarification", "rollback", "reset"]
+    kind: Literal["design", "clarification", "rollback"]
     target: str | None = None  # rollback 时："start"(一开始) / "prev"(上一步)
     message: str | None = None  # clarification 时的追问内容
 

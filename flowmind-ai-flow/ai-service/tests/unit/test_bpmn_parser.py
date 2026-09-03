@@ -2,8 +2,12 @@
 FlowMind 智能流程设计服务 - BPMN 反解析器测试
 """
 
+import lxml.etree as etree
+
 from app.design.bpmn_generator import generate_bpmn_xml
+from app.design.bpmn_merge import preserve_bpmn_metadata
 from app.design.bpmn_parser import enrich_flow_baseline, parse_bpmn_to_flat
+from app.design.operations import apply_design_operations
 
 BPMN_XML = """<?xml version='1.0' encoding='utf-8'?>
 <bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -62,6 +66,7 @@ def test_parse_nodes_and_edges():
     # 条件连线被保留
     conditioned = [e for e in edges if e.get("condition")]
     assert len(conditioned) == 1
+    assert conditioned[0]["id"] == "Flow_3"
     assert conditioned[0]["source"] == "Gateway_1"
     assert conditioned[0]["target"] == "Task_2"
     assert conditioned[0]["condition"] == "金额>10000"
@@ -109,3 +114,167 @@ def test_enrich_flow_baseline():
     # 无 XML -> 原样返回
     assert enrich_flow_baseline({"modelId": "1"}) == {"modelId": "1"}
     assert enrich_flow_baseline(None) == {}
+
+
+def test_incremental_bpmn_merge_preserves_extensions_and_existing_layout():
+    flat = parse_bpmn_to_flat(BPMN_XML)
+    original = etree.fromstring(generate_bpmn_xml(flat, {"code": "leave"}).encode())
+    task = next(item for item in original.iter() if item.get("id") == "Task_1")
+    task.set("{http://flowable.org/bpmn}customFlag", "keep-me")
+    extension = etree.SubElement(
+        task, "{http://www.omg.org/spec/BPMN/20100524/MODEL}extensionElements"
+    )
+    etree.SubElement(
+        extension, "{http://flowable.org/bpmn}taskListener", event="create"
+    )
+    service = etree.SubElement(
+        next(
+            item for item in original.iter() if etree.QName(item).localname == "process"
+        ),
+        "{http://www.omg.org/spec/BPMN/20100524/MODEL}serviceTask",
+        id="Service_Keep",
+        name="保留服务任务",
+    )
+    assert service is not None
+    shape = next(
+        item for item in original.iter() if item.get("bpmnElement") == "Task_1"
+    )
+    bounds = next(item for item in shape if etree.QName(item).localname == "Bounds")
+    bounds.set("x", "999")
+
+    flat["nodes"][1]["name"] = "更新后的任务"
+    generated = generate_bpmn_xml(flat, {"code": "leave"})
+    merged = preserve_bpmn_metadata(etree.tostring(original).decode(), generated)
+    root = etree.fromstring(merged.encode())
+    merged_task = next(item for item in root.iter() if item.get("id") == "Task_1")
+
+    assert merged_task.get("name") == "更新后的任务"
+    assert merged_task.get("{http://flowable.org/bpmn}customFlag") == "keep-me"
+    assert any(
+        etree.QName(item).localname == "taskListener" for item in merged_task.iter()
+    )
+    assert any(item.get("id") == "Service_Keep" for item in root.iter())
+    merged_shape = next(
+        item for item in root.iter() if item.get("bpmnElement") == "Task_1"
+    )
+    merged_bounds = next(
+        item for item in merged_shape if etree.QName(item).localname == "Bounds"
+    )
+    assert merged_bounds.get("x") == "999"
+
+
+def test_incremental_bpmn_merge_restores_custom_boundary_ids():
+    original = BPMN_XML.replace("StartEvent_1", "Start_Custom").replace(
+        "EndEvent_1", "End_Custom"
+    )
+    flat = parse_bpmn_to_flat(original)
+    generated = generate_bpmn_xml(flat, {"code": "leave"})
+
+    merged = preserve_bpmn_metadata(original, generated)
+    root = etree.fromstring(merged.encode())
+    ids = {item.get("id") for item in root.iter() if item.get("id")}
+
+    assert "Start_Custom" in ids
+    assert "End_Custom" in ids
+    assert "StartEvent_1" not in ids
+    assert "EndEvent_1" not in ids
+    assert all(
+        item.get("sourceRef") != "StartEvent_1"
+        and item.get("targetRef") != "EndEvent_1"
+        and item.get("bpmnElement") not in {"StartEvent_1", "EndEvent_1"}
+        for item in root.iter()
+    )
+
+
+def test_incremental_bpmn_merge_keeps_connected_unsupported_task():
+    original = etree.fromstring(BPMN_XML.encode())
+    task = next(item for item in original.iter() if item.get("id") == "Task_1")
+    namespace = etree.QName(task).namespace
+    task.tag = f"{{{namespace}}}serviceTask"
+    original_xml = etree.tostring(original).decode()
+
+    flat = parse_bpmn_to_flat(original_xml)
+    assert any(node["id"] == "Task_1" for node in flat["nodes"])
+    old_edge = next(edge for edge in flat["edges"] if edge["source"] == "Task_1")
+    old_target = old_edge["target"]
+    old_id = old_edge.pop("id")
+    old_edge["target"] = "Inserted_Task"
+    flat["nodes"].append(
+        {"id": "Inserted_Task", "name": "新增审批", "type": "USER_TASK"}
+    )
+    flat["edges"].append(
+        {"id": old_id, "source": "Inserted_Task", "target": old_target}
+    )
+    merged = preserve_bpmn_metadata(
+        original_xml, generate_bpmn_xml(flat, {"code": "leave"})
+    )
+    merged_root = etree.fromstring(merged.encode())
+    merged_task = next(
+        item for item in merged_root.iter() if item.get("id") == "Task_1"
+    )
+
+    assert etree.QName(merged_task).localname == "serviceTask"
+    outgoing = next(
+        child for child in merged_task if etree.QName(child).localname == "outgoing"
+    )
+    actual_outgoing = next(
+        item.get("id")
+        for item in merged_root.iter()
+        if etree.QName(item).localname == "sequenceFlow"
+        and item.get("sourceRef") == "Task_1"
+    )
+    assert outgoing.text == actual_outgoing
+    assert outgoing.text != old_id
+    business_ids = {item.get("id") for item in merged_root.iter() if item.get("id")}
+    assert all(
+        item.get("sourceRef") in business_ids and item.get("targetRef") in business_ids
+        for item in merged_root.iter()
+        if etree.QName(item).localname == "sequenceFlow"
+    )
+
+
+def test_subprocess_is_an_opaque_node_instead_of_flattening_its_children():
+    original = etree.fromstring(BPMN_XML.encode())
+    task = next(item for item in original.iter() if item.get("id") == "Task_1")
+    namespace = etree.QName(task).namespace
+    task.tag = f"{{{namespace}}}subProcess"
+    etree.SubElement(task, f"{{{namespace}}}userTask", id="Inner_Task", name="内部任务")
+
+    flat = parse_bpmn_to_flat(etree.tostring(original).decode())
+    node_ids = {node["id"] for node in flat["nodes"]}
+
+    assert "Task_1" in node_ids
+    assert "Inner_Task" not in node_ids
+
+
+def test_changed_edge_id_does_not_restore_stale_waypoints():
+    flat = parse_bpmn_to_flat(BPMN_XML)
+    original = generate_bpmn_xml(flat, {"code": "leave"})
+    updated = apply_design_operations(
+        "flow_design",
+        flat,
+        [
+            {
+                "op": "add_node",
+                "after_id": "Task_1",
+                "node": {"id": "Inserted_Task", "name": "新增", "type": "USER_TASK"},
+            }
+        ],
+    )
+    root = etree.fromstring(
+        preserve_bpmn_metadata(
+            original, generate_bpmn_xml(updated, {"code": "leave"})
+        ).encode()
+    )
+    shape = next(
+        item for item in root.iter() if item.get("bpmnElement") == "Inserted_Task"
+    )
+    bounds = next(item for item in shape if etree.QName(item).localname == "Bounds")
+    edge = next(item for item in root.iter() if item.get("bpmnElement") == "Flow_2")
+    first_waypoint = next(
+        item for item in edge if etree.QName(item).localname == "waypoint"
+    )
+
+    assert float(first_waypoint.get("x")) == float(bounds.get("x")) + float(
+        bounds.get("width")
+    )

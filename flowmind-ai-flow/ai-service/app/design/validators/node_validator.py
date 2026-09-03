@@ -60,6 +60,23 @@ class NodeValidator:
                         element_id=node.get("id"),
                     )
                 )
+
+            candidate_groups = node.get("candidate_groups") or []
+            if candidate_groups and context.roles_lookup_complete:
+                available_role_keys = {
+                    f"ROLE{role.get('roleId')}"
+                    for role in context.available_roles
+                    if role.get("roleId") is not None
+                }
+                missing_groups = sorted(set(candidate_groups) - available_role_keys)
+                if missing_groups:
+                    errors.append(
+                        ValidationError(
+                            "NODE_N009",
+                            f"节点 '{node.get('name')}' 引用了不存在的角色: {missing_groups}",
+                            element_id=node.get("id"),
+                        )
+                    )
             node_id = node.get("id")
             if node_id:
                 if node_id in seen_ids:

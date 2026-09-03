@@ -43,6 +43,6 @@ export function clearDesignState(designType, threadId, mode = 'design') {
  *   完成事件：{ type: 'done', status, form_data, operations, validation, trace_id }
  *   错误事件：{ type: 'error', message }
  */
-export async function designStream(designType, data, onEvent) {
-  return postSse(`/flowmind-ai/design/${designType}`, data, onEvent)
+export async function designStream(designType, data, onEvent, signal) {
+  return postSse(`/flowmind-ai/design/${designType}`, data, onEvent, { signal })
 }

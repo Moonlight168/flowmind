@@ -383,6 +383,24 @@ def _create_auto_edges(
     )
 
 
+def _unique_flow_ids(edges: list[dict]) -> list[str]:
+    """Fill missing IDs without colliding with IDs preserved from the baseline."""
+    used = {str(edge["id"]) for edge in edges if edge.get("id")}
+    result: list[str] = []
+    candidate = 1
+    for edge in edges:
+        if edge.get("id"):
+            result.append(str(edge["id"]))
+            continue
+        while f"Flow_{candidate}" in used:
+            candidate += 1
+        flow_id = f"Flow_{candidate}"
+        used.add(flow_id)
+        result.append(flow_id)
+        candidate += 1
+    return result
+
+
 def _create_custom_edges(
     process: etree._Element,
     ns: dict[str, str],
@@ -428,8 +446,7 @@ def _create_custom_edges(
     incoming_map: dict[str, list[str]] = {}
     outgoing_map: dict[str, list[str]] = {}
 
-    for i, edge in enumerate(edges):
-        flow_id = edge.get("id") or f"Flow_{i + 1}"
+    for edge, flow_id in zip(edges, _unique_flow_ids(edges), strict=True):
         source = edge["source"]
         target = edge["target"]
 

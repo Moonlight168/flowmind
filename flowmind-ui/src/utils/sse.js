@@ -3,7 +3,7 @@ import { getToken } from '@/utils/auth'
 /**
  * 发起 POST SSE 请求并逐条解析 data 事件。
  */
-export async function postSse(path, data, onEvent) {
+export async function postSse(path, data, onEvent, options = {}) {
   const token = getToken()
   const response = await fetch(`${import.meta.env.VITE_APP_BASE_API}${path}`, {
     method: 'POST',
@@ -11,7 +11,8 @@ export async function postSse(path, data, onEvent) {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: 'Bearer ' + token } : {})
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
+    signal: options.signal
   })
 
   if (!response.ok) {

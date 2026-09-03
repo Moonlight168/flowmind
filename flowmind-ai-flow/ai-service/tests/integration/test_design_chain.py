@@ -54,6 +54,9 @@ class _FakeBackendService:
     def search_flow_models(self, *args, **kwargs):
         return []
 
+    def search_roles(self, *args, **kwargs):
+        return [{"roleId": 1, "roleName": "部门经理"}]
+
 
 @pytest.fixture
 def chain(monkeypatch):
@@ -64,6 +67,7 @@ def chain(monkeypatch):
     monkeypatch.setattr(dw, "_get_redis_client", lambda: _FakeRedis())
     monkeypatch.setattr(review_node, "FormClient", _FakeBackendService)
     monkeypatch.setattr(review_node, "CategoryClient", _FakeBackendService)
+    monkeypatch.setattr(review_node, "RoleClient", _FakeBackendService)
     return dw
 
 

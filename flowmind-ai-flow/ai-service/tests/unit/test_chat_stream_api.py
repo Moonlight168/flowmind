@@ -59,3 +59,15 @@ async def test_chat_stream_hides_internal_error_details(monkeypatch):
     assert "AI 服务暂时异常，请稍后重试" in body
     assert "password" not in body
     assert "secret" not in body
+
+
+def test_chat_thread_namespace_is_user_owned_and_reversible():
+    first = TokenUser(user_id=1, username="first", user_key="token-a")
+    second = TokenUser(user_id=2, username="second", user_key="token-b")
+
+    first_thread = chat._chat_thread_id(first, "conversation/42")
+    second_thread = chat._chat_thread_id(second, "conversation/42")
+
+    assert first_thread != second_thread
+    assert chat._public_thread_id(first, first_thread) == "conversation/42"
+    assert chat._public_thread_id(first, second_thread) is None

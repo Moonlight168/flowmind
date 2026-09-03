@@ -2,6 +2,9 @@
 FlowMind 智能流程设计服务 - 意图判别单元测试
 """
 
+import pytest
+from pydantic import ValidationError
+
 from app.design.intent import Intent, discriminate_intent
 
 
@@ -34,9 +37,9 @@ def test_rollback():
     assert discriminate_intent("回到一开始", llm=llm).target == "start"
 
 
-def test_reset():
-    llm = _FakeLLM(result=Intent(kind="reset"))
-    assert discriminate_intent("清空重来", llm=llm).kind == "reset"
+def test_reset_is_not_a_separate_intent():
+    with pytest.raises(ValidationError):
+        Intent(kind="reset")
 
 
 def test_failure_defaults_to_design():

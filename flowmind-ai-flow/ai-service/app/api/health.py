@@ -46,12 +46,17 @@ async def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
     """返回脱敏后的模型配置与结构化能力状态。"""
     providers = get_model_runtime().describe_providers()
     total_count = len(providers)
+    structured_count = sum(
+        bool(provider["supports_structured_output"]) for provider in providers
+    )
 
     return ResponseVO.success(
         {
             "status": "configured" if total_count > 0 else "unconfigured",
             "primary_provider": providers[0]["name"] if providers else None,
             "total_count": total_count,
+            "structured_provider_count": structured_count,
+            "structured_fallback_ready": structured_count >= 2,
             "providers": providers,
             "timestamp": datetime.now().isoformat(),
         }

@@ -1,6 +1,6 @@
 """Design API conversation namespace tests."""
 
-from app.api.design import _design_thread_id, _safe_stream_error
+from app.api.design import SSE_HEADERS, _design_thread_id, _safe_stream_error
 
 
 def test_design_thread_namespace_separates_artifact_mode_and_user():
@@ -22,3 +22,10 @@ def test_design_stream_error_is_traceable_without_internal_details():
     assert '"trace_id": "trace-1"' in event
     assert '"status": "error"' in event
     assert "password" not in event
+
+
+def test_design_sse_disables_proxy_buffering():
+    assert SSE_HEADERS == {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }

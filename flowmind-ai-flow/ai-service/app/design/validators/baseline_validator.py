@@ -10,7 +10,6 @@ from app.design.validators.base import (
     ValidationResult,
     ValidatorContext,
 )
-from app.infra.logger import logger
 
 # 用户指令中表示"删除"意图的关键词（避免"不要/取消"误报："不要财务审批改成总监"是修改非删除）
 DELETE_KEYWORDS = ("删", "去掉", "移除")
@@ -25,7 +24,7 @@ class BaselineValidator:
         if context.design_type == "form_design":
             return self._validate_form(output, context)
         if context.design_type == "category_design":
-            return self._validate_category(output, context)
+            return ValidationResult.ok()
         return ValidationResult.ok()
 
     def _has_delete_intent(self, context: ValidatorContext) -> bool:
@@ -34,6 +33,8 @@ class BaselineValidator:
     def _validate_flow(
         self, output: dict, context: ValidatorContext
     ) -> ValidationResult:
+        if context.allow_full_replace and _has_operation(output, "replace_graph"):
+            return ValidationResult.ok()
         baseline_nodes = context.current_form_data.get("nodes") or []
         if not baseline_nodes:
             return ValidationResult.ok()
@@ -60,6 +61,9 @@ class BaselineValidator:
             (e.get("source"), e.get("target")) for e in (output.get("edges") or [])
         }
         deleted_edges = baseline_edges - output_edges
+        deleted_edges = {
+            edge for edge in deleted_edges if not _is_valid_edge_split(edge, output)
+        }
         if deleted_edges and not self._has_delete_intent(context):
             return ValidationResult.from_errors(
                 [
@@ -74,18 +78,15 @@ class BaselineValidator:
     def _validate_form(
         self, output: dict, context: ValidatorContext
     ) -> ValidationResult:
+        if context.allow_full_replace and _has_operation(output, "replace_form"):
+            return ValidationResult.ok()
         baseline_widgets = context.current_form_data.get("widgetList") or []
         if not baseline_widgets:
             return ValidationResult.ok()
 
-        def _names(widgets):
-            return {
-                w.get("options", {}).get("name")
-                for w in widgets
-                if w.get("options", {}).get("name")
-            }
-
-        deleted = _names(baseline_widgets) - _names(output.get("widgetList") or [])
+        deleted = _widget_names(baseline_widgets) - _widget_names(
+            output.get("widgetList") or []
+        )
         if deleted and not self._has_delete_intent(context):
             return ValidationResult.from_errors(
                 [
@@ -97,22 +98,47 @@ class BaselineValidator:
             )
         return ValidationResult.ok()
 
-    def _validate_category(
-        self, output: dict, context: ValidatorContext
-    ) -> ValidationResult:
-        # category 增量：code 不应静默变（改 code 不是删除，删除意图不放行）
-        baseline_code = context.current_form_data.get("code")
-        output_code = output.get("code")
-        if baseline_code and output_code and baseline_code != output_code:
-            logger.info(
-                f"[baseline] 分类 code 从 '{baseline_code}' 变为 '{output_code}'"
-            )
-            return ValidationResult.from_errors(
-                [
-                    ValidationError(
-                        "BASE_B004",
-                        f"分类 code 从 '{baseline_code}' 变为 '{output_code}'，但用户未要求修改",
+
+def _has_operation(output: dict, operation_name: str) -> bool:
+    return any(
+        operation.get("op") == operation_name
+        for operation in output.get("operations") or []
+    )
+
+
+def _is_valid_edge_split(edge: tuple, output: dict) -> bool:
+    output_edges = {
+        (item.get("source"), item.get("target")) for item in output.get("edges") or []
+    }
+    for operation in output.get("operations") or []:
+        node_id = (operation.get("node") or {}).get("id")
+        if operation.get("op") != "add_node" or operation.get("after_id") != edge[0]:
+            continue
+        if (edge[0], node_id) in output_edges and (node_id, edge[1]) in output_edges:
+            return True
+    return False
+
+
+def _widget_names(widgets: list[dict]) -> set[str]:
+    names: set[str] = set()
+    for widget in widgets:
+        name = (widget.get("options") or {}).get("name")
+        if name:
+            names.add(name)
+        direct = widget.get("widgetList")
+        if isinstance(direct, list):
+            names.update(_widget_names(direct))
+        for key in ("cols", "tabs", "rows"):
+            for child in widget.get(key) or []:
+                if not isinstance(child, dict):
+                    continue
+                children = child.get("widgetList")
+                if isinstance(children, list):
+                    names.update(_widget_names(children))
+                for cell in child.get("cols") or child.get("cells") or []:
+                    cell_children = (
+                        cell.get("widgetList") if isinstance(cell, dict) else None
                     )
-                ]
-            )
-        return ValidationResult.ok()
+                    if isinstance(cell_children, list):
+                        names.update(_widget_names(cell_children))
+    return names

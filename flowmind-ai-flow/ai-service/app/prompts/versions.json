@@ -1,13 +1,22 @@
 {
   "prompts": {
-    "agents/chat.md": {
-      "stable": "v1",
-      "versions": {
-        "v1": {
-          "file": "agents/chat.md",
-          "weight": 100
-        }
-      }
-    }
+    "agents/chat.md": {"stable": "v1", "versions": {"v1": {"file": "agents/chat.md", "weight": 100}}},
+    "agents/compression.md": {"stable": "v1", "versions": {"v1": {"file": "agents/compression.md", "weight": 100}}},
+    "agents/gateway_feedback.md": {"stable": "v1", "versions": {"v1": {"file": "agents/gateway_feedback.md", "weight": 100}}},
+    "agents/intent.md": {"stable": "v1", "versions": {"v1": {"file": "agents/intent.md", "weight": 100}}},
+    "agents/review_feedback.md": {"stable": "v1", "versions": {"v1": {"file": "agents/review_feedback.md", "weight": 100}}},
+    "roles/category_designer.md": {"stable": "v1", "versions": {"v1": {"file": "roles/category_designer.md", "weight": 100}}},
+    "roles/flow_designer.md": {"stable": "v1", "versions": {"v1": {"file": "roles/flow_designer.md", "weight": 100}}},
+    "roles/form_designer.md": {"stable": "v1", "versions": {"v1": {"file": "roles/form_designer.md", "weight": 100}}},
+    "shared/design_intent.md": {"stable": "v1", "versions": {"v1": {"file": "shared/design_intent.md", "weight": 100}}},
+    "skills/bpmn_design.md": {"stable": "v1", "versions": {"v1": {"file": "skills/bpmn_design.md", "weight": 100}}},
+    "tasks/category_design.md": {"stable": "v1", "versions": {"v1": {"file": "tasks/category_design.md", "weight": 100}}},
+    "tasks/flow_model_basic.md": {"stable": "v1", "versions": {"v1": {"file": "tasks/flow_model_basic.md", "weight": 100}}},
+    "tasks/flow_model_design.md": {"stable": "v1", "versions": {"v1": {"file": "tasks/flow_model_design.md", "weight": 100}}},
+    "tasks/form_design.md": {"stable": "v1", "versions": {"v1": {"file": "tasks/form_design.md", "weight": 100}}},
+    "tools/search_categories.md": {"stable": "v1", "versions": {"v1": {"file": "tools/search_categories.md", "weight": 100}}},
+    "tools/search_flow_models.md": {"stable": "v1", "versions": {"v1": {"file": "tools/search_flow_models.md", "weight": 100}}},
+    "tools/search_forms.md": {"stable": "v1", "versions": {"v1": {"file": "tools/search_forms.md", "weight": 100}}},
+    "tools/search_roles.md": {"stable": "v1", "versions": {"v1": {"file": "tools/search_roles.md", "weight": 100}}}
   }
 }

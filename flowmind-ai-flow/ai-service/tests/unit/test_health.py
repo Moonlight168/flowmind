@@ -31,6 +31,8 @@ async def test_model_health_uses_safe_runtime_description(monkeypatch) -> None:
         "status": "configured",
         "primary_provider": "primary",
         "total_count": 1,
+        "structured_provider_count": 1,
+        "structured_fallback_ready": False,
         "providers": providers,
     }
     assert "api_key" not in str(result.data)

@@ -6,7 +6,9 @@ FlowMind 智能流程设计服务 - 对话 API
 
 import json
 from collections.abc import Iterator
+from hashlib import sha256
 from typing import Any
+from urllib.parse import quote, unquote
 
 import httpx
 import redis
@@ -32,6 +34,18 @@ router = APIRouter(
 )
 
 
+def _chat_thread_id(user: TokenUser, conversation_id: str | None) -> str:
+    """Map a public conversation id into a user-owned Redis namespace."""
+    owner = sha256(str(user.user_id or user.user_key).encode()).hexdigest()[:16]
+    public_id = conversation_id or user.user_key or "default"
+    return f"chat:{owner}:{quote(public_id, safe='')}"
+
+
+def _public_thread_id(user: TokenUser, thread_id: str) -> str | None:
+    prefix = _chat_thread_id(user, "").rsplit(":", 1)[0] + ":"
+    return unquote(thread_id[len(prefix) :]) if thread_id.startswith(prefix) else None
+
+
 @router.post("", response_model=ResponseVO[dict[str, Any]])
 def chat(
     payload: ChatRequestDTO,
@@ -41,7 +55,8 @@ def chat(
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
 
-    thread_id = payload.thread_id or current_user.user_key or "default"
+    public_thread_id = payload.thread_id or current_user.user_key or "default"
+    thread_id = _chat_thread_id(current_user, public_thread_id)
 
     result = invoke_chat_workflow(
         user_input=payload.user_input,
@@ -55,7 +70,7 @@ def chat(
     return ResponseVO.success(
         {
             "response": chat_response,
-            "thread_id": thread_id,
+            "thread_id": public_thread_id,
         },
         trace_id=trace_id,
     )
@@ -69,10 +84,11 @@ def chat_stream(
     """通用聊天流式接口（SSE：meta + delta + done）。"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = payload.thread_id or current_user.user_key or "default"
+    public_thread_id = payload.thread_id or current_user.user_key or "default"
+    thread_id = _chat_thread_id(current_user, public_thread_id)
 
     def event_stream() -> Iterator[str]:
-        meta = {"type": "meta", "thread_id": thread_id, "trace_id": trace_id}
+        meta = {"type": "meta", "thread_id": public_thread_id, "trace_id": trace_id}
         yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
         try:
             for event in stream_chat_workflow(
@@ -107,7 +123,7 @@ async def get_chat_state(
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[dict[str, Any]]:
     """获取会话状态和消息历史"""
-    state = get_chat_workflow_state(thread_id)
+    state = get_chat_workflow_state(_chat_thread_id(current_user, thread_id))
     if state is None:
         return ResponseVO.error("会话不存在或已过期", code=404)
 
@@ -123,7 +139,7 @@ async def delete_chat_state(
     try:
         checkpointer = chat_workflow.checkpointer
         if hasattr(checkpointer, "delete_thread"):
-            checkpointer.delete_thread(thread_id)
+            checkpointer.delete_thread(_chat_thread_id(current_user, thread_id))
         return ResponseVO.success({"thread_id": thread_id})
     except Exception as e:
         return ResponseVO.error(500, f"删除失败: {e!s}")
@@ -140,7 +156,7 @@ async def batch_delete_chat_state(
         deleted_count = 0
         for thread_id in thread_ids:
             if hasattr(checkpointer, "delete_thread"):
-                checkpointer.delete_thread(thread_id)
+                checkpointer.delete_thread(_chat_thread_id(current_user, thread_id))
                 deleted_count += 1
         return ResponseVO.success({"deleted_count": deleted_count})
     except Exception as e:
@@ -161,12 +177,12 @@ async def get_chat_history(
         # list_threads 已返回 {thread_id, ns, preview, updated_at}
         result = [
             {
-                "thread_id": t.get("thread_id", ""),
+                "thread_id": public_id,
                 "preview": t.get("preview", "新对话"),
                 "updated_at": t.get("updated_at", None),
             }
             for t in threads
-            if t.get("thread_id")
+            if (public_id := _public_thread_id(current_user, t.get("thread_id", "")))
         ]
         return ResponseVO.success(result)
     except Exception as e:

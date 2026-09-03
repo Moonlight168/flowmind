@@ -32,6 +32,7 @@ from app.infra.logger import logger
 from app.integrations.backend import (
     CategoryClient,
     FormClient,
+    RoleClient,
     request_cache,
 )
 from app.prompts.loader import render_prompt
@@ -113,10 +114,15 @@ def _build_context(state: AppState) -> ValidatorContext:
     mode = state.get("mode", "design")
     available_forms = []
     available_categories = []
+    available_roles = []
     if design_type == "flow_design" and mode == "design":
         available_forms = request_cache.get(
             "backend:forms:",
             lambda: FormClient(auth_token=auth_token).search_forms(""),
+        )
+        available_roles = request_cache.get(
+            "backend:roles:",
+            lambda: RoleClient(auth_token=auth_token).search_roles(""),
         )
     if design_type == "category_design" or (
         design_type == "flow_design" and mode == "basic"
@@ -131,9 +137,12 @@ def _build_context(state: AppState) -> ValidatorContext:
         current_form_data=state.get("current_form_data") or {},
         available_forms=available_forms,
         available_categories=available_categories,
+        available_roles=available_roles,
         forms_lookup_complete=design_type == "flow_design" and mode == "design",
         categories_lookup_complete=design_type == "category_design"
         or (design_type == "flow_design" and mode == "basic"),
+        roles_lookup_complete=design_type == "flow_design" and mode == "design",
+        allow_full_replace=bool(state.get("allow_full_replace")),
         auth_token=auth_token,
         user_input=user_input,
     )
