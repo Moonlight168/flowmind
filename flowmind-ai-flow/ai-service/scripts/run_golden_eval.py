@@ -1,39 +1,30 @@
-"""Run FlowMind golden dataset evaluations and report scores to Langfuse."""
+"""执行 FlowMind 黄金数据集评估并上报 Langfuse（从 dataset 拉取，不触发上传）。
+
+前置：先用 scripts/upload_golden_to_langfuse.py 把本地 evals/golden_dataset.jsonl
+上传到 Langfuse dataset；本脚本从 dataset 拉取用例执行，避免 golden 未更新时重复上传。
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from app.config.settings import settings
-from app.evaluation.golden_dataset import (
-    build_workflow_task,
-    evaluate_contract,
-    load_golden_cases,
-    select_cases,
-    sync_dataset,
-)
+from app.evaluation.golden_dataset import build_workflow_task, evaluate_contract
 from app.infra.logger import logger
 from app.infra.observability import get_client, observability_enabled
 
-DEFAULT_DATASET_PATH = Path(__file__).parents[1] / "evals" / "golden_dataset.jsonl"
 DEFAULT_DATASET_NAME = "flowmind-design-golden-v1"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line options for all-case or exact single-case execution."""
     parser = argparse.ArgumentParser(
-        description="执行 FlowMind 黄金数据集并将评估结果上报 Langfuse"
+        description="从 Langfuse dataset 拉取黄金用例并执行评估上报"
     )
     parser.add_argument("--case-id", help="只执行指定的稳定用例 ID")
-    parser.add_argument(
-        "--dataset-path",
-        type=Path,
-        default=DEFAULT_DATASET_PATH,
-        help="JSONL 数据集路径",
-    )
     parser.add_argument(
         "--dataset-name", default=DEFAULT_DATASET_NAME, help="Langfuse 数据集名称"
     )
@@ -47,21 +38,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _case_id(item: Any) -> str:
+    metadata = item.metadata or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except (json.JSONDecodeError, ValueError):
+            metadata = {}
+    return str(metadata.get("case_id", ""))
+
+
 def run(args: argparse.Namespace) -> Any:
-    """Sync selected cases, execute the production workflow, and return the run."""
+    """Pull dataset items, execute the production workflow, and return the run."""
     auth_token = settings.evaluation.auth_token
     if not auth_token:
         raise RuntimeError("缺少 FLOWMIND_AUTH_TOKEN, 无法验证完整后端调用链")
     if not observability_enabled():
         raise RuntimeError("请先配置 Langfuse 密钥并启用链路监控")
 
-    cases = select_cases(load_golden_cases(args.dataset_path), args.case_id)
     client = get_client()
-    dataset_items = sync_dataset(client, args.dataset_name, cases)
+    items = list(client.get_dataset(args.dataset_name).items)
+    if args.case_id:
+        items = [item for item in items if _case_id(item) == args.case_id]
+        if not items:
+            raise RuntimeError(
+                f"Langfuse dataset={args.dataset_name} 中不存在用例: {args.case_id}"
+            )
+    if not items:
+        raise RuntimeError(
+            f"Langfuse dataset={args.dataset_name} 为空，请先运行 "
+            "scripts/upload_golden_to_langfuse.py 上传本地 golden 数据集"
+        )
+
     run_name = args.run_name or _default_run_name(args.case_id)
-    logger.info(f"[黄金集评估] 开始执行 run={run_name}, cases={len(dataset_items)}")
+    logger.info(f"[黄金集评估] 开始执行 run={run_name}, cases={len(items)}")
     try:
-        result = _execute_experiment(client, args, dataset_items, auth_token, run_name)
+        result = _execute_experiment(client, args, items, auth_token, run_name)
     finally:
         client.flush()
     logger.info(f"\n{result.format(include_item_results=True)}")

@@ -51,9 +51,16 @@ def _case(case_id: str = "flow-linear") -> GoldenCase:
 
 
 class _FakeLangfuseClient:
-    def __init__(self, captured: dict[str, object], result: SimpleNamespace) -> None:
+    def __init__(
+        self, captured: dict[str, object], result: SimpleNamespace, items: list[object]
+    ) -> None:
         self.captured = captured
         self.result = result
+        self.items = items
+
+    def get_dataset(self, name: str) -> SimpleNamespace:
+        self.captured["dataset"] = {"name": name}
+        return SimpleNamespace(items=list(self.items))
 
     def create_dataset(self, **kwargs: object) -> None:
         self.captured["dataset"] = kwargs
@@ -266,7 +273,7 @@ def test_cli_selects_one_case() -> None:
     assert args.max_concurrency == 1
 
 
-def test_cli_run_syncs_only_selected_case_and_flushes(
+def test_cli_run_pulls_dataset_filters_case_and_flushes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -274,20 +281,55 @@ def test_cli_run_syncs_only_selected_case_and_flushes(
         dataset_run_url="https://langfuse.example/run/1",
         format=lambda **kwargs: "evaluation summary",
     )
+    case = _case("flow-linear")
+    items = [
+        SimpleNamespace(
+            id="1",
+            input=case.input.model_dump(),
+            expected_output=case.expected_output.model_dump(),
+            metadata={"case_id": "flow-linear"},
+        ),
+        SimpleNamespace(
+            id="2",
+            input=_case("other").input.model_dump(),
+            expected_output=_case("other").expected_output.model_dump(),
+            metadata={"case_id": "other"},
+        ),
+    ]
 
     monkeypatch.setattr(
         run_golden_eval.settings.evaluation, "auth_token", "token-for-test"
     )
     monkeypatch.setattr(run_golden_eval, "observability_enabled", lambda: True)
     monkeypatch.setattr(
-        run_golden_eval, "get_client", lambda: _FakeLangfuseClient(captured, result)
+        run_golden_eval,
+        "get_client",
+        lambda: _FakeLangfuseClient(captured, result, items),
     )
-    args = parse_args(["--case-id", "flow-linear-leave", "--run-name", "test-run"])
+    args = parse_args(["--case-id", "flow-linear", "--run-name", "test-run"])
 
     assert run_golden_eval.run(args) is result
+    assert captured["dataset"]["name"] == run_golden_eval.DEFAULT_DATASET_NAME
     experiment = captured["experiment"]
     assert len(experiment["data"]) == 1
-    assert experiment["data"][0].metadata["case_id"] == "flow-linear-leave"
+    assert experiment["data"][0].metadata["case_id"] == "flow-linear"
     assert experiment["run_name"] == "test-run"
     assert experiment["evaluators"] == [evaluate_contract]
     assert captured["flushed"] is True
+
+
+def test_cli_run_errors_when_dataset_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    result = SimpleNamespace(dataset_run_url="", format=lambda **kwargs: "")
+
+    monkeypatch.setattr(
+        run_golden_eval.settings.evaluation, "auth_token", "token-for-test"
+    )
+    monkeypatch.setattr(run_golden_eval, "observability_enabled", lambda: True)
+    monkeypatch.setattr(
+        run_golden_eval, "get_client", lambda: _FakeLangfuseClient(captured, result, [])
+    )
+    args = parse_args([])
+
+    with pytest.raises(RuntimeError, match="upload_golden_to_langfuse"):
+        run_golden_eval.run(args)

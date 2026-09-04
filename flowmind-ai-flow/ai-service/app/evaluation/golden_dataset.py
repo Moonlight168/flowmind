@@ -46,6 +46,16 @@ EVALUATION_RUNTIME_ERRORS = (
 )
 
 
+def _decode(value: Any) -> Any:
+    """Langfuse dataset 从服务端拉回时 input/expected_output/metadata 是 JSON 字符串。"""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            return value
+    return value
+
+
 class GoldenTurn(BaseModel):
     """One anonymized user turn and its artifact baseline."""
 
@@ -171,11 +181,12 @@ def build_workflow_task(auth_token: str) -> typing.Callable[..., dict[str, Any]]
     """构建 Langfuse 实验 task，逐条隔离运行时失败。"""
 
     def run(item: Any, **_: Any) -> dict[str, Any]:
-        case_id = str((item.metadata or {}).get("case_id", "unknown"))
+        metadata = _decode(item.metadata) or {}
+        case_id = str(metadata.get("case_id", "unknown"))
         thread_id = f"eval-{case_id}-{uuid4().hex[:12]}"
         set_auth_token(auth_token)
         try:
-            case_input = GoldenInput.model_validate(item.input)
+            case_input = GoldenInput.model_validate(_decode(item.input))
             turn_outputs = []
             latest_artifact: dict[str, Any] = {}
             for turn in case_input.turns:
@@ -225,7 +236,7 @@ def evaluate_contract(
     *, output: dict[str, Any], expected_output: dict[str, Any], **_: Any
 ) -> list[Evaluation]:
     """评估稳定输出契约，所有分数均可直接上报 Langfuse。"""
-    expected = GoldenExpectedOutput.model_validate(expected_output)
+    expected = GoldenExpectedOutput.model_validate(_decode(expected_output))
     scores = [
         _evaluation(
             "status_match",
