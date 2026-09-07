@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.utils.bpmn_validator import ValidationError, ValidationResult, validate_bpmn_xml
+from app.design.bpmn_validator import ValidationError, ValidationResult, validate_bpmn_xml
 
 
 # ---------------------------------------------------------------------------
