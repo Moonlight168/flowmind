@@ -4,7 +4,7 @@
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind</h1>
 <h4 align="center">基于 RuoYi-Cloud + Flowable 的智能工作流管理系统</h4>
 <p align="center">
-	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.1.0-brightgreen.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg"></a>
 	<a href="https://github.com/Moonlight168/flowmind"><img src="https://img.shields.io/github/stars/Moonlight168/flowmind?style=flat"></a>
 	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
@@ -16,7 +16,7 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 | 子项目                     | 技术栈                  | 端口    | 职责                            |
 | -------------------------- | ----------------------- | ------- | ------------------------------- |
 | **flowmind-ui**      | Vue 3 + Element Plus    | 88/80 | 用户界面、AI 助手、审批中心     |
-| **flowmind-cloud**   | Spring Cloud + Flowable | 8080    | 业务逻辑、Flowable 流程引擎     |
+| **flowmind-cloud**   | Spring Cloud + Flowable | 9001-9007 | 业务逻辑、Flowable 流程引擎（网关 9001） |
 | **flowmind-ai-flow** | FastAPI + LangGraph     | 8000    | AI 意图识别、流程设计、表单生成 |
 
 ## 核心特性
@@ -155,19 +155,22 @@ docker-compose -f docker-compose.prod.yml up -d --build
 bin\start.bat
 ```
 
-自动启动：Docker 基础环境 → Java 后端 → 前端
+自动启动：Docker 基础环境 → AI 服务 → Java 后端 → 前端
 
-**已启动服务**：Gateway (9001)、Auth (9002)、System (9003)、Flowable (9007)
+**已启动服务**：AI (8000)、Gateway (9001)、Auth (9002)、System (9003)、Flowable (9007)
 
 **未启动（可选）**：Gen (9004)、Job (9005)、File (9006)、Visual
 
-AI 服务（需单独启动）：
+AI 服务由脚本自动拉起（使用仓库根 `.venv` + `uvicorn app.main:app`，依赖已按 `requirements.txt` 安装）；手动启动方式：
 
 ```bash
 cd flowmind-ai-flow/ai-service
 poetry install
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+> 注意：AI 服务强依赖 Nacos 注册，需先启动 Docker 容器（`bin/start.bat` 已按序处理）。
+> Windows 本地手动运行 AI 若报 `SettingsError: field "prompt"`，是 cmd 遗留的 `PROMPT` 环境变量干扰 pydantic-settings，先执行 `set "PROMPT="` 再启动。
 
 ## 服务端口
 
@@ -182,11 +185,11 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | System 系统          | 9003                     | —                                   |
 | Flowable 流程        | 9007                     | —                                   |
 | AI 服务              | 8000                     | http://localhost:8000               |
-| Nacos（Docker 映射） | 18848（容器内 8848）    | http://localhost:18848/nacos        |
+| Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
 | MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
 | Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
 
-> 可选模块端口：Gen 9004、Job 9005、File 9006。AI 服务 Docker 编排位于 `docker/ai-service/`，整体生产编排位于 `docker/flowmind/`。
+> 可选模块端口：Gen 9004、Job 9005、File 9006。`docker/ai-service/` 为 vLLM 推理引擎（宿主机 8001），AI 业务服务由 `bin/start.bat` 本地启动或生产编排运行；整体生产编排位于 `docker/flowmind/`。
 
 ## 项目仓库
 
@@ -207,4 +210,4 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
 
-**最后更新**: 2026-09-02
+**最后更新**: 2026-09-07
