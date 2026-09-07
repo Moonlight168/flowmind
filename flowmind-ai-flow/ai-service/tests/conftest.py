@@ -8,25 +8,24 @@ FlowMind AI Service - 测试配置
 
 from __future__ import annotations
 
-import os
 import uuid
-from typing import Generator
+from pathlib import Path
 
 import pytest
 import redis
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 
-# 加载 .env 文件
-_load_dotenv = load_dotenv("/f/MyProjects/flowmind/flowmind-ai-flow/ai-service/.env")
-
-from app.main import app
-from app.config.settings import settings
+# 加载 .env 文件（ai-service 根目录，须在导入 app 前完成）
+_env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(_env_path)
 
 
 @pytest.fixture(scope="session")
 def redis_client() -> redis.Redis:
     """连接 Redis（使用 settings 配置）"""
+    from app.config.settings import settings
+
     client = redis.Redis(
         host=settings.redis.host,
         port=settings.redis.port,
@@ -41,6 +40,8 @@ def redis_client() -> redis.Redis:
 @pytest.fixture(scope="session")
 def client() -> TestClient:
     """FastAPI TestClient"""
+    from app.main import app
+
     return TestClient(app)
 
 

@@ -13,14 +13,17 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 import redis
 
-from app.core.checkpoint.redis_checkpoint import RedisCheckpoint
-from app.graph.workflows.design_workflow import (
-    delete_design_thread,
-    invoke_design_workflow,
-)
+from app.graph.design_graph import delete_design_thread, invoke_design_workflow
+from app.infra.checkpoint.redis import RedisCheckpoint
+
+
+def _checkpoint_exists(thread_id: str) -> bool:
+    """当前实现只把 chat:* 前缀线程写入简化列表，设计线程需按 checkpoint 键判断。"""
+    checkpointer = RedisCheckpoint()
+    config = {"configurable": {"thread_id": thread_id}}
+    return checkpointer.get_tuple(config) is not None
 
 
 class TestCategoryDesign:
@@ -69,8 +72,7 @@ class TestCategoryDesign:
             thread_id=thread_id,
         )
 
-        checkpointer = RedisCheckpoint()
-        assert checkpointer.thread_exists(thread_id) is True
+        assert _checkpoint_exists(thread_id) is True
 
 
 class TestFlowDesign:
@@ -88,8 +90,7 @@ class TestFlowDesign:
 
         assert result["intent"] == "success", f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
         assert result["form_data"] is not None
-        assert "flowName" in result["form_data"]
-        # bpmn_xml 可能为空或不包含，取决于 LLM 输出
+        assert "bpmn_xml" in result["form_data"]
 
     def test_flow_design_returns_clarification_structure(
         self, clean_redis: redis.Redis, thread_id: str
@@ -146,7 +147,7 @@ class TestMultiTurnConversation:
     ):
         """从已有 thread 继续对话，验证上下文保持"""
         # 第一轮：模糊输入触发 clarification
-        result1 = invoke_design_workflow(
+        invoke_design_workflow(
             design_type="category_design",
             user_input="帮我创建一个分类",
             thread_id=thread_id,
@@ -180,8 +181,7 @@ class TestMultiTurnConversation:
             thread_id=thread_id,
         )
 
-        checkpointer = RedisCheckpoint()
-        assert checkpointer.thread_exists(thread_id) is True
+        assert _checkpoint_exists(thread_id) is True
 
 
 class TestStateRecovery:
@@ -238,9 +238,8 @@ class TestConcurrency:
         assert result2["intent"] in ("clarification", "success")
 
         # 两个 thread 独立存在
-        checkpointer = RedisCheckpoint()
-        assert checkpointer.thread_exists(thread_id_1) is True
-        assert checkpointer.thread_exists(thread_id_2) is True
+        assert _checkpoint_exists(thread_id_1) is True
+        assert _checkpoint_exists(thread_id_2) is True
 
 
 class TestCleanup:
@@ -257,11 +256,10 @@ class TestCleanup:
             thread_id=thread_id,
         )
 
-        checkpointer = RedisCheckpoint()
-        assert checkpointer.thread_exists(thread_id) is True
+        assert _checkpoint_exists(thread_id) is True
 
         # 删除
         delete_design_thread(thread_id)
 
         # 验证删除
-        assert checkpointer.thread_exists(thread_id) is False
+        assert _checkpoint_exists(thread_id) is False

@@ -7,10 +7,7 @@ FlowMind 智能审批服务 - BPMN 验证器单元测试
 
 from __future__ import annotations
 
-import pytest
-
-from app.design.bpmn_validator import ValidationError, ValidationResult, validate_bpmn_xml
-
+from app.design.bpmn_validator import validate_bpmn_xml
 
 # ---------------------------------------------------------------------------
 # 辅助函数：快速生成 BPMN XML 片段

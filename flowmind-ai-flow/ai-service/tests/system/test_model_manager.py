@@ -1,204 +1,158 @@
 """
-FlowMind AI Service - ModelManager 系统测试
+FlowMind AI Service - 模型运行时系统测试
 
-验证 ModelManager 的模型管理和降级行为：
-- 单模型可用时直接返回
-- 多模型按优先级选择
-- 降级机制：第一个失败自动切换到第二个
-- 全部失败时抛出异常
+验证统一模型运行时（app.llm.runtime.ModelRuntime）的模型管理与降级行为：
+- 单 Provider 可用时直接执行
+- 多 Provider 按优先级选择
+- 构建失败/调用失败自动切换下一个 Provider
+- 全部失败抛出 ModelExhaustedError
+- 任务级参数（temperature）与结构化候选过滤
 """
 
 from __future__ import annotations
 
-import os
-from typing import Generator
-from unittest.mock import patch
-
 import pytest
-import redis
+from langchain_openai import ChatOpenAI
 
-from app.adapters.factory import ModelFactory
-from app.adapters.model_manager import ModelManager, ModelManagerConfig
+from app.llm import ModelExhaustedError, reset_model_runtime
+from app.llm.runtime import ModelRuntime, ModelRuntimeConfig
 
 
-@pytest.fixture(scope="module")
-def redis_client() -> Generator[redis.Redis, None, None]:
-    """连接 Redis"""
-    client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=False)
-    yield client
-    client.close()
+def _cfg(model: str = "m", structured: bool = True) -> dict:
+    return {
+        "model_name": model,
+        "base_url": "http://localhost:9999/v1",
+        "api_key": "test-key",
+        "supports_structured_output": structured,
+    }
 
 
 @pytest.fixture(autouse=True)
-def reset_model_factory():
-    """每个测试前后重置 ModelFactory"""
-    ModelFactory.reset()
+def reset_runtime():
+    """每个测试前后清空全局模型运行时（对应旧 ModelFactory.reset）"""
+    reset_model_runtime()
     yield
-    ModelFactory.reset()
+    reset_model_runtime()
 
 
-class TestModelManagerSingleModel:
+class TestSingleProvider:
     """单模型可用测试"""
 
-    def test_create_llm_returns_chatopenai_instance(self):
-        """单模型配置时，create_llm 返回 ChatOpenAI 实例"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
+    def test_operation_runs_on_only_provider(self):
+        calls: list[str] = []
 
-        llm = manager.create_llm(task_name="chat")
+        def builder(provider, config, task_name):
+            calls.append(provider)
+            return object()
 
-        # 验证返回的是 ChatOpenAI 实例
-        assert llm is not None
-        assert hasattr(llm, "invoke")
+        runtime = ModelRuntime(
+            providers={"p1": _cfg()},
+            priority=["p1"],
+            model_builder=builder,
+            config=ModelRuntimeConfig(max_retries=0, retry_interval=0),
+        )
+        result = runtime.execute("chat", lambda llm: llm)
+        assert result is not None
+        assert calls == ["p1"]
 
-    def test_single_model_priority_used(self):
-        """单模型时直接使用该模型"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
+    def test_default_builder_returns_chatopenai(self):
+        """默认 model_builder 返回 ChatOpenAI 实例"""
+        runtime = ModelRuntime(
+            providers={"p1": _cfg()},
+            priority=["p1"],
+            config=ModelRuntimeConfig(max_retries=0),
+        )
+        model = runtime._get_model("p1", "chat")
+        assert isinstance(model, ChatOpenAI)
+        assert model.model_name == "m"
 
-        provider = manager.get_current_provider()
-        available = manager.get_available_providers()
 
-        # 单模型时，当前 provider 应该是可用列表中的第一个
-        assert provider in available
-        assert len(available) >= 1
-
-
-class TestModelManagerPriority:
+class TestModelPriority:
     """多模型优先级测试"""
 
-    def test_priority_order_respected(self):
-        """验证模型按 priority 顺序选择"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
-
-        available = manager.get_available_providers()
-
-        # available_providers 应按 priority 排序
-        assert len(available) >= 1
-        # 第一个应该是最高优先级
-        priority = ModelFactory._model_manager._priority if hasattr(ModelFactory, '_model_manager') else []
-        if len(available) > 1:
-            # 验证 available 是 priority 的子集且顺序一致
-            for i, name in enumerate(available):
-                assert name == priority[i] if i < len(priority) else True
+    def test_providers_follow_priority(self):
+        """describe_providers 按 priority 顺序返回"""
+        runtime = ModelRuntime(
+            providers={"p1": _cfg(), "p2": _cfg(model="m2")},
+            priority=["p2", "p1"],
+        )
+        names = [item["name"] for item in runtime.describe_providers()]
+        assert names == ["p2", "p1"]
 
 
-class TestModelManagerFallback:
+class TestModelFallback:
     """模型降级测试"""
 
-    def test_fallback_on_first_model_failure(self):
-        """第一个模型失败时自动降级到第二个"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
+    def test_build_failure_falls_back_to_next_provider(self):
+        """第一个模型构建失败时自动使用第二个"""
+        def builder(provider, config, task_name):
+            if provider == "p1":
+                raise ValueError("模拟 p1 配置不可用")
+            return "model-p2"
 
-        # 如果有多个模型，验证降级能力
-        available = manager.get_available_providers()
-        if len(available) < 2:
-            pytest.skip("需要至少两个模型才能测试降级")
+        runtime = ModelRuntime(
+            providers={"p1": _cfg(), "p2": _cfg(model="m2")},
+            priority=["p1", "p2"],
+            model_builder=builder,
+            config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
+        )
+        assert runtime.execute("chat", lambda llm: llm) == "model-p2"
 
-        # 获取第一个模型的配置并注入失败
-        first_model = available[0]
-        first_config = manager._providers.get(first_model)
+    def test_call_failure_falls_back_to_next_provider(self):
+        """第一个模型调用失败时自动降级到第二个"""
+        def builder(provider, config, task_name):
+            return provider
 
-        # Mock 第一个模型抛出异常
-        def mock_build_llm_failure(config, task_name):
-            if config == first_config:
-                raise RuntimeError("模拟第一个模型失败")
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(
-                model=config.get("model_name", ""),
-                base_url=config.get("base_url", "").rstrip("/"),
-                api_key=config.get("api_key") or "not-needed",
-            )
+        runtime = ModelRuntime(
+            providers={"p1": _cfg(), "p2": _cfg(model="m2")},
+            priority=["p1", "p2"],
+            model_builder=builder,
+            config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
+        )
 
-        original_build = manager._build_llm
-        manager._build_llm = mock_build_llm_failure
+        def operation(model):
+            if model == "p1":
+                raise RuntimeError("模拟 p1 调用失败")
+            return f"ok:{model}"
 
-        try:
-            # 应该降级到第二个模型
-            llm = manager.create_llm(task_name="chat")
-            assert llm is not None
-            assert manager.get_current_provider() == available[1]
-        finally:
-            manager._build_llm = original_build
+        assert runtime.execute("chat", operation) == "ok:p2"
 
     def test_all_models_fail_raises_exception(self):
-        """所有模型都失败时抛出异常"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
+        """所有模型都失败时抛出 ModelExhaustedError"""
+        def builder(provider, config, task_name):
+            raise ValueError("所有模型不可用")
 
-        # Mock 所有模型都失败
-        def mock_build_llm_always_fail(config, task_name):
-            raise RuntimeError("所有模型不可用")
-
-        original_build = manager._build_llm
-        manager._build_llm = mock_build_llm_always_fail
-
-        try:
-            with pytest.raises(RuntimeError, match="所有模型"):
-                manager.create_llm(task_name="chat")
-        finally:
-            manager._build_llm = original_build
+        runtime = ModelRuntime(
+            providers={"p1": _cfg()},
+            priority=["p1"],
+            model_builder=builder,
+            config=ModelRuntimeConfig(max_retries=0, retry_interval=0),
+        )
+        with pytest.raises(ModelExhaustedError, match="不可用"):
+            runtime.execute("chat", lambda llm: llm)
 
 
-class TestModelManagerConfig:
-    """ModelManager 配置测试"""
+class TestTaskConfig:
+    """任务级配置测试"""
 
     def test_task_temperature_config(self):
-        """验证不同任务使用不同的 temperature 配置"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
+        """不同任务使用不同 temperature"""
+        runtime = ModelRuntime(
+            providers={"p1": _cfg()},
+            priority=["p1"],
+            config=ModelRuntimeConfig(max_retries=0),
+        )
+        chat_model = runtime._get_model("p1", "chat")
+        design_model = runtime._get_model("p1", "category_design")
+        assert chat_model.temperature == 0.8
+        assert design_model.temperature == 0.3
 
-        # chat 应该用 0.8
-        chat_llm = manager.create_llm(task_name="chat")
-        # design 任务应该用 0.3
-        design_llm = manager.create_llm(task_name="category_design")
-
-        # 两个 LLM 实例都应该成功创建
-        assert chat_llm is not None
-        assert design_llm is not None
-
-    def test_json_format_tasks(self):
-        """验证 JSON 格式任务设置了正确的 response_format"""
-        ModelFactory.initialize()
-        manager = ModelFactory.get_model_manager()
-
-        # category_design 是 JSON_FORMAT_TASKS
-        llm = manager.create_llm(task_name="category_design")
-        assert llm is not None
-
-        # chat 不是 JSON_FORMAT_TASKS
-        chat_llm = manager.create_llm(task_name="chat")
-        assert chat_llm is not None
-
-
-class TestModelFactoryIntegration:
-    """ModelFactory 集成测试"""
-
-    def test_factory_initialization(self):
-        """验证 ModelFactory 正确初始化"""
-        ModelFactory.initialize()
-
-        assert ModelFactory.is_initialized() is True
-        assert ModelFactory.get_model_manager() is not None
-
-    def test_factory_reset(self):
-        """验证 ModelFactory 重置"""
-        ModelFactory.initialize()
-        assert ModelFactory.is_initialized() is True
-
-        ModelFactory.reset()
-        assert ModelFactory.is_initialized() is False
-
-    def test_factory_reinitialization(self):
-        """验证 ModelFactory 重新初始化"""
-        ModelFactory.initialize()
-        manager1 = ModelFactory.get_model_manager()
-
-        # 重新初始化应该更新 manager
-        ModelFactory.reset()
-        ModelFactory.initialize()
-        manager2 = ModelFactory.get_model_manager()
-
-        assert manager1 is not manager2
+    def test_structured_candidates_filter(self):
+        """结构化任务只选择声明支持结构化输出的 Provider"""
+        providers = {
+            "vllm": _cfg(structured=False),
+            "qwen": _cfg(model="qwen"),
+        }
+        runtime = ModelRuntime(providers=providers, priority=["vllm", "qwen"])
+        assert runtime._candidates(structured=True) == ["qwen"]
+        assert runtime._candidates(structured=False) == ["vllm", "qwen"]
