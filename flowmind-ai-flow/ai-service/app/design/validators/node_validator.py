@@ -33,8 +33,6 @@ GATEWAY_TYPES = {
 
 
 class NodeValidator:
-    name = "node"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         errors: list[ValidationError] = []
         warnings: list[ValidationError] = []

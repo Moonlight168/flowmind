@@ -64,9 +64,10 @@ def _llm_summary(middle: list[dict[str, Any]]) -> str:
             "compress",
             lambda llm: llm.invoke(messages, config=langchain_config()),
         )
-        summary = (resp.content or "").strip() if hasattr(resp, "content") else ""
+        content = getattr(resp, "content", "")
+        summary = content.strip() if isinstance(content, str) else ""
         return summary
-    except (RuntimeError, ValueError, KeyError, OSError) as e:
+    except (RuntimeError, ValueError, TypeError, AttributeError, KeyError, OSError) as e:
         logger.warning(f"[compress] LLM 摘要失败，回退纯裁剪: {e}")
         return ""
 

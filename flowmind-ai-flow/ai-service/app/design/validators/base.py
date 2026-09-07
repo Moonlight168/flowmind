@@ -68,6 +68,4 @@ class ValidatorContext:
 class Validator(Protocol):
     """校验器协议：实现 validate，返回 ValidationResult"""
 
-    name: str
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult: ...

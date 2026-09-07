@@ -52,16 +52,13 @@ class BackendClient:
         """获取请求超时时间"""
         return settings.backend.timeout
 
-    def _get_headers(self, content_type: str = "application/json") -> dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """构建请求头
-
-        Args:
-            content_type: Content-Type，默认 application/json
 
         Returns:
             请求头字典
         """
-        headers = {"Content-Type": content_type}
+        headers = {"Content-Type": "application/json"}
         if self._auth_token:
             headers["Authorization"] = f"Bearer {self._auth_token}"
         return headers

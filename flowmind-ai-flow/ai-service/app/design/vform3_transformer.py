@@ -198,14 +198,12 @@ def _build_field_options(
         options["optionItems"] = ai_options.get("optionItems", [])
 
     elif widget_type == "time":
-        options["defaultValue"] = None
         options["autoFullWidth"] = True
         options["editable"] = False
         options["format"] = ai_options.get("format", "HH:mm:ss")
         options["valueFormat"] = ai_options.get("valueFormat", "HH:mm:ss")
 
     elif widget_type == "time-range":
-        options["defaultValue"] = None
         options["startPlaceholder"] = ai_options.get("startPlaceholder", "")
         options["endPlaceholder"] = ai_options.get("endPlaceholder", "")
         options["autoFullWidth"] = True
@@ -214,7 +212,6 @@ def _build_field_options(
         options["valueFormat"] = ai_options.get("valueFormat", "HH:mm:ss")
 
     elif widget_type == "date":
-        options["defaultValue"] = None
         options["type"] = "date"
         options["autoFullWidth"] = True
         options["editable"] = False
@@ -222,7 +219,6 @@ def _build_field_options(
         options["valueFormat"] = ai_options.get("valueFormat", "YYYY-MM-DD")
 
     elif widget_type == "date-range":
-        options["defaultValue"] = None
         options["type"] = "daterange"
         options["startPlaceholder"] = ai_options.get("startPlaceholder", "")
         options["endPlaceholder"] = ai_options.get("endPlaceholder", "")
@@ -246,9 +242,6 @@ def _build_field_options(
         options["allowHalf"] = False
         options["showText"] = False
         options["showScore"] = False
-
-    elif widget_type == "color":
-        options["defaultValue"] = None
 
     elif widget_type == "slider":
         options["min"] = ai_options.get("min", 0)

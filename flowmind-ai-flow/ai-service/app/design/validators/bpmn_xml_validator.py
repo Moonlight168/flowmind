@@ -33,8 +33,6 @@ def build_category(output: dict, current_form_data: dict) -> dict:
 
 
 class BPMNXMLValidator:
-    name = "bpmn_xml"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         if context.design_type != "flow_design" or context.mode == "basic":
             return ValidationResult.ok()

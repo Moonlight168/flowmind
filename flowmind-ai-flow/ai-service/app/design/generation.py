@@ -72,10 +72,17 @@ def run_react_agent(
     last_error: Exception | None = None
     max_retry = settings.validation.structured_max_retry_count
     for attempt in range(1, max_retry + 1):
+        # 语义重试：把上次解析/校验失败原因反馈给模型，避免同样的输出重试三次
+        attempt_messages = full_messages
+        if attempt > 1 and last_error is not None:
+            attempt_messages = [
+                *full_messages,
+                {"role": "user", "content": _retry_feedback(last_error)},
+            ]
         try:
             result = runtime.execute(
                 task_name,
-                lambda llm: _invoke_agent(llm, tools, schema, full_messages),
+                lambda llm, msgs=attempt_messages: _invoke_agent(llm, tools, schema, msgs),
                 structured=True,
             )
             obj = result.get("structured_response")
@@ -100,6 +107,16 @@ def run_react_agent(
 
     logger.error(f"[LLM] 结构化输出重试耗尽: {last_error}")
     return {"intent": "error", "message": "AI 服务暂时异常，请稍后重试"}
+
+
+def _retry_feedback(error: Exception) -> str:
+    detail = str(error)
+    if len(detail) > 500:
+        detail = detail[:500] + "…"
+    return (
+        f"你上一次的输出没有通过结构解析/校验：{detail}。"
+        "请严格按要求的 JSON 结构重新输出完整结果，不要输出解释。"
+    )
 
 
 def _invoke_agent(llm: Any, tools: list[Any], schema: Any, messages: list[dict]):

@@ -17,8 +17,6 @@ CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class CategoryValidator:
-    name = "category"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         errors: list[ValidationError] = []
         warnings: list[ValidationError] = []

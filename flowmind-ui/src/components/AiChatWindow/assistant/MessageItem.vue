@@ -20,9 +20,8 @@
 
 <script setup>
 import { ChatDotRound } from '@element-plus/icons-vue'
-import MarkdownIt from 'markdown-it'
-import DOMPurify from 'dompurify'
 import useUserStore from '@/store/modules/user'
+import { renderMarkdown } from '@/utils/markdown'
 
 const userStore = useUserStore()
 
@@ -32,25 +31,6 @@ defineProps({
     required: true
   }
 })
-
-// Markdown 渲染配置
-const md = new MarkdownIt({
-  html: true,
-  breaks: true,
-  linkify: true,
-  typographer: true
-})
-
-// 渲染 Markdown 并处理换行
-function renderMarkdown(content) {
-  if (!content) return ''
-
-  let formattedContent = content
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-
-  return DOMPurify.sanitize(md.render(formattedContent))
-}
 </script>
 
 <style lang="scss" scoped>

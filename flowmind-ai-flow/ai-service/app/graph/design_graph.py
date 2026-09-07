@@ -66,13 +66,21 @@ def _get_redis_client() -> redis.Redis:
 
 @contextmanager
 def _thread_lock(thread_id: str) -> Iterator[None]:
-    """按 thread_id 加分布式锁，防止并发重复执行"""
+    """按 thread_id 加分布式锁，防止并发重复执行。
+
+    调试模式（APP_DEBUG=true）且 Redis 不可用时跳过加锁，
+    便于无 Redis 环境本地联调；生产环境 Redis 故障直接报错。
+    """
     lock_key = f"lock:design:{thread_id}"
     lock_token = token_hex(16)
     redis_client = _get_redis_client()
     try:
         acquired = redis_client.set(lock_key, lock_token, nx=True, ex=LOCK_TTL_SECONDS)
     except redis.RedisError as exc:
+        if settings.app.debug:
+            logger.warning(f"[lock] Redis 不可用，调试模式跳过会话锁: {exc}")
+            yield
+            return
         raise FlowDesignException(
             "会话锁服务暂时不可用，请稍后重试", stage="lock"
         ) from exc
@@ -371,12 +379,9 @@ def stream_design_workflow(
 
 
 def delete_design_thread(thread_id: str) -> None:
-    """删除设计对话历史"""
-    try:
-        checkpointer.delete_thread(thread_id)
-        logger.info(f"删除设计对话: thread_id={thread_id}")
-    except Exception as e:
-        logger.warning(f"删除设计对话失败: {e}")
+    """删除设计对话历史；删除失败向上抛，由接口返回失败而非伪成功"""
+    checkpointer.delete_thread(thread_id)
+    logger.info(f"删除设计对话: thread_id={thread_id}")
 
 
 __all__ = [

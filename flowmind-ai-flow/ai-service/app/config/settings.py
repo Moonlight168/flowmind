@@ -103,10 +103,6 @@ class AppSettings(BaseSettings):
         default=["http://localhost:5173", "http://localhost:80"],
         description="允许的跨域来源，prod环境需修改为实际域名",
     )
-    execution_mode: str = Field(
-        default="invoke",
-        description="工作流执行模式: stream(分步执行,调试用) / invoke(同步执行,生产用)",
-    )
     workers: int = Field(
         default=4,
         description="uvicorn worker 进程数（debug 模式强制为 1）",
@@ -115,14 +111,6 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
-
-    @field_validator("execution_mode")
-    @classmethod
-    def validate_execution_mode(cls, v: str) -> str:
-        allowed = ["stream", "invoke"]
-        if v not in allowed:
-            raise ValueError(f"execution_mode 仅支持: {', '.join(allowed)}")
-        return v
 
 
 class LogSettings(BaseSettings):

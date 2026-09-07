@@ -378,9 +378,10 @@ const handleDesignerClosed = () => {
   aiDesignDialogRef.value?.clearMessages();
 };
 
-// 监听设计器关闭，清空 AI 聊天和后端 checkpoint
+// 监听设计器关闭，关闭并清空 AI 聊天和后端 checkpoint
 watch(() => designer.visible, (val) => {
   if (!val) {
+    aiDesignVisible.value = false;
     aiDesignDialogRef.value?.clearMessages();
     aiDesigning.value = false;
     aiDesignProgress.value = '';

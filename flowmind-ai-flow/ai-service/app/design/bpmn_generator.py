@@ -11,21 +11,6 @@ import lxml.etree as etree
 
 Bounds = tuple[float, float, float, float]
 
-GENERATE_BPMN_XML_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "bpmn_structure": {
-            "type": "object",
-            "description": "流程结构，包含 nodes 列表",
-        },
-        "category": {
-            "type": "object",
-            "description": "分类信息",
-        },
-    },
-    "required": ["bpmn_structure", "category"],
-}
-
 
 def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
     """生成 BPMN XML 格式的流程定义
@@ -63,7 +48,7 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
 
     # 创建连线
     if custom_edges:
-        _create_custom_edges(process, ns, custom_edges, node_ids, nodes)
+        _create_custom_edges(process, ns, custom_edges, nodes)
     else:
         _create_auto_edges(process, ns, nodes, node_ids)
 
@@ -385,12 +370,17 @@ def _create_auto_edges(
 
 def _unique_flow_ids(edges: list[dict]) -> list[str]:
     """Fill missing IDs without colliding with IDs preserved from the baseline."""
-    used = {str(edge["id"]) for edge in edges if edge.get("id")}
+    used = {
+        str(edge.get("id") or edge.get("flow_id"))
+        for edge in edges
+        if edge.get("id") or edge.get("flow_id")
+    }
     result: list[str] = []
     candidate = 1
     for edge in edges:
-        if edge.get("id"):
-            result.append(str(edge["id"]))
+        existing = edge.get("id") or edge.get("flow_id")
+        if existing:
+            result.append(str(existing))
             continue
         while f"Flow_{candidate}" in used:
             candidate += 1
@@ -405,7 +395,6 @@ def _create_custom_edges(
     process: etree._Element,
     ns: dict[str, str],
     edges: list[dict],
-    node_ids: list[str],
     nodes: list[dict] | None = None,
 ) -> None:
     """根据自定义 edges 创建连线"""
@@ -447,6 +436,8 @@ def _create_custom_edges(
     outgoing_map: dict[str, list[str]] = {}
 
     for edge, flow_id in zip(edges, _unique_flow_ids(edges), strict=True):
+        # 把分配到的 flow_id 写回，供后续 DI（BPMNEdge@bpmnElement）复用同一 id
+        edge["flow_id"] = flow_id
         source = edge["source"]
         target = edge["target"]
 

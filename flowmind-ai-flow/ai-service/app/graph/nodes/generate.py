@@ -105,7 +105,8 @@ def generate_node(state: AppState) -> AppState:
     else:
         state["intent"] = "success"
         state["design_output"] = result
-        ai_message = str(result)
+        operation_count = result.get("operation_count", 0)
+        ai_message = f"已生成 {operation_count} 项变更，正在校验…"
 
     # 将 AI 回复追加到 messages
     state["messages"].append(AIMessage(content=ai_message))

@@ -84,7 +84,8 @@ def review_node(state: AppState) -> AppState:
             "errors": [e.message for e in result.errors],
             "warnings": [e.message for e in result.warnings],
         }
-        if retry_count <= settings.validation.review_max_retry_count:
+        # 仅在还会触发下一次 design 重试时追加反馈；已达上限时不再留无人消费的 AIMessage
+        if retry_count < settings.validation.review_max_retry_count:
             logger.warning(
                 f"[review] 校验失败（第 {retry_count}/{settings.validation.review_max_retry_count} 次）："
                 f"{[e.rule_id for e in result.errors]}"
@@ -92,7 +93,7 @@ def review_node(state: AppState) -> AppState:
             feedback = _build_error_feedback(result.errors, design_output)
             state["messages"].append(AIMessage(content=feedback))
         else:
-            logger.error(
+            logger.warning(
                 f"[review] 校验失败，已达最大重试次数 ({settings.validation.review_max_retry_count})"
             )
         state["review_retry_count"] = retry_count

@@ -226,9 +226,10 @@ const discardAiPreview = () => {
   aiPreviewSnapshot.value = null;
 }
 
-// 监听主对话框关闭，清空 AI 聊天和后端 checkpoint
+// 监听主对话框关闭，关闭并清空 AI 聊天和后端 checkpoint
 watch(() => dialog.visible, (val) => {
   if (!val) {
+    aiDesignVisible.value = false;
     aiDesignDialogRef.value?.clearMessages()
   }
 })

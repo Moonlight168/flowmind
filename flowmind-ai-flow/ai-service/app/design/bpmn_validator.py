@@ -121,20 +121,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
             )
         )
 
-    # ---- V005: 节点 ID 唯一性 ----
-    seen: set[str] = set()
-    for eid in node_ids:
-        if eid in seen:
-            errors.append(
-                ValidationError(
-                    rule_id="V005",
-                    message=f"节点 ID 重复: '{eid}'",
-                    element_id=eid,
-                )
-            )
-        seen.add(eid)
-
-    # 收集所有节点 ID（含 sequenceFlow 的 id，用于唯一性检查）
+    # ---- V005: 元素 ID 唯一性（覆盖节点与 sequenceFlow）----
     all_elem_ids: set[str] = set()
     for elem in process:
         eid = elem.get("id")
@@ -228,7 +215,7 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
     if not has_structural_errors and start_events and end_events:
         # V010: 所有活动节点从 startEvent 可达
         start_id = start_events[0].get("id")
-        reachable_from_start = _find_reachable(process, start_id, flows_from)
+        reachable_from_start = _find_reachable(process, start_id)
 
         for eid in node_ids:
             elem = nodes_by_id[eid]
@@ -243,23 +230,18 @@ def validate_bpmn_xml(xml_string: str) -> ValidationResult:
 
         # V011: 所有活动节点可到达 endEvent
         end_id = end_events[0].get("id")
-        reachable_to_end = _find_reachable_reverse(process, end_id, flows_to)
+        reachable_to_end = _find_reachable_reverse(process, end_id)
 
         for eid in node_ids:
             elem = nodes_by_id[eid]
             if elem.tag in ACTIVITY_TAGS and eid not in reachable_to_end:
-                # 避免重复报告同一个节点
-                already_warned = any(
-                    w.element_id == eid and w.rule_id == "V011" for w in warnings
-                )
-                if not already_warned:
-                    warnings.append(
-                        ValidationError(
-                            rule_id="V011",
-                            message=f"节点 '{eid}' 无法到达 endEvent",
-                            element_id=eid,
-                        )
+                warnings.append(
+                    ValidationError(
+                        rule_id="V011",
+                        message=f"节点 '{eid}' 无法到达 endEvent",
+                        element_id=eid,
                     )
+                )
 
     is_valid = len(errors) == 0
     return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
@@ -316,7 +298,6 @@ def _try_parse_and_get_process(
 def _find_reachable(
     process: etree._Element,
     start_id: str,
-    flows_from: dict[str, list[str]],
 ) -> set[str]:
     """从 start_id 出发进行正向 BFS，返回所有可达节点 ID"""
     adj: dict[str, list[str]] = {}
@@ -342,7 +323,6 @@ def _find_reachable(
 def _find_reachable_reverse(
     process: etree._Element,
     end_id: str,
-    flows_to: dict[str, list[str]],
 ) -> set[str]:
     """从 end_id 出发进行反向 BFS，返回所有能到达 end_id 的节点 ID"""
     rev_adj: dict[str, list[str]] = {}

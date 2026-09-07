@@ -146,13 +146,10 @@ def stream_chat_workflow(
 
 
 def get_chat_workflow_state(thread_id: str) -> dict | None:
-    """获取聊天 Workflow 状态"""
+    """获取聊天 Workflow 状态；存储异常向上抛，避免被误判为会话不存在"""
     config = {"configurable": {"thread_id": thread_id}}
-    try:
-        state = chat_workflow.get_state(config)
-        return state.values if state else None
-    except Exception:
-        return None
+    state = chat_workflow.get_state(config)
+    return state.values if state else None
 
 
 __all__ = [

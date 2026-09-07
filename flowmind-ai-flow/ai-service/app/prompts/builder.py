@@ -41,36 +41,6 @@ def build_prompt(task: "Task | str", variables: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def _format_variables(variables: dict[str, Any]) -> str:
-    """格式化所有变量为 Prompt 文本"""
-    lines = []
-    for key, value in variables.items():
-        formatter = _get_formatter(key)
-        formatted = formatter(value)
-        if formatted:
-            lines.append(formatted)
-    return "\n".join(lines)
-
-
-def _get_formatter(key: str):
-    """根据变量名获取格式化器"""
-    formatters = {
-        "current_form_data": _format_current_form_data,
-    }
-    return formatters.get(key, _format_default)
-
-
-def _format_current_form_data(value: dict) -> str:
-    """格式化当前表单数据"""
-    if not value:
-        return "【当前表单数据】: （新建）"
-    lines = ["【当前表单数据】:"]
-    for k, v in value.items():
-        if v:
-            lines.append(f"  {k}: {v}")
-    return "\n".join(lines)
-
-
 def _format_flow_basic_info(current_form_data: dict) -> str:
     """Format the normalized artifact baseline without large serialized blobs."""
     if not current_form_data:
@@ -82,12 +52,6 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
         if key not in omitted and value not in (None, "")
     }
     return json.dumps(baseline, ensure_ascii=False, indent=2)
-
-
-def _format_default(value: Any) -> str:
-    if value is None or value == "":
-        return ""
-    return f"{value}"
 
 
 _TASK_SKILL_MAP: dict[str, str] = {

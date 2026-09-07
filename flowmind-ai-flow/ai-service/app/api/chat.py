@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from openai import OpenAIError
 
+from app.api._sse import to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
 from app.domain.dto import ChatRequestDTO, ResponseVO
@@ -111,7 +112,7 @@ def chat_stream(
             yield f"data: {json.dumps(error, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
-        event_stream(),
+        to_async_stream(event_stream()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -141,7 +142,7 @@ async def delete_chat_state(
         if hasattr(checkpointer, "delete_thread"):
             checkpointer.delete_thread(_chat_thread_id(current_user, thread_id))
         return ResponseVO.success({"thread_id": thread_id})
-    except Exception as e:
+    except (redis.RedisError, OSError, ValueError, TypeError) as e:
         return ResponseVO.error(500, f"删除失败: {e!s}")
 
 
@@ -159,8 +160,8 @@ async def batch_delete_chat_state(
                 checkpointer.delete_thread(_chat_thread_id(current_user, thread_id))
                 deleted_count += 1
         return ResponseVO.success({"deleted_count": deleted_count})
-    except Exception as e:
-        return ResponseVO.error(f"批量删除失败: {e!s}")
+    except (redis.RedisError, OSError, ValueError, TypeError) as e:
+        return ResponseVO.error(500, f"批量删除失败: {e!s}")
 
 
 @router.get("/history", response_model=ResponseVO[list[dict[str, Any]]])
@@ -173,7 +174,9 @@ async def get_chat_history(
         if not hasattr(checkpointer, "list_threads"):
             return ResponseVO.success([])
 
-        threads = checkpointer.list_threads(limit=100)
+        # 只取当前用户命名空间下的会话，避免被其他用户挤占、也避免跨用户越权可见
+        prefix = _chat_thread_id(current_user, "").rsplit(":", 1)[0] + ":"
+        threads = checkpointer.list_threads(limit=100, prefix=prefix)
         # list_threads 已返回 {thread_id, ns, preview, updated_at}
         result = [
             {
@@ -185,5 +188,5 @@ async def get_chat_history(
             if (public_id := _public_thread_id(current_user, t.get("thread_id", "")))
         ]
         return ResponseVO.success(result)
-    except Exception as e:
-        return ResponseVO.error(f"获取历史失败: {e!s}")
+    except (redis.RedisError, OSError, ValueError, TypeError) as e:
+        return ResponseVO.error(500, f"获取历史失败: {e!s}")

@@ -8,9 +8,11 @@ import json
 from hashlib import sha256
 from typing import Any
 
+import redis
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from app.api._sse import to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
 from app.core.exceptions import FlowDesignException
@@ -20,10 +22,16 @@ from app.graph.design_graph import (
     delete_design_thread,
     stream_design_workflow,
 )
-from app.infra.logger import generate_trace_id, set_trace_id
+from app.infra.logger import generate_trace_id, logger, set_trace_id
 
 router = APIRouter(prefix="/design", tags=["设计"])
-STREAM_ERRORS = (RuntimeError, ValueError, TypeError, FlowDesignException)
+STREAM_ERRORS = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    FlowDesignException,
+    redis.RedisError,
+)
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
@@ -81,10 +89,11 @@ def design_category(
                 allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except STREAM_ERRORS:
+        except STREAM_ERRORS as exc:
+            logger.error(f"设计流式处理异常: {exc}", exc_info=True)
             yield _safe_stream_error(trace_id)
 
-    return _sse_response(event_stream())
+    return _sse_response(to_async_stream(event_stream()))
 
 
 @router.post("/flow")
@@ -114,10 +123,11 @@ def design_flow(
                 allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except STREAM_ERRORS:
+        except STREAM_ERRORS as exc:
+            logger.error(f"设计流式处理异常: {exc}", exc_info=True)
             yield _safe_stream_error(trace_id)
 
-    return _sse_response(event_stream())
+    return _sse_response(to_async_stream(event_stream()))
 
 
 @router.post("/form")
@@ -143,10 +153,11 @@ def design_form(
                 allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except STREAM_ERRORS:
+        except STREAM_ERRORS as exc:
+            logger.error(f"设计流式处理异常: {exc}", exc_info=True)
             yield _safe_stream_error(trace_id)
 
-    return _sse_response(event_stream())
+    return _sse_response(to_async_stream(event_stream()))
 
 
 @router.delete("/state/{design_type}", response_model=ResponseVO[dict[str, Any]])

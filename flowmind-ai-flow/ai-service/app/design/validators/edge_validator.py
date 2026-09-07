@@ -20,8 +20,6 @@ VIRTUAL_END = "end"
 
 
 class EdgeValidator:
-    name = "edge"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         errors: list[ValidationError] = []
         warnings: list[ValidationError] = []
@@ -137,7 +135,7 @@ class EdgeValidator:
         }
 
         # EDGE_E004: 孤立节点（从 start 不可达）WARNING
-        reachable = _reachable_from_start(edges)
+        reachable = _reachable_from_start(edges, start_ids)
         for node_id in node_ids:
             if node_id not in reachable and node_id not in (start_ids | end_ids):
                 warnings.append(
@@ -152,14 +150,14 @@ class EdgeValidator:
         return ValidationResult.from_errors(errors + warnings)
 
 
-def _reachable_from_start(edges: list[dict]) -> set[str]:
-    """从虚拟起点 'start' 出发做 BFS，返回可达的节点 id 集合"""
+def _reachable_from_start(edges: list[dict], start_ids: set[str]) -> set[str]:
+    """从虚拟起点 'start' 及真实 START_EVENT 节点出发做 BFS，返回可达的节点 id 集合"""
     adj: dict[str, list[str]] = {}
     for edge in edges:
         adj.setdefault(edge.get("source"), []).append(edge.get("target"))
 
     visited: set[str] = set()
-    queue: deque[str] = deque([VIRTUAL_START])
+    queue: deque[str] = deque([VIRTUAL_START, *start_ids])
     while queue:
         node = queue.popleft()
         if node in visited:

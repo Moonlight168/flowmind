@@ -97,6 +97,8 @@ def _add_flow_node(result: dict[str, Any], operation: dict[str, Any]) -> None:
     nodes.append(node)
     after_id = operation.get("after_id")
     if after_id:
+        if not _find_by_id(nodes, after_id):
+            raise ValueError(f"要插入的位置节点不存在: {after_id}")
         _insert_after(result.setdefault("edges", []), after_id, node["id"])
 
 

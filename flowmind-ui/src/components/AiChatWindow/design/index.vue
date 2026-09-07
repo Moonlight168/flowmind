@@ -22,25 +22,11 @@
     </template>
 
     <div class="dialog-messages" ref="messagesContainer">
-      <div
+      <MessageItem
         v-for="(msg, index) in messages"
         :key="index"
-        :class="['message flex gap-3 mb-4', msg.role === 'user' ? 'flex-row-reverse' : '']"
-      >
-        <div class="message-avatar flex-shrink-0 flex items-center justify-center text-blue-500">
-          <el-icon v-if="msg.role === 'assistant'" :size="20">
-            <ChatDotRound />
-          </el-icon>
-          <el-avatar v-else size="small" :src="userStore.avatar" />
-        </div>
-        <div
-          :class="[
-            'message-text px-3.5 py-2.5 rounded-3xl text-sm leading-relaxed break-all markdown-content',
-            msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white text-gray-800'
-          ]"
-          v-html="renderMarkdown(msg.content)"
-        ></div>
-      </div>
+        :message="msg"
+      />
       <div v-if="loading" class="message assistant flex gap-3 mb-4">
         <div class="message-avatar flex-shrink-0 flex items-center justify-center text-blue-500">
           <el-icon :size="20"><ChatDotRound /></el-icon>
@@ -98,12 +84,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { designStream, clearDesignState } from '@/api/workflow/design'
 import { ChatDotRound, Plus } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
-import useUserStore from '@/store/modules/user'
-import MarkdownIt from 'markdown-it'
-import DOMPurify from 'dompurify'
+import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessageBox } from 'element-plus'
-
-const userStore = useUserStore()
 
 const props = defineProps({
   modelValue: Boolean,
@@ -157,25 +139,6 @@ watch(() => props.formData, (newVal) => {
     currentFormData.value = cloneData(newVal)
   }
 }, { deep: true, immediate: true })
-
-// Markdown 渲染配置
-const md = new MarkdownIt({
-  html: true,
-  breaks: true,
-  linkify: true,
-  typographer: true
-})
-
-// 渲染 Markdown 并处理换行
-function renderMarkdown(content) {
-  if (!content) return ''
-
-  let formattedContent = content
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-
-  return DOMPurify.sanitize(md.render(formattedContent))
-}
 
 // 新建对象无业务标识时生成临时会话 id，保证不同对象会话/版本历史不串扰
 const localSessionId = ref(
@@ -232,45 +195,36 @@ function rollbackTo(target) {
   return false
 }
 
-onMounted(() => {
+function saveSession() {
+  sessionStorage.setItem(storageKey.value, JSON.stringify({
+    messages: messages.value,
+    currentFormData: currentFormData.value
+  }))
+}
+
+function restoreSession() {
+  // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
+  currentFormData.value = cloneData(props.formData)
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
     try {
       const state = JSON.parse(saved)
-      messages.value = state.messages || []
-      currentFormData.value = cloneData(props.formData)
+      if (Array.isArray(state.messages)) messages.value = state.messages
     } catch (e) {
       console.error('恢复聊天记录失败:', e)
-      currentFormData.value = { ...props.formData }
     }
-  } else {
-    currentFormData.value = { ...props.formData }
   }
-})
+}
+
+onMounted(restoreSession)
 
 watch(visible, (val) => {
   if (val) {
-    // 弹窗打开时：优先用 sessionStorage 保存的数据，其次用外部传入的
-    const saved = sessionStorage.getItem(storageKey.value)
-    if (saved) {
-      try {
-        const state = JSON.parse(saved)
-        messages.value = state.messages || []
-        currentFormData.value = cloneData(props.formData)
-      } catch (e) {
-        currentFormData.value = { ...props.formData }
-      }
-    } else {
-      currentFormData.value = { ...props.formData }
-    }
+    restoreSession()
   } else {
     requestController.value?.abort()
     discardPreview()
-    // 弹窗关闭时：保存状态
-    sessionStorage.setItem(storageKey.value, JSON.stringify({
-      messages: messages.value,
-      currentFormData: currentFormData.value
-    }))
+    saveSession()
   }
 })
 
@@ -299,6 +253,7 @@ async function handleSend() {
   emit('designing', true)
   const controller = new AbortController()
   requestController.value = controller
+  let wasAborted = false
 
   try {
     await designStream(props.designType, {
@@ -334,14 +289,12 @@ async function handleSend() {
         messages.value.push({ role: 'assistant', content: event.message || '服务暂时不可用，请稍后重试。' })
         scrollToBottom()
       }
-
-      sessionStorage.setItem(storageKey.value, JSON.stringify({
-        messages: messages.value,
-        currentFormData: currentFormData.value
-      }))
     }, controller.signal)
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    if (error?.name === 'AbortError') {
+      wasAborted = true
+      return
+    }
     console.error('AI 设计失败:', error)
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
     scrollToBottom()
@@ -351,6 +304,7 @@ async function handleSend() {
     loading.value = false
     progressText.value = ''
     emit('designing', false)
+    if (!wasAborted) saveSession()
   }
 }
 
@@ -402,6 +356,7 @@ function discardPreview() {
 
 
 function clearMessages() {
+  requestController.value?.abort()
   discardPreview()
   messages.value = []
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
@@ -449,124 +404,6 @@ defineExpose({
 .message-text {
   max-width: 75%;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-// Markdown 内容样式
-.markdown-content {
-  word-break: break-word;
-  white-space: normal;
-
-  :deep(p) {
-    margin: 0.5em 0;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-
-  :deep(p:first-child) {
-    margin-top: 0;
-  }
-
-  :deep(p:last-child) {
-    margin-bottom: 0;
-  }
-
-  :deep(code) {
-    background-color: rgba(0, 0, 0, 0.06);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.9em;
-    white-space: pre;
-  }
-
-  :deep(pre) {
-    background-color: #f6f8fa;
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin: 0.5em 0;
-
-    code {
-      background-color: transparent;
-      padding: 0;
-      white-space: pre;
-    }
-  }
-
-  :deep(ul), :deep(ol) {
-    padding-left: 1.5em;
-    margin: 0.5em 0;
-  }
-
-  :deep(li) {
-    margin: 0.25em 0;
-    white-space: normal;
-  }
-
-  :deep(li > p) {
-    margin: 0;
-    display: inline;
-  }
-
-  :deep(blockquote) {
-    border-left: 4px solid #667eea;
-    padding-left: 1em;
-    margin: 0.5em 0;
-    color: #666;
-  }
-
-  :deep(strong) {
-    font-weight: 600;
-  }
-
-  :deep(em) {
-    font-style: italic;
-  }
-
-  :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
-    margin: 0.75em 0 0.5em;
-    font-weight: 600;
-    line-height: 1.25;
-  }
-
-  :deep(h1:first-child), :deep(h2:first-child), :deep(h3:first-child) {
-    margin-top: 0;
-  }
-
-  :deep(table) {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0.5em 0;
-    display: block;
-    overflow-x: auto;
-  }
-
-  :deep(th), :deep(td) {
-    border: 1px solid #ddd;
-    padding: 6px 12px;
-    text-align: left;
-  }
-
-  :deep(th) {
-    background-color: #f6f8fa;
-    font-weight: 600;
-  }
-
-  :deep(a) {
-    color: #667eea;
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-
-  :deep(hr) {
-    border: none;
-    border-top: 1px solid #ddd;
-    margin: 1em 0;
-  }
 }
 
 .typing-dot {

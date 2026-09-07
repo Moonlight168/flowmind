@@ -20,8 +20,6 @@ ALLOWED_WIDGET_TYPES = FIELD_TYPES | CONTAINER_TYPES | DISPLAY_TYPES
 
 
 class FormFieldValidator:
-    name = "form_field"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         errors: list[ValidationError] = []
         warnings: list[ValidationError] = []

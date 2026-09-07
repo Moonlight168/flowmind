@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI):
         reasons = ",".join(readiness["not_ready_reasons"])
         logger.error(f"结构化模型降级未就绪: {reasons}")
 
+    if not settings.jwt_secret:
+        logger.warning(
+            "未配置 JWT_SECRET：当前启用签名校验后所有受保护接口都会 403，"
+            "请配置与 RuoYi 签发端一致的密钥（HS512 建议 ≥64 字节）"
+        )
+
     # 注册到 Nacos（失败时会抛出异常）
     if not register_to_nacos():
         logger.error("Nacos 注册失败，服务启动中止")

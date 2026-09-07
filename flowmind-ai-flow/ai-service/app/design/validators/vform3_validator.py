@@ -11,8 +11,6 @@ from app.design.vform3_transformer import transform_to_vform3
 
 
 class VForm3Validator:
-    name = "vform3"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         try:
             document = transform_to_vform3(output, context.current_form_data)

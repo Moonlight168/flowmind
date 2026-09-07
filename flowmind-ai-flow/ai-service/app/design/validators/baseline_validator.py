@@ -5,19 +5,25 @@ FlowMind 智能流程设计服务 - 基线保留校验器
 覆盖 flow（nodes+edges）、form（widgetList）、category（code）。
 """
 
+import re
+
 from app.design.validators.base import (
     ValidationError,
     ValidationResult,
     ValidatorContext,
 )
 
-# 用户指令中表示"删除"意图的关键词（避免"不要/取消"误报："不要财务审批改成总监"是修改非删除）
+# 用户指令中表示"删除"意图的关键词
 DELETE_KEYWORDS = ("删", "去掉", "移除")
+
+# 否定句式（"不要删除/请勿去掉"等）不算删除意图，否则会绕开基线保留保护
+_NEGATED_DELETE_RE = re.compile(
+    r"(?:不要|不用|无须|无需|请勿|先别|别|不能|不可以|不允许|禁止|切勿|别再)"
+    r"\s*(?:把|将)?\s*(?:它|其|这些|该|这个)?\s*(?:删除|删掉|删去|去掉|移除)"
+)
 
 
 class BaselineValidator:
-    name = "baseline"
-
     def validate(self, output: dict, context: ValidatorContext) -> ValidationResult:
         if context.design_type == "flow_design":
             return self._validate_flow(output, context)
@@ -28,7 +34,8 @@ class BaselineValidator:
         return ValidationResult.ok()
 
     def _has_delete_intent(self, context: ValidatorContext) -> bool:
-        return any(kw in (context.user_input or "") for kw in DELETE_KEYWORDS)
+        text = _NEGATED_DELETE_RE.sub("", context.user_input or "")
+        return any(keyword in text for keyword in DELETE_KEYWORDS)
 
     def _validate_flow(
         self, output: dict, context: ValidatorContext

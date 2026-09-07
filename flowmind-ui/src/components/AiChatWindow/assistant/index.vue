@@ -10,41 +10,27 @@
       </div>
     </el-tooltip>
 
-    <!-- 对话窗口 (可拖拽悬浮球) -->
-    <div
-      v-else
-      ref="windowRef"
-      class="ai-assistant-window"
-      :style="{
-        left: windowPosition.x + 'px',
-        top: windowPosition.y + 'px',
-        width: windowSize.width + 'px',
-        height: windowSize.height + 'px'
-      }"
+    <!-- 对话窗口（复用 AiFloatingWindow 的拖拽/缩放/头部；常驻挂载以保留拖拽位置） -->
+    <AiFloatingWindow
+      :model-value="isVisible"
+      title="AI 助手"
+      :icon="ChatDotRound"
+      :width="440"
+      :height="620"
+      :min-width="MIN_WIDTH"
+      :min-height="MIN_HEIGHT"
+      @update:model-value="handleVisibleChange"
     >
-      <!-- 窗口头部 (拖拽区域) -->
-      <div
-        class="window-header flex items-center justify-between p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white cursor-move select-none"
-        @mousedown="startDrag"
-      >
-        <div class="header-title flex items-center gap-2 text-base font-semibold">
-          <el-icon :size="20"><ChatDotRound /></el-icon>
-          <span>AI 助手</span>
-        </div>
-        <div class="header-actions flex items-center gap-1">
-          <!-- 切换历史列表显示 -->
-          <el-button link type="info" @click="toggleHistoryList" title="历史对话">
-            <el-icon><List /></el-icon>
-          </el-button>
-                    <!-- 新建对话 -->
-          <el-button link type="info" @click="handleNewChat" title="新建对话">
-            <el-icon><Plus /></el-icon>
-          </el-button>
-          <el-button link type="info" @click="toggleVisible" title="关闭">
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </div>
-      </div>
+      <template #actions>
+        <el-button link type="info" @click="toggleHistoryList" title="历史对话">
+          <el-icon><List /></el-icon>
+        </el-button>
+        <el-button link type="info" @click="handleNewChat" title="新建对话">
+          <el-icon><Plus /></el-icon>
+        </el-button>
+      </template>
+
+      <div class="assistant-body">
 
       <!-- 历史列表 (覆盖在消息列表上方) -->
       <div
@@ -143,7 +129,7 @@
             :maxlength="MAX_INPUT_LENGTH"
             placeholder=""
             @keydown.enter.exact="sendMessage"
-            :disabled="isLoading || awaitingConfirmation"
+            :disabled="isLoading"
             class="flex-1"
             show-word-limit
           />
@@ -158,25 +144,20 @@
         </el-button>
       </div>
 
-      <!-- 右下角调整大小手柄 -->
-      <div
-        class="resize-handle resize-handle-se"
-        @mousedown="startResize('se')"
-      >
-        <el-icon :size="12"><MoreFilled /></el-icon>
       </div>
-    </div>
+    </AiFloatingWindow>
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Close, Delete, Plus, List, MoreFilled, Check } from '@element-plus/icons-vue'
+import { ChatDotRound, Close, Delete, Plus, List } from '@element-plus/icons-vue'
 import { aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
 import MessageItem from './MessageItem.vue'
+import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 
 const { proxy } = getCurrentInstance()
 const route = useRoute()
@@ -196,7 +177,6 @@ const hasStreamingContent = ref(false)
 const inputMessage = ref('')
 const messages = ref([])
 const messagesContainer = ref(null)
-const windowRef = ref(null)
 
 // 创建带唯一 ID 的消息对象
 let messageIdCounter = 0
@@ -207,46 +187,17 @@ function createMessage(data) {
 // 使用计算属性访问 session 状态
 const threadId = computed(() => aiSession.threadId)
 
-// 最后一条消息是否处于待确认状态，禁用输入框强制用户点击按钮
-const PENDING_STATUSES = ['category_pending', 'form_pending', 'flow_pending', 'awaiting_confirm']
-const awaitingConfirmation = computed(() => {
-  if (messages.value.length === 0) return false
-  const last = messages.value[messages.value.length - 1]
-  return last?.role === 'assistant' && PENDING_STATUSES.includes(last.workflow_status)
-})
-
 // 历史面板相关
 const showHistoryList = ref(false)
 const historyList = ref([])
 const selectedThreadIds = ref([])
 const isLoadingHistory = ref(false)
 
-// 窗口位置（支持拖拽）
-const windowPosition = ref({ x: 0, y: 0 })
-const isDragging = ref(false)
-const dragOffset = ref({ x: 0, y: 0 })
-
-// 窗口大小（支持调整）
-const windowSize = ref({ width: 400, height: 560 })
-const isResizing = ref(false)
-const resizeDirection = ref('')
-const resizeStart = ref({ x: 0, y: 0 })
-const resizeStartSize = ref({ width: 0, height: 0 })
 const requestController = ref(null)
 
-// 最小窗口尺寸
+// 最小窗口尺寸（作为 AiFloatingWindow 缩放下限）
 const MIN_WIDTH = 300
 const MIN_HEIGHT = 400
-
-// 初始化窗口位置（右下角）
-function initWindowPosition() {
-  const windowWidth = window.innerWidth
-  const windowHeight = window.innerHeight
-  windowPosition.value = {
-    x: windowWidth - 440,
-    y: windowHeight - 620
-  }
-}
 
 // 切换窗口可见性
 async function toggleVisible() {
@@ -267,6 +218,12 @@ async function toggleVisible() {
     // 加载历史列表
     handleLoadHistoryList()
   }
+}
+
+// AiFloatingWindow 头部关闭按钮回调
+function handleVisibleChange(val) {
+  isVisible.value = val
+  if (!val) requestController.value?.abort()
 }
 
 function showWelcome() {
@@ -377,10 +334,11 @@ async function handleBatchDeleteHistory() {
     const res = await batchDeleteAiFormState(selectedThreadIds.value)
     if (res?.status === 'success' || res?.code === 200) {
       ElMessage.success('批量删除成功')
+      const deletedIds = [...selectedThreadIds.value]
       selectedThreadIds.value = []
       handleLoadHistoryList()
       // 如果删除的包含当前会话，清空
-      if (selectedThreadIds.value.includes(aiSession.threadId)) {
+      if (deletedIds.includes(aiSession.threadId)) {
         aiSession.resetSession()
         messages.value = []
         inputMessage.value = ''
@@ -413,92 +371,6 @@ function toggleSelectOne(threadId) {
   } else {
     selectedThreadIds.value.push(threadId)
   }
-}
-
-// 拖拽相关方法
-function startDrag(e) {
-  isDragging.value = true
-  const rect = windowRef.value.getBoundingClientRect()
-  dragOffset.value = {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top
-  }
-
-  document.addEventListener('mousemove', onDrag)
-  document.addEventListener('mouseup', stopDrag)
-  e.preventDefault()
-}
-
-function onDrag(e) {
-  if (!isDragging.value) return
-
-  const newX = e.clientX - dragOffset.value.x
-  const newY = e.clientY - dragOffset.value.y
-
-  // 限制在视口范围内
-  const maxX = window.innerWidth - windowRef.value.offsetWidth
-  const maxY = window.innerHeight - windowRef.value.offsetHeight
-
-  windowPosition.value = {
-    x: Math.max(0, Math.min(newX, maxX)),
-    y: Math.max(0, Math.min(newY, maxY))
-  }
-}
-
-function stopDrag() {
-  isDragging.value = false
-  document.removeEventListener('mousemove', onDrag)
-  document.removeEventListener('mouseup', stopDrag)
-}
-
-
-// 调整窗口大小
-function startResize(direction) {
-  isResizing.value = true
-  resizeDirection.value = direction
-  resizeStart.value = {
-    x: event.clientX,
-    y: event.clientY
-  }
-  resizeStartSize.value = {
-    width: windowSize.value.width,
-    height: windowSize.value.height
-  }
-
-  document.addEventListener('mousemove', onResize)
-  document.addEventListener('mouseup', stopResize)
-  event.preventDefault()
-}
-
-function onResize(e) {
-  if (!isResizing.value) return
-
-  const deltaX = e.clientX - resizeStart.value.x
-  const deltaY = e.clientY - resizeStart.value.y
-
-  // 根据拖拽方向调整大小
-  if (resizeDirection.value === 'se') {
-    // 右下角：同时调整宽度和高度
-    const newWidth = resizeStartSize.value.width + deltaX
-    const newHeight = resizeStartSize.value.height + deltaY
-
-    windowSize.value.width = Math.max(MIN_WIDTH, newWidth)
-    windowSize.value.height = Math.max(MIN_HEIGHT, newHeight)
-  }
-
-  // 确保窗口不超出视口
-  const maxX = window.innerWidth - windowSize.value.width
-  const maxY = window.innerHeight - windowSize.value.height
-
-  windowPosition.value.x = Math.min(windowPosition.value.x, maxX)
-  windowPosition.value.y = Math.min(windowPosition.value.y, maxY)
-}
-
-function stopResize() {
-  isResizing.value = false
-  resizeDirection.value = ''
-  document.removeEventListener('mousemove', onResize)
-  document.removeEventListener('mouseup', stopResize)
 }
 
 // 获取当前时间
@@ -617,8 +489,6 @@ defineExpose({
 
 // 生命周期
 onMounted(async () => {
-  initWindowPosition()
-
   // 监听打开事件
   window.addEventListener('open-ai-assistant', handleOpenAssistant)
 
@@ -674,53 +544,15 @@ function handleOpenAssistant() {
       margin-top: 2px;
     }
   }
+}
 
-  .ai-assistant-window {
-    position: fixed;
-    width: 420px;
-    height: 580px;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+.assistant-body {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    z-index: 9999;
-    min-width: 360px;
-    min-height: 480px;
-    border: 1px solid #e4e7ed;
-
-    // 头部
-    .window-header {
-      flex-shrink: 0;
-      padding: 14px 16px;
-      background: #fff;
-      border-bottom: 1px solid #f0f0f0;
-
-      .header-title {
-        .el-icon {
-          color: #409eff;
-        }
-        span {
-          color: #303133;
-          font-size: 15px;
-        }
-      }
-
-      .header-actions {
-        .el-button {
-          color: #909399;
-          padding: 6px 8px;
-          border-radius: 6px;
-          transition: all 0.2s;
-
-          &:hover {
-            color: #409eff;
-            background: #f5f7fa;
-          }
-        }
-      }
-    }
+    position: relative;
 
     // 消息区域
     .window-messages {
@@ -789,26 +621,6 @@ function handleOpenAssistant() {
         &:disabled {
           opacity: 0.6;
         }
-      }
-    }
-
-    // 右下角调整大小手柄
-    .resize-handle-se {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      width: 18px;
-      height: 18px;
-      cursor: nwse-resize;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #c0c4cc;
-      transition: color 0.2s;
-      z-index: 10;
-
-      &:hover {
-        color: #409eff;
       }
     }
 
@@ -905,7 +717,6 @@ function handleOpenAssistant() {
       }
     }
   }
-}
 
 // 消息样式
 .message {
@@ -985,97 +796,6 @@ function handleOpenAssistant() {
   50% {
     transform: scale(1.4);
     opacity: 0.6;
-  }
-}
-
-// Markdown 内容样式
-.markdown-content {
-  word-break: break-word;
-  white-space: normal;
-
-  :deep(p) {
-    margin: 0.5em 0;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-
-  :deep(p:first-child) { margin-top: 0; }
-  :deep(p:last-child) { margin-bottom: 0; }
-
-  :deep(code) {
-    background-color: #f0f2f5;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 0.9em;
-  }
-
-  :deep(pre) {
-    background-color: #f6f8fa;
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin: 0.8em 0;
-
-    code {
-      background-color: transparent;
-      padding: 0;
-    }
-  }
-
-  :deep(ul), :deep(ol) {
-    padding-left: 1.5em;
-    margin: 0.5em 0;
-  }
-
-  :deep(li) {
-    margin: 0.25em 0;
-  }
-
-  :deep(blockquote) {
-    border-left: 3px solid #409eff;
-    padding-left: 1em;
-    margin: 0.8em 0;
-    color: #606266;
-  }
-
-  :deep(strong) { font-weight: 600; }
-  :deep(em) { font-style: italic; }
-
-  :deep(h1), :deep(h2), :deep(h3), :deep(h4) {
-    margin: 1em 0 0.5em;
-    font-weight: 600;
-    color: #303133;
-  }
-
-  :deep(table) {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0.8em 0;
-  }
-
-  :deep(th), :deep(td) {
-    border: 1px solid #dcdfe6;
-    padding: 8px 12px;
-  }
-
-  :deep(th) {
-    background-color: #f5f7fa;
-    font-weight: 600;
-  }
-
-  :deep(a) {
-    color: #409eff;
-    text-decoration: none;
-
-    &:hover { text-decoration: underline; }
-  }
-
-  :deep(hr) {
-    border: none;
-    border-top: 1px solid #dcdfe6;
-    margin: 1em 0;
   }
 }
 </style>

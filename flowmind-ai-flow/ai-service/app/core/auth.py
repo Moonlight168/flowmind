@@ -34,37 +34,6 @@ def _get_jwt_secret() -> str:
     return settings.jwt_secret
 
 
-def parse_token(token: str | None) -> TokenUser | None:
-    """解析 JWT Token，提取用户信息。
-
-    Args:
-        token: JWT Token 字符串（不含 Bearer 前缀）
-
-    Returns:
-        TokenUser 对象，解析失败返回 None
-    """
-    if not token:
-        return None
-
-    # TODO: 生产环境建议开启签名验证，确保 Token 的真实性和完整性
-    try:
-        claims = jwt.decode(
-            token,
-            _get_jwt_secret(),
-            algorithms=["HS512"],
-            options={"verify_signature": False},
-        )
-        return TokenUser(
-            user_id=int(claims.get("user_id") or 0),
-            username=claims.get("username") or "",
-            user_key=claims.get("user_key") or "",
-        )
-    except jwt.exceptions.PyJWTError:
-        return None
-    except (ValueError, TypeError):
-        return None
-
-
 def parse_token_strict(token: str | None) -> TokenUser:
     """解析 JWT Token，提取用户信息。解析失败则抛出异常。
 
@@ -85,7 +54,6 @@ def parse_token_strict(token: str | None) -> TokenUser:
             token,
             _get_jwt_secret(),
             algorithms=["HS512"],
-            options={"verify_signature": False},
         )
         user_id = int(claims.get("user_id") or 0)
         username = claims.get("username") or ""

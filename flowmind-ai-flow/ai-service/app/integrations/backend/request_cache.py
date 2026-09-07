@@ -24,7 +24,10 @@ def scope() -> Iterator[None]:
 
 
 def get(key: str, factory: Callable[[], Any]) -> Any:
-    """取缓存，未命中用 factory() 计算并缓存（空结果也缓存，失败不缓存）"""
+    """取缓存，未命中用 factory() 计算并缓存（空结果也缓存，失败不缓存）。
+
+    调用方通常处于 scope() 内；无 scope 时在当前上下文内自建缓存。
+    """
     cache = _cache.get()
     if cache is None:
         cache = {}

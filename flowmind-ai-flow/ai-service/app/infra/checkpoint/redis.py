@@ -291,55 +291,49 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
         logger.info(f"Deleted thread: thread_id={thread_id}")
 
-    def list_threads(self, limit: int = 100) -> list[dict]:
-        """列出所有对话（带预览、时间）"""
-        try:
-            threads = []
+    def list_threads(self, limit: int = 100, prefix: str | None = None) -> list[dict]:
+        """列出对话（带预览、时间），可按 owner 前缀过滤后再按时间倒序截断。
 
-            # 从简化版数据中获取列表
-            thread_ids = self.redis.smembers(self.CHAT_THREADS_KEY)
-            if not thread_ids:
-                return []
-
-            for thread_id_bytes in thread_ids:
-                thread_id = (
-                    thread_id_bytes.decode()
-                    if isinstance(thread_id_bytes, bytes)
-                    else thread_id_bytes
-                )
-                thread_key = self._chat_thread_key(thread_id)
-                data = self.redis.get(thread_key)
-
-                if data:
-                    try:
-                        thread_data = ormsgpack.unpackb(data)
-                        threads.append(
-                            {
-                                "thread_id": thread_data.get("thread_id", thread_id),
-                                "preview": thread_data.get("preview", "新对话"),
-                                "updated_at": thread_data.get("updated_at"),
-                            }
-                        )
-                    except Exception as e:
-                        logger.debug(f"Failed to parse thread data: {e}")
-                        threads.append(
-                            {
-                                "thread_id": thread_id,
-                                "preview": "新对话",
-                                "updated_at": None,
-                            }
-                        )
-
-                if len(threads) >= limit:
-                    break
-
-            # 按更新时间倒序
-            threads.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
-            return threads
-
-        except Exception as e:
-            logger.error(f"Failed to list threads: {e}")
+        存储/解析异常直接向上抛，由接口层决定如何返回，避免把故障伪装成"无历史"。
+        """
+        thread_ids = self.redis.smembers(self.CHAT_THREADS_KEY)
+        if not thread_ids:
             return []
+
+        threads = []
+        for thread_id_bytes in thread_ids:
+            thread_id = (
+                thread_id_bytes.decode()
+                if isinstance(thread_id_bytes, bytes)
+                else thread_id_bytes
+            )
+            if prefix and not thread_id.startswith(prefix):
+                continue
+
+            thread_key = self._chat_thread_key(thread_id)
+            data = self.redis.get(thread_key)
+            if data:
+                try:
+                    thread_data = ormsgpack.unpackb(data)
+                    threads.append(
+                        {
+                            "thread_id": thread_data.get("thread_id", thread_id),
+                            "preview": thread_data.get("preview", "新对话"),
+                            "updated_at": thread_data.get("updated_at"),
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to parse thread data: {e}")
+                    threads.append(
+                        {
+                            "thread_id": thread_id,
+                            "preview": "新对话",
+                            "updated_at": None,
+                        }
+                    )
+
+        threads.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+        return threads[:limit]
 
     def thread_exists(self, thread_id: str, ns: str = "") -> bool:
         """检查对话是否存在"""
