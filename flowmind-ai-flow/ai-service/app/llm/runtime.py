@@ -35,6 +35,25 @@ _runtime: "ModelRuntime | None" = None
 _runtime_lock = threading.RLock()
 
 
+class _ProviderChatOpenAI(ChatOpenAI):
+    """按 Provider 能力选择 LangChain 的结构化输出协议。"""
+
+    structured_output_method: str = "json_schema"
+
+    def with_structured_output(
+        self,
+        schema: Any = None,
+        *,
+        method: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        return super().with_structured_output(
+            schema,
+            method=method or self.structured_output_method,
+            **kwargs,
+        )
+
+
 class ModelExhaustedError(RuntimeError):
     """所有符合任务能力要求的模型都不可用。"""
 
@@ -254,13 +273,25 @@ class ModelRuntime:
         params.update(self.TASK_PARAMETERS.get(task_name, {}))
         if task_name == "compress":
             params["max_tokens"] = settings.compress.summary_max_tokens
-        return ChatOpenAI(
+        structured_output_method = config.get("structured_output_method", "json_schema")
+        model_class = (
+            _ProviderChatOpenAI
+            if structured_output_method != "json_schema"
+            else ChatOpenAI
+        )
+        return model_class(
             model=config.get("model_name", ""),
             base_url=config.get("base_url", "").rstrip("/"),
             api_key=config.get("api_key") or "not-needed",
             temperature=params["temperature"],
             max_tokens=params["max_tokens"],
             timeout=config.get("timeout", 60),
+            extra_body=config.get("extra_body"),
+            **(
+                {"structured_output_method": structured_output_method}
+                if model_class is _ProviderChatOpenAI
+                else {}
+            ),
         )
 
     def _log_failure(self, provider: str, attempt: int, error: Exception) -> None:

@@ -27,6 +27,7 @@ SECONDS_PER_HOUR = 3600
 DEFAULT_MAX_TOKENS = 4096  # 增加到 4096 以支持复杂流程设计
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
+STRUCTURED_OUTPUT_METHODS = frozenset({"json_schema", "function_calling", "json_mode"})
 
 # 默认模型配置
 DEFAULT_MODELS = [
@@ -312,6 +313,15 @@ class Settings(BaseSettings):
 
 def _normalize_model_config(model: dict) -> dict:
     """标准化模型配置，补充默认值并统一字段名"""
+    structured_output_method = str(
+        model.get("structured_output_method", "json_schema")
+    ).strip()
+    if structured_output_method not in STRUCTURED_OUTPUT_METHODS:
+        allowed = ", ".join(sorted(STRUCTURED_OUTPUT_METHODS))
+        raise ValueError(
+            f"不支持的 structured_output_method: {structured_output_method}，"
+            f"可选值: {allowed}"
+        )
     return {
         "model_name": model.get("model", ""),
         "base_url": model.get("base_url", ""),
@@ -322,6 +332,8 @@ def _normalize_model_config(model: dict) -> dict:
         "timeout": model.get("timeout", 60),
         "thinking": model.get("thinking", False),
         "supports_structured_output": model.get("supports_structured_output", True),
+        "extra_body": model.get("extra_body"),
+        "structured_output_method": structured_output_method,
     }
 
 

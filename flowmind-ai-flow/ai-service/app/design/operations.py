@@ -18,11 +18,12 @@ def apply_design_operations(
 ) -> dict[str, Any]:
     """在基线副本上应用指定类型的增量操作。"""
     result = normalize_design_baseline(design_type, baseline)
+    automatic_edges: set[tuple[str, str]] = set()
     for operation in operations:
         if design_type == "flow_design" and mode == "basic":
             _apply_update_operation(result, operation, "update_flow_metadata")
         elif design_type == "flow_design":
-            _apply_flow_operation(result, operation)
+            _apply_flow_operation(result, operation, automatic_edges)
         elif design_type == "form_design":
             _apply_form_operation(result, operation)
         elif design_type == "category_design":
@@ -60,14 +61,21 @@ def normalize_design_baseline(
     return result
 
 
-def _apply_flow_operation(result: dict[str, Any], operation: dict[str, Any]) -> None:
+def _apply_flow_operation(
+    result: dict[str, Any],
+    operation: dict[str, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> None:
     op = operation.get("op")
     if op == "replace_graph":
         result["nodes"] = deepcopy(operation.get("nodes") or [])
         result["edges"] = deepcopy(operation.get("edges") or [])
+        automatic_edges.clear()
         return
     if op == "add_node":
-        _add_flow_node(result, operation)
+        automatic_edge = _add_flow_node(result, operation)
+        if automatic_edge:
+            automatic_edges.add(automatic_edge)
         return
     if op == "update_node":
         node = _find_by_id(result.get("nodes", []), operation.get("node_id"))
@@ -79,7 +87,11 @@ def _apply_flow_operation(result: dict[str, Any], operation: dict[str, Any]) -> 
         _remove_flow_node(result, operation.get("node_id"))
         return
     if op == "add_edge":
-        result.setdefault("edges", []).append(deepcopy(operation.get("edge") or {}))
+        _add_flow_edge(
+            result.setdefault("edges", []),
+            operation.get("edge") or {},
+            automatic_edges,
+        )
         return
     if op in {"update_edge", "remove_edge"}:
         _change_flow_edge(result, operation, remove=op == "remove_edge")
@@ -87,7 +99,39 @@ def _apply_flow_operation(result: dict[str, Any], operation: dict[str, Any]) -> 
     raise ValueError(f"不支持的流程操作: {op}")
 
 
-def _add_flow_node(result: dict[str, Any], operation: dict[str, Any]) -> None:
+def _add_flow_edge(
+    edges: list[dict[str, Any]],
+    edge: dict[str, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> None:
+    """显式操作只补全本批次由 after_id 创建的无元数据连线。"""
+    candidate = deepcopy(edge)
+    endpoints = (candidate.get("source"), candidate.get("target"))
+    existing = _find_automatic_edge(edges, endpoints, automatic_edges)
+    if existing:
+        existing.update(candidate)
+        automatic_edges.discard(endpoints)
+        return
+    edges.append(candidate)
+
+
+def _find_automatic_edge(
+    edges: list[dict[str, Any]],
+    endpoints: tuple[Any, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> dict[str, Any] | None:
+    if endpoints not in automatic_edges:
+        return None
+    source, target = endpoints
+    return next(
+        (edge for edge in edges if edge == {"source": source, "target": target}),
+        None,
+    )
+
+
+def _add_flow_node(
+    result: dict[str, Any], operation: dict[str, Any]
+) -> tuple[str, str] | None:
     node = deepcopy(operation.get("node") or {})
     if not node.get("id"):
         raise ValueError("新增流程节点缺少 id")
@@ -96,10 +140,12 @@ def _add_flow_node(result: dict[str, Any], operation: dict[str, Any]) -> None:
         raise ValueError(f"流程节点 id 已存在: {node['id']}")
     nodes.append(node)
     after_id = operation.get("after_id")
-    if after_id:
-        if not _find_by_id(nodes, after_id):
-            raise ValueError(f"要插入的位置节点不存在: {after_id}")
-        _insert_after(result.setdefault("edges", []), after_id, node["id"])
+    if not after_id:
+        return None
+    if not _find_by_id(nodes, after_id):
+        raise ValueError(f"要插入的位置节点不存在: {after_id}")
+    _insert_after(result.setdefault("edges", []), after_id, node["id"])
+    return after_id, node["id"]
 
 
 def _insert_after(edges: list[dict[str, Any]], after_id: str, node_id: str) -> None:

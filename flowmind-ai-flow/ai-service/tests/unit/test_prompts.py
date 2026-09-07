@@ -94,7 +94,11 @@ def test_review_feedback_is_rendered_from_markdown() -> None:
 def test_all_runtime_prompts_are_explicitly_versioned() -> None:
     prompt_root = Path(__file__).parents[2] / "app" / "prompts"
     registry = json.loads((prompt_root / "versions.json").read_text(encoding="utf-8"))
-    registered = set(registry["prompts"])
+    registered = {
+        version["file"]
+        for prompt in registry["prompts"].values()
+        for version in prompt["versions"].values()
+    }
     markdown_files = {
         path.relative_to(prompt_root).as_posix() for path in prompt_root.rglob("*.md")
     }

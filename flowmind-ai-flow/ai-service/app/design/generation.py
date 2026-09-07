@@ -8,6 +8,7 @@ ReAct 主路径：create_react_agent 边推理边调检索工具取真实数据�
 
 from typing import Any
 
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
 from pydantic import ValidationError
 
@@ -126,10 +127,36 @@ def _retry_feedback(error: Exception) -> str:
 
 
 def _invoke_agent(llm: Any, tools: list[Any], schema: Any, messages: list[dict]):
-    """使用指定模型构建并执行一次 ReAct Agent。"""
+    """先完成工具检索，再用不含工具调用元数据的上下文生成结构化结果。"""
     versioned_tools = [
         tool.model_copy(update={"description": load_prompt(f"tools/{tool.name}.md")})
         for tool in tools
     ]
-    agent = create_react_agent(llm, versioned_tools, response_format=schema)
-    return agent.invoke({"messages": messages}, config=langchain_config())
+    config = langchain_config()
+    agent = create_react_agent(llm, versioned_tools)
+    result = agent.invoke({"messages": messages}, config=config)
+    structured_response = llm.with_structured_output(schema).invoke(
+        [*messages, {"role": "user", "content": _structured_handoff(result)}],
+        config=config,
+    )
+    return {**result, "structured_response": structured_response}
+
+
+def _structured_handoff(result: dict[str, Any]) -> str:
+    """保留检索事实和 Agent 结论，但不回放可能污染收尾模型的 tool_calls。"""
+    evidence: list[str] = []
+    for message in result.get("messages", []):
+        content = str(getattr(message, "content", "") or "").strip()
+        if not content:
+            continue
+        if isinstance(message, ToolMessage):
+            evidence.append(f"工具 {message.name} 返回：\n{content}")
+        elif isinstance(message, AIMessage):
+            evidence.append(f"Agent 分析：\n{content}")
+
+    details = "\n\n".join(evidence) or "无额外检索结果，请依据原始需求生成。"
+    return (
+        "工具检索阶段已经结束，禁止继续请求任何检索工具。"
+        "请依据原始需求和以下检索事实，通过当前要求的结构化格式返回最终结果：\n\n"
+        f"{details}"
+    )

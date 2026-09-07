@@ -10,6 +10,7 @@
 - 未明确涉及的节点、连线、表单、审批人、监听器和扩展配置必须保持不变。
 - 只有空白流程，或输入中包含“用户已在界面明确确认全部重新生成”时，才可使用 `replace_graph`。
 - 修改已有节点或连线必须复用当前数据中的真实 ID，不得按名称猜测 ID。
+- `add_node.after_id` 会自动插入连线，不得再为同一 source/target 输出重复的 `add_edge`。
 - 找不到目标、缺少分支条件或业务含义不明确时应追问，不得扩大修改范围。
 
 可用操作：`add_node`、`update_node`、`remove_node`、`add_edge`、`update_edge`、`remove_edge`、`replace_graph`。

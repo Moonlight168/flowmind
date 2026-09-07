@@ -11,11 +11,17 @@ FlowMind AI Service - Design Workflow 系统测试
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import redis
+from fastapi.testclient import TestClient
 
-from app.graph.design_graph import delete_design_thread, invoke_design_workflow
+from app.api.design import _design_thread_id
+from app.graph.design_graph import (
+    delete_design_thread,
+    invoke_design_workflow,
+)
 from app.infra.checkpoint.redis import RedisCheckpoint
 
 
@@ -24,6 +30,20 @@ def _checkpoint_exists(thread_id: str) -> bool:
     checkpointer = RedisCheckpoint()
     config = {"configurable": {"thread_id": thread_id}}
     return checkpointer.get_tuple(config) is not None
+
+
+def _read_sse_events(
+    client: TestClient, payload: dict, headers: dict[str, str]
+) -> tuple[int, str, list[dict]]:
+    with client.stream(
+        "POST", "/design/category", json=payload, headers=headers
+    ) as response:
+        events = [
+            json.loads(line.removeprefix("data: "))
+            for line in response.iter_lines()
+            if line.startswith("data: ")
+        ]
+        return response.status_code, response.headers["content-type"], events
 
 
 class TestCategoryDesign:
@@ -57,7 +77,9 @@ class TestCategoryDesign:
             thread_id=thread_id,
         )
 
-        assert result["intent"] == "success", f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        assert result["intent"] == "success", (
+            f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        )
         assert result["form_data"] is not None
         assert "category_name" in result["form_data"]
         assert "code" in result["form_data"]
@@ -74,6 +96,36 @@ class TestCategoryDesign:
 
         assert _checkpoint_exists(thread_id) is True
 
+    def test_category_design_sse_uses_real_model_and_redis(
+        self,
+        clean_redis: redis.Redis,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        thread_id: str,
+    ):
+        """SSE 接口应通过真实模型与 Redis 返回进度及最终结果。"""
+        payload = {
+            "user_input": "创建费用报销分类，编码 EXPENSE",
+            "thread_id": thread_id,
+        }
+
+        api_thread_id = _design_thread_id(
+            "category_design", "system-test", conversation_id=thread_id
+        )
+        try:
+            status, content_type, events = _read_sse_events(
+                client, payload, auth_headers
+            )
+            assert status == 200
+            assert content_type.startswith("text/event-stream")
+            assert any(event.get("type") == "progress" for event in events)
+            done = next(event for event in events if event.get("type") == "done")
+            assert done["intent"] == "success"
+            assert done["form_data"]["code"].upper() == "EXPENSE"
+            assert _checkpoint_exists(api_thread_id) is True
+        finally:
+            delete_design_thread(api_thread_id)
+
 
 class TestFlowDesign:
     """流程设计 workflow 测试"""
@@ -88,7 +140,9 @@ class TestFlowDesign:
             thread_id=thread_id,
         )
 
-        assert result["intent"] == "success", f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        assert result["intent"] == "success", (
+            f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        )
         assert result["form_data"] is not None
         assert "bpmn_xml" in result["form_data"]
 
@@ -120,7 +174,9 @@ class TestFormDesign:
             thread_id=thread_id,
         )
 
-        assert result["intent"] == "success", f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        assert result["intent"] == "success", (
+            f"期望 success，实际 {result.get('intent')}: {result.get('message')}"
+        )
         assert result["form_data"] is not None
         # form_data 内部应包含表单结构
 
@@ -213,9 +269,7 @@ class TestStateRecovery:
 class TestConcurrency:
     """并发安全测试"""
 
-    def test_independent_threads_do_not_interfere(
-        self, clean_redis: redis.Redis
-    ):
+    def test_independent_threads_do_not_interfere(self, clean_redis: redis.Redis):
         """独立 thread_id 之间不互相影响"""
         thread_id_1 = f"test_{uuid.uuid4().hex[:16]}"
         thread_id_2 = f"test_{uuid.uuid4().hex[:16]}"

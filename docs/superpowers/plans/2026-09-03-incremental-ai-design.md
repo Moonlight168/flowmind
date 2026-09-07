@@ -11,10 +11,13 @@
 - 黄金集上传会删除稳定 UUID 规则可识别、但已从本地 JSONL 移除的旧用例，保留非本同步器管理的远端数据。
 - 当前补充信息采用终态 `needs_input` 加同一 thread 的下一轮调用；预览确认是前端本地状态，不引入无服务端副作用的 LangGraph interrupt/resume。
 - 结构化增量结果仅序列化模型实际提供的字段，未提及字段不再被展开为 `None` 覆盖原值；显式空字符串仍可用于清空字段。
+- 模型配置支持按 Provider 下发 `extra_body` 和选择 `json_schema/function_calling/json_mode`；DeepSeek V4 可显式关闭默认思考模式，并用 function-calling 完成 Pydantic 结构约束。
+- ReAct 工具检索与结构化收尾拆成两次调用；收尾只接收工具文本结果和 Agent 结论，不回放 `tool_calls` 元数据，避免模型误选已解绑的检索工具。
+- `add_node.after_id` 在本批次生成的无元数据连线可由紧随其后的显式 `add_edge` 补全；原流程中同端点的条件连线保持不变，避免增量修改误覆盖业务分支。
 
 ## 验证结果
 
-- AI 服务 Ruff 检查通过，后端 205 条稳定单元/集成测试全部通过，覆盖前置基线处理、增量操作、角色/分类校验、BPMN 元数据合并、SSE 与会话隔离。
+- AI 服务 228 条单元、集成和系统测试全部通过，其中 13 条设计系统测试使用真实 DeepSeek 与独立测试 Redis DB，Java 权威目录使用固定测试数据；新增系统用例覆盖 FastAPI 认证、SSE、LangGraph、模型调用和 checkpoint 完整链路。
 - 前端生产构建通过；VForm3 依赖的既有 eval 和大分包告警不影响构建。
 - 双轴代码审查发现的全量替换授权、候选预览隔离、表单引用和嵌套字段校验问题已修正。
 - 所有设计请求及黄金集实验均携带 trace/session 元数据进入 Langfuse，结果包含稳定状态、校验和操作信息。

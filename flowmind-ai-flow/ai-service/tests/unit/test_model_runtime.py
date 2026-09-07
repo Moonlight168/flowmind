@@ -7,6 +7,7 @@ FlowMind 智能流程设计服务 - 模型运行时单元测试
 from contextlib import contextmanager
 
 import pytest
+from langchain_openai import ChatOpenAI
 
 from app.llm.runtime import (
     ModelExhaustedError,
@@ -261,3 +262,31 @@ def test_compression_token_limit_comes_from_settings(monkeypatch) -> None:
     max_tokens = runtime.execute("compress", lambda model: model["max_tokens"])
 
     assert max_tokens == 123
+
+
+def test_model_builder_applies_provider_compatibility_options(monkeypatch) -> None:
+    monkeypatch.setattr(
+        ChatOpenAI,
+        "with_structured_output",
+        lambda self, schema, *, method="json_schema", **kwargs: method,
+    )
+    runtime = ModelRuntime(
+        providers={},
+        priority=[],
+        config=ModelRuntimeConfig(retry_interval=0),
+    )
+
+    model = runtime._build_model(
+        "deepseek",
+        {
+            "model_name": "deepseek-v4-flash",
+            "base_url": "https://api.deepseek.com",
+            "api_key": "test-key",
+            "extra_body": {"thinking": {"type": "disabled"}},
+            "structured_output_method": "function_calling",
+        },
+        "intent",
+    )
+
+    assert model.extra_body == {"thinking": {"type": "disabled"}}
+    assert model.with_structured_output(dict) == "function_calling"

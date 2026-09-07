@@ -77,6 +77,72 @@ def test_flow_node_insert_rewires_single_outgoing_edge() -> None:
     ]
 
 
+def test_duplicate_add_edge_enriches_automatic_edge_instead_of_branching() -> None:
+    result = apply_design_operations(
+        "flow_design",
+        {"nodes": [], "edges": []},
+        [
+            {"op": "add_node", "node": {"id": "start", "type": "START_EVENT"}},
+            {
+                "op": "add_node",
+                "after_id": "start",
+                "node": {"id": "approve", "type": "USER_TASK"},
+            },
+            {
+                "op": "add_edge",
+                "edge": {
+                    "id": "Flow_start_approve",
+                    "source": "start",
+                    "target": "approve",
+                },
+            },
+        ],
+    )
+
+    assert result["edges"] == [
+        {
+            "id": "Flow_start_approve",
+            "source": "start",
+            "target": "approve",
+        }
+    ]
+
+
+def test_add_edge_does_not_overwrite_existing_conditional_edge() -> None:
+    baseline_edge = {
+        "id": "approved",
+        "source": "review",
+        "target": "end",
+        "condition": "approved == true",
+    }
+
+    result = apply_design_operations(
+        "flow_design",
+        {"nodes": [], "edges": [baseline_edge]},
+        [
+            {
+                "op": "add_edge",
+                "edge": {
+                    "id": "rejected",
+                    "source": "review",
+                    "target": "end",
+                    "condition": "approved == false",
+                },
+            }
+        ],
+    )
+
+    assert result["edges"] == [
+        baseline_edge,
+        {
+            "id": "rejected",
+            "source": "review",
+            "target": "end",
+            "condition": "approved == false",
+        },
+    ]
+
+
 def test_form_content_is_normalized_and_add_widget_preserves_metadata() -> None:
     form_json = {
         "widgetList": [
