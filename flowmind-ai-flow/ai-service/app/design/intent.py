@@ -7,7 +7,7 @@ FlowMind 智能流程设计服务 - 意图判别
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.infra.logger import logger
 from app.infra.observability import langchain_config
@@ -19,8 +19,9 @@ class Intent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["design", "clarification", "rollback"]
-    target: str | None = None  # rollback 时："start"(一开始) / "prev"(上一步)
+    target: str | None = None  # rollback 时：“start”(一开始) / “prev”(上一步)
     message: str | None = None  # clarification 时的追问内容
+    choices: list[str] = Field(default_factory=list)
 
 
 def discriminate_intent(

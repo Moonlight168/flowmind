@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 import ormsgpack
 import redis
@@ -322,7 +323,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
                             "updated_at": thread_data.get("updated_at"),
                         }
                     )
-                except Exception as e:
+                except (ormsgpack.MsgpackDecodeError, TypeError, ValueError) as e:
                     logger.debug(f"Failed to parse thread data: {e}")
                     threads.append(
                         {
@@ -341,9 +342,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
     def get_or_create_thread_id(self, user_key: str | None = None) -> str:
         """获取或创建新的线程ID"""
-        import uuid
-
-        return user_key or f"thread_{uuid.uuid4().hex[:16]}"
+        return user_key or f"thread_{uuid4().hex[:16]}"
 
     def put_writes(
         self,

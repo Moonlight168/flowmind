@@ -46,7 +46,7 @@ EVALUATION_RUNTIME_ERRORS = (
 )
 
 
-def _decode(value: Any) -> Any:
+def decode_dataset_value(value: Any) -> Any:
     """Langfuse dataset 从服务端拉回时 input/expected_output/metadata 是 JSON 字符串。"""
     if isinstance(value, str):
         try:
@@ -159,6 +159,7 @@ def sync_dataset(client: Any, dataset_name: str, cases: list[GoldenCase]) -> lis
         input_schema=GoldenInput.model_json_schema(),
         expected_output_schema=GoldenExpectedOutput.model_json_schema(),
     )
+    _delete_stale_managed_items(client, dataset_name, cases)
     return [
         client.create_dataset_item(
             id=str(uuid5(NAMESPACE_URL, f"{dataset_name}:{case.id}")),
@@ -177,16 +178,28 @@ def sync_dataset(client: Any, dataset_name: str, cases: list[GoldenCase]) -> lis
     ]
 
 
+def _delete_stale_managed_items(
+    client: Any, dataset_name: str, cases: list[GoldenCase]
+) -> None:
+    current_ids = {case.id for case in cases}
+    for item in client.get_dataset(dataset_name).items:
+        metadata = decode_dataset_value(item.metadata) or {}
+        case_id = str(metadata.get("case_id", ""))
+        managed_id = str(uuid5(NAMESPACE_URL, f"{dataset_name}:{case_id}"))
+        if case_id and item.id == managed_id and case_id not in current_ids:
+            client.api.dataset_items.delete(item.id)
+
+
 def build_workflow_task(auth_token: str) -> typing.Callable[..., dict[str, Any]]:
     """构建 Langfuse 实验 task，逐条隔离运行时失败。"""
 
     def run(item: Any, **_: Any) -> dict[str, Any]:
-        metadata = _decode(item.metadata) or {}
+        metadata = decode_dataset_value(item.metadata) or {}
         case_id = str(metadata.get("case_id", "unknown"))
         thread_id = f"eval-{case_id}-{uuid4().hex[:12]}"
         set_auth_token(auth_token)
         try:
-            case_input = GoldenInput.model_validate(_decode(item.input))
+            case_input = GoldenInput.model_validate(decode_dataset_value(item.input))
             turn_outputs = []
             latest_artifact: dict[str, Any] = {}
             for turn in case_input.turns:
@@ -236,7 +249,9 @@ def evaluate_contract(
     *, output: dict[str, Any], expected_output: dict[str, Any], **_: Any
 ) -> list[Evaluation]:
     """评估稳定输出契约，所有分数均可直接上报 Langfuse。"""
-    expected = GoldenExpectedOutput.model_validate(_decode(expected_output))
+    expected = GoldenExpectedOutput.model_validate(
+        decode_dataset_value(expected_output)
+    )
     scores = [
         _evaluation(
             "status_match",
@@ -468,6 +483,7 @@ __all__ = [
     "GoldenInput",
     "GoldenTurn",
     "build_workflow_task",
+    "decode_dataset_value",
     "evaluate_contract",
     "load_golden_cases",
     "select_cases",

@@ -1,6 +1,6 @@
-"""把本地 evals/golden_dataset.jsonl 上传到 Langfuse dataset（幂等 upsert）。
+"""把本地 evals/golden_dataset.jsonl 上传到 Langfuse dataset (幂等 upsert).
 
-与 run_golden_eval.py 解耦：只在 golden 数据集变更后手动执行，评估本身不再触发上传。
+与 run_golden_eval.py 解耦: 只在 golden 数据集变更后手动执行, 评估本身不再触发上传.
 用法:
     python scripts/upload_golden_to_langfuse.py
     python scripts/upload_golden_to_langfuse.py --dataset-name flowmind-design-golden-v2
@@ -22,7 +22,7 @@ DEFAULT_DATASET_NAME = "flowmind-design-golden-v1"
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="上传本地 golden 数据集到 Langfuse（幂等 upsert）"
+        description="上传本地 golden 数据集到 Langfuse (幂等 upsert)"
     )
     parser.add_argument(
         "--dataset-path",

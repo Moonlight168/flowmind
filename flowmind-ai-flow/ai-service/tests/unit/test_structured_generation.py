@@ -2,7 +2,7 @@
 
 import app.design.generation as generation_module
 from app.design.generation import run_react_agent
-from app.domain.design_models import BasicDesign, FlowDesign
+from app.domain.design_models import BasicDesign, CategoryDesign, FlowDesign
 
 
 class _FakeAgent:
@@ -90,3 +90,31 @@ def test_basic_mode_uses_basic_schema(monkeypatch):
     assert result["operations"][0]["changes"]["code"] == "expense"
     assert captured["response_format"] is BasicDesign
     assert {tool.name for tool in captured["tools"]} == {"search_categories"}
+
+
+def test_optional_metadata_fields_are_not_expanded_to_none(monkeypatch):
+    obj = BasicDesign(
+        operations=[
+            {"op": "update_flow_metadata", "changes": {"description": "新描述"}}
+        ]
+    )
+    captured = {}
+    _mock_runtime(monkeypatch)
+    _mock_agent(monkeypatch, obj, captured)
+
+    result = run_react_agent("flow_design", [], current_form_data={}, mode="basic")
+
+    assert result["operations"][0]["changes"] == {"description": "新描述"}
+
+
+def test_optional_category_fields_are_not_expanded_to_none(monkeypatch):
+    obj = CategoryDesign(
+        operations=[{"op": "update_category", "changes": {"remark": "新备注"}}]
+    )
+    captured = {}
+    _mock_runtime(monkeypatch)
+    _mock_agent(monkeypatch, obj, captured)
+
+    result = run_react_agent("category_design", [], current_form_data={})
+
+    assert result["operations"][0]["changes"] == {"remark": "新备注"}

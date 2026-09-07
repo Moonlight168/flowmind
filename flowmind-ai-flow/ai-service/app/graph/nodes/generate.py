@@ -54,7 +54,11 @@ def generate_node(state: AppState) -> AppState:
     if intent and intent.kind == "clarification":
         msg = intent.message or "请更具体地描述您的需求"
         state["intent"] = "clarification"
-        state["design_output"] = {"intent": "clarification", "message": msg}
+        state["design_output"] = {
+            "intent": "clarification",
+            "message": msg,
+            "choices": intent.choices,
+        }
         state["messages"].append(AIMessage(content=msg))
         return state
     if intent and intent.kind == "rollback":

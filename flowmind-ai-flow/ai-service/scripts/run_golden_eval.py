@@ -1,18 +1,21 @@
-"""执行 FlowMind 黄金数据集评估并上报 Langfuse（从 dataset 拉取，不触发上传）。
+"""执行 FlowMind 黄金数据集评估并上报 Langfuse (从 dataset 拉取, 不触发上传).
 
-前置：先用 scripts/upload_golden_to_langfuse.py 把本地 evals/golden_dataset.jsonl
-上传到 Langfuse dataset；本脚本从 dataset 拉取用例执行，避免 golden 未更新时重复上传。
+前置: 先用 scripts/upload_golden_to_langfuse.py 把本地 evals/golden_dataset.jsonl
+上传到 Langfuse dataset; 本脚本从 dataset 拉取用例执行, 避免 golden 未更新时重复上传.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import UTC, datetime
 from typing import Any
 
 from app.config.settings import settings
-from app.evaluation.golden_dataset import build_workflow_task, evaluate_contract
+from app.evaluation.golden_dataset import (
+    build_workflow_task,
+    decode_dataset_value,
+    evaluate_contract,
+)
 from app.infra.logger import logger
 from app.infra.observability import get_client, observability_enabled
 
@@ -39,13 +42,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _case_id(item: Any) -> str:
-    metadata = item.metadata or {}
-    if isinstance(metadata, str):
-        try:
-            metadata = json.loads(metadata)
-        except (json.JSONDecodeError, ValueError):
-            metadata = {}
+    metadata = decode_dataset_value(item.metadata) or {}
     return str(metadata.get("case_id", ""))
+
+
+def _load_items(client: Any, args: argparse.Namespace) -> list[Any]:
+    items = list(client.get_dataset(args.dataset_name).items)
+    if args.case_id:
+        items = [item for item in items if _case_id(item) == args.case_id]
+        if not items:
+            raise RuntimeError(
+                f"Langfuse dataset={args.dataset_name} 中不存在用例: {args.case_id}"
+            )
+    if not items:
+        raise RuntimeError(
+            f"Langfuse dataset={args.dataset_name} 为空, 请先运行 "
+            "scripts/upload_golden_to_langfuse.py 上传本地 golden 数据集"
+        )
+    return items
 
 
 def run(args: argparse.Namespace) -> Any:
@@ -57,19 +71,7 @@ def run(args: argparse.Namespace) -> Any:
         raise RuntimeError("请先配置 Langfuse 密钥并启用链路监控")
 
     client = get_client()
-    items = list(client.get_dataset(args.dataset_name).items)
-    if args.case_id:
-        items = [item for item in items if _case_id(item) == args.case_id]
-        if not items:
-            raise RuntimeError(
-                f"Langfuse dataset={args.dataset_name} 中不存在用例: {args.case_id}"
-            )
-    if not items:
-        raise RuntimeError(
-            f"Langfuse dataset={args.dataset_name} 为空，请先运行 "
-            "scripts/upload_golden_to_langfuse.py 上传本地 golden 数据集"
-        )
-
+    items = _load_items(client, args)
     run_name = args.run_name or _default_run_name(args.case_id)
     logger.info(f"[黄金集评估] 开始执行 run={run_name}, cases={len(items)}")
     try:

@@ -40,6 +40,16 @@
           </template>
         </div>
       </div>
+      <div v-if="pendingChoices.length" class="clarification-choices">
+        <el-button
+          v-for="(choice, index) in pendingChoices"
+          :key="index"
+          size="small"
+          @click="selectChoice(choice)"
+        >
+          {{ choiceLabel(choice) }}
+        </el-button>
+      </div>
     </div>
 
     <div v-if="pendingPreview" class="change-preview">
@@ -53,6 +63,12 @@
           {{ operationLabel(operation) }}
         </li>
       </ul>
+      <dl v-if="previewChanges.length" class="change-preview__fields">
+        <div v-for="field in previewChanges" :key="field.key">
+          <dt>{{ field.label }}</dt>
+          <dd>{{ field.before }} → {{ field.after }}</dd>
+        </div>
+      </dl>
       <div class="change-preview__actions">
         <el-button @click="discardPreview">放弃</el-button>
         <el-button type="primary" @click="applyPreview">应用变更</el-button>
@@ -125,6 +141,7 @@ const messages = ref([])
 const loading = ref(false)
 const progressText = ref('')
 const pendingPreview = ref(null)
+const pendingChoices = ref([])
 const previewBaseline = ref(null)
 const allowFullReplace = ref(false)
 const messagesContainer = ref(null)
@@ -222,11 +239,22 @@ watch(visible, (val) => {
   if (val) {
     restoreSession()
   } else {
-    requestController.value?.abort()
+    cancelCurrentRequest()
     discardPreview()
     saveSession()
   }
 })
+
+function cancelCurrentRequest() {
+  const controller = requestController.value
+  if (!controller) return
+  requestController.value = null
+  controller.abort()
+  allowFullReplace.value = false
+  loading.value = false
+  progressText.value = ''
+  emit('designing', false)
+}
 
 async function handleSend() {
   if (!inputText.value.trim() || loading.value) return
@@ -244,6 +272,7 @@ async function handleSend() {
     }
   }
   inputText.value = ''
+  pendingChoices.value = []
 
   messages.value.push({ role: 'user', content: userInput })
   scrollToBottom()
@@ -263,11 +292,15 @@ async function handleSend() {
       thread_id: flowKey.value,
       allow_full_replace: allowFullReplace.value
     }, (event) => {
+      if (requestController.value !== controller) return
       if (event.type === 'progress') {
         progressText.value = event.message
         emit('progress', event.message)
       } else if (event.type === 'done') {
         const data = event
+        pendingChoices.value = data.status === 'needs_input' && Array.isArray(data.choices)
+          ? data.choices
+          : []
         // 回退指令：恢复到目标版本（后端判别返回 rollback）
         if (data.kind === 'rollback') {
           if (rollbackTo(data.target)) {
@@ -299,12 +332,14 @@ async function handleSend() {
     messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
     scrollToBottom()
   } finally {
-    if (requestController.value === controller) requestController.value = null
-    allowFullReplace.value = false
-    loading.value = false
-    progressText.value = ''
-    emit('designing', false)
-    if (!wasAborted) saveSession()
+    if (requestController.value === controller) {
+      requestController.value = null
+      allowFullReplace.value = false
+      loading.value = false
+      progressText.value = ''
+      emit('designing', false)
+      if (!wasAborted) saveSession()
+    }
   }
 }
 
@@ -316,7 +351,7 @@ function scrollToBottom() {
   }, 0)
 }
 
-onBeforeUnmount(() => requestController.value?.abort())
+onBeforeUnmount(cancelCurrentRequest)
 
 function operationLabel(operation) {
   const labels = {
@@ -328,6 +363,45 @@ function operationLabel(operation) {
   }
   const target = operation.node_id || operation.widget_name || operation.node?.name || operation.widget?.options?.label
   return `${labels[operation.op] || operation.op}${target ? `：${target}` : ''}`
+}
+
+const previewChanges = computed(() => {
+  if (!pendingPreview.value) return []
+  const fields = props.designType === 'category'
+    ? [
+        ['category_name', 'categoryName', '分类名称'],
+        ['code', 'code', '分类编码'],
+        ['remark', 'remark', '备注']
+      ]
+    : props.designType === 'flow' && props.mode === 'basic'
+      ? [
+          ['flow_name', 'modelName', '流程名称'],
+          ['code', 'category', '流程分类'],
+          ['description', 'description', '流程描述'],
+          ['flow_key', 'modelKey', '流程标识']
+        ]
+      : []
+  return fields.map(([key, oldKey, label]) => ({
+    key,
+    label,
+    before: formatPreviewValue(previewBaseline.value?.[oldKey] ?? previewBaseline.value?.[key]),
+    after: formatPreviewValue(pendingPreview.value.form_data?.[key])
+  })).filter((field) => field.before !== field.after)
+})
+
+function formatPreviewValue(value) {
+  return value === undefined || value === null || value === '' ? '未设置' : String(value)
+}
+
+function choiceLabel(choice) {
+  if (typeof choice !== 'object' || choice === null) return String(choice)
+  const label = choice.label || choice.name || choice.value || choice.code || choice.id
+  return label == null ? JSON.stringify(choice) : String(label)
+}
+
+function selectChoice(choice) {
+  inputText.value = choiceLabel(choice)
+  handleSend()
 }
 
 function cloneData(value) {
@@ -356,9 +430,10 @@ function discardPreview() {
 
 
 function clearMessages() {
-  requestController.value?.abort()
+  cancelCurrentRequest()
   discardPreview()
   messages.value = []
+  pendingChoices.value = []
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
   // 只清空 AI 生成的数据
   currentFormData.value = { ...props.formData }
@@ -452,5 +527,10 @@ defineExpose({
 .change-preview__title { font-weight: 600; color: #303133; }
 .change-preview__summary { margin-top: 4px; font-size: 12px; color: #606266; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
+.change-preview__fields { margin: 8px 0; font-size: 12px; }
+.change-preview__fields div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
+.change-preview__fields dt { color: #606266; }
+.change-preview__fields dd { margin: 0; color: #303133; overflow-wrap: anywhere; }
 .change-preview__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.clarification-choices { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; background: #f5f7fa; }
 </style>

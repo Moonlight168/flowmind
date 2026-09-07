@@ -255,3 +255,25 @@ def test_invalid_operation_target_is_repaired_once(monkeypatch) -> None:
     assert len(calls) == 2
     assert result["intent"] == "success"
     assert result["design_output"]["nodes"][0]["name"] == "新名称"
+
+
+def test_generate_node_propagates_clarification_choices(monkeypatch):
+    monkeypatch.setattr(
+        generate_module,
+        "discriminate_intent",
+        lambda *args, **kwargs: Intent(
+            kind="clarification",
+            message="请选择流程类型",
+            choices=["请假流程", "报销流程"],
+        ),
+    )
+    state = {
+        "messages": [HumanMessage(content="帮我设计流程")],
+        "design_type": "flow_design",
+        "current_form_data": {},
+        "review_retry_count": 0,
+    }
+
+    result = generate_module.generate_node(state)
+
+    assert result["design_output"]["choices"] == ["请假流程", "报销流程"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 import pytest
@@ -149,6 +150,8 @@ def test_sync_dataset_uses_stable_ids() -> None:
     client = SimpleNamespace(
         create_dataset=lambda **kwargs: kwargs,
         create_dataset_item=lambda **kwargs: kwargs,
+        get_dataset=lambda name: SimpleNamespace(items=[]),
+        api=SimpleNamespace(dataset_items=SimpleNamespace(delete=lambda item_id: None)),
     )
 
     first = sync_dataset(client, "flowmind-design-golden-v1", [_case()])
@@ -157,6 +160,29 @@ def test_sync_dataset_uses_stable_ids() -> None:
     assert first[0]["id"] == second[0]["id"]
     assert first[0]["metadata"]["case_id"] == "flow-linear"
     assert first[0]["input"]["turns"][0]["design_type"] == "flow_design"
+
+
+def test_sync_dataset_removes_only_stale_managed_items() -> None:
+    deleted: list[str] = []
+    stale_item = SimpleNamespace(
+        id=str(uuid5(NAMESPACE_URL, "golden:stale")),
+        metadata={"case_id": "stale"},
+    )
+    unrelated = SimpleNamespace(id="manual-item", metadata={"case_id": "manual-case"})
+    client = SimpleNamespace(
+        create_dataset=lambda **kwargs: kwargs,
+        create_dataset_item=lambda **kwargs: kwargs,
+        get_dataset=lambda name: SimpleNamespace(items=[stale_item, unrelated]),
+        api=SimpleNamespace(
+            dataset_items=SimpleNamespace(
+                delete=lambda item_id: deleted.append(item_id)
+            )
+        ),
+    )
+
+    sync_dataset(client, "golden", [_case("current")])
+
+    assert deleted == [stale_item.id]
 
 
 @pytest.mark.parametrize(

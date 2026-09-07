@@ -82,13 +82,19 @@ def run_react_agent(
         try:
             result = runtime.execute(
                 task_name,
-                lambda llm, msgs=attempt_messages: _invoke_agent(llm, tools, schema, msgs),
+                lambda llm, msgs=attempt_messages: _invoke_agent(
+                    llm, tools, schema, msgs
+                ),
                 structured=True,
             )
             obj = result.get("structured_response")
             if obj is not None:
                 logger.info("[LLM] ReAct 结构化输出成功")
-                return obj.model_dump() if hasattr(obj, "model_dump") else obj
+                return (
+                    obj.model_dump(exclude_none=True)
+                    if hasattr(obj, "model_dump")
+                    else obj
+                )
             last_error = ValueError("结构化输出返回 None")
             logger.warning(f"[LLM] 结构化输出返回 None（第 {attempt}/{max_retry} 次）")
         except (

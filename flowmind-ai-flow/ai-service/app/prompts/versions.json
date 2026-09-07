@@ -3,7 +3,7 @@
     "agents/chat.md": {"stable": "v1", "versions": {"v1": {"file": "agents/chat.md", "weight": 100}}},
     "agents/compression.md": {"stable": "v1", "versions": {"v1": {"file": "agents/compression.md", "weight": 100}}},
     "agents/gateway_feedback.md": {"stable": "v1", "versions": {"v1": {"file": "agents/gateway_feedback.md", "weight": 100}}},
-    "agents/intent.md": {"stable": "v1", "versions": {"v1": {"file": "agents/intent.md", "weight": 100}}},
+    "agents/intent.md": {"stable": "v2", "versions": {"v1": {"file": "agents/intent.v1.md", "weight": 0}, "v2": {"file": "agents/intent.md", "weight": 100}}},
     "agents/review_feedback.md": {"stable": "v1", "versions": {"v1": {"file": "agents/review_feedback.md", "weight": 100}}},
     "roles/category_designer.md": {"stable": "v1", "versions": {"v1": {"file": "roles/category_designer.md", "weight": 100}}},
     "roles/flow_designer.md": {"stable": "v1", "versions": {"v1": {"file": "roles/flow_designer.md", "weight": 100}}},

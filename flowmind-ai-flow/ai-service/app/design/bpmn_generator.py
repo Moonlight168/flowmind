@@ -47,14 +47,15 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
     _create_node_elements(process, ns, nodes, node_ids, flowable_ns)
 
     # 创建连线
+    custom_flow_ids: list[str] = []
     if custom_edges:
-        _create_custom_edges(process, ns, custom_edges, nodes)
+        custom_flow_ids = _create_custom_edges(process, ns, custom_edges, nodes)
     else:
         _create_auto_edges(process, ns, nodes, node_ids)
 
     # 生成 BPMNDI 画布布局
     _create_layered_bpmn_diagram(
-        definitions, ns, process_id, nodes, node_ids, custom_edges
+        definitions, ns, process_id, nodes, node_ids, custom_edges, custom_flow_ids
     )
 
     return etree.tostring(
@@ -396,7 +397,7 @@ def _create_custom_edges(
     ns: dict[str, str],
     edges: list[dict],
     nodes: list[dict] | None = None,
-) -> None:
+) -> list[str]:
     """根据自定义 edges 创建连线"""
     bpmn = ns["bpmn2"]
     start_id = "StartEvent_1"
@@ -435,9 +436,8 @@ def _create_custom_edges(
     incoming_map: dict[str, list[str]] = {}
     outgoing_map: dict[str, list[str]] = {}
 
-    for edge, flow_id in zip(edges, _unique_flow_ids(edges), strict=True):
-        # 把分配到的 flow_id 写回，供后续 DI（BPMNEdge@bpmnElement）复用同一 id
-        edge["flow_id"] = flow_id
+    assigned_flow_ids = _unique_flow_ids(edges)
+    for edge, flow_id in zip(edges, assigned_flow_ids, strict=True):
         source = edge["source"]
         target = edge["target"]
 
@@ -492,6 +492,7 @@ def _create_custom_edges(
         if elem is not None:
             for fid in flow_ids:
                 etree.SubElement(elem, f"{{{bpmn}}}outgoing").text = fid
+    return assigned_flow_ids
 
 
 def _compile_condition(condition: dict | str) -> str:
@@ -523,6 +524,7 @@ def _create_layered_bpmn_diagram(
     nodes: list[dict],
     node_ids: list[str],
     custom_edges: list[dict],
+    custom_flow_ids: list[str],
 ) -> None:
     """Create a deterministic left-to-right diagram with separated branches."""
     bpmndi, dc, di = ns["bpmndi"], ns["dc"], ns["di"]
@@ -534,7 +536,9 @@ def _create_layered_bpmn_diagram(
     )
 
     canonical = _canonical_node_ids(nodes, node_ids)
-    normalized_edges = _normalize_di_edges(nodes, node_ids, custom_edges, canonical)
+    normalized_edges = _normalize_di_edges(
+        nodes, node_ids, custom_edges, custom_flow_ids, canonical
+    )
     bounds = _calculate_di_bounds(nodes, node_ids, normalized_edges, canonical)
     _append_di_shapes(plane, bpmndi, dc, bounds)
     _append_di_edges(plane, bpmndi, di, normalized_edges, bounds)
@@ -544,16 +548,20 @@ def _normalize_di_edges(
     nodes: list[dict],
     node_ids: list[str],
     custom_edges: list[dict],
+    custom_flow_ids: list[str],
     canonical: dict[str, str],
 ) -> list[dict]:
     edges = custom_edges or _build_auto_edges_list(nodes, node_ids)
     return [
         {
             **edge,
+            "flow_id": custom_flow_ids[index]
+            if custom_flow_ids
+            else edge.get("flow_id"),
             "source": canonical.get(edge["source"], edge["source"]),
             "target": canonical.get(edge["target"], edge["target"]),
         }
-        for edge in edges
+        for index, edge in enumerate(edges)
     ]
 
 

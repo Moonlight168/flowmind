@@ -22,10 +22,10 @@
       @update:model-value="handleVisibleChange"
     >
       <template #actions>
-        <el-button link type="info" @click="toggleHistoryList" title="历史对话">
+        <el-button link type="info" @click="toggleHistoryList" title="历史对话" :disabled="isLoading">
           <el-icon><List /></el-icon>
         </el-button>
-        <el-button link type="info" @click="handleNewChat" title="新建对话">
+        <el-button link type="info" @click="handleNewChat" title="新建对话" :disabled="isLoading">
           <el-icon><Plus /></el-icon>
         </el-button>
       </template>
@@ -202,7 +202,7 @@ const MIN_HEIGHT = 400
 // 切换窗口可见性
 async function toggleVisible() {
   isVisible.value = !isVisible.value
-  if (!isVisible.value) requestController.value?.abort()
+  if (!isVisible.value) cancelCurrentRequest()
   if (isVisible.value) {
     // 恢复已有会话
     if (aiSession.hasActiveSession) {
@@ -223,7 +223,16 @@ async function toggleVisible() {
 // AiFloatingWindow 头部关闭按钮回调
 function handleVisibleChange(val) {
   isVisible.value = val
-  if (!val) requestController.value?.abort()
+  if (!val) cancelCurrentRequest()
+}
+
+function cancelCurrentRequest() {
+  const controller = requestController.value
+  if (!controller) return
+  requestController.value = null
+  controller.abort()
+  hasStreamingContent.value = false
+  isLoading.value = false
 }
 
 function showWelcome() {
@@ -244,6 +253,7 @@ function toggleHistoryList() {
 
 // 新开聊天
 function handleNewChat() {
+  cancelCurrentRequest()
   aiSession.resetSession()
   // 生成新的 threadId
   const newThreadId = crypto.randomUUID()
@@ -275,6 +285,7 @@ async function handleSelectHistory(session) {
     return
   }
 
+  cancelCurrentRequest()
   // 初始化会话
   aiSession.initializeSession({ threadId: session.thread_id, targetPageType: null })
   inputMessage.value = ''
@@ -434,6 +445,7 @@ async function sendMessage() {
       user_input: content,
       thread_id: aiSession.threadId
     }, (event) => {
+      if (requestController.value !== controller) return
       if (event.type === 'meta' && event.thread_id) {
         aiSession.initializeSession({
           threadId: event.thread_id,
@@ -476,9 +488,11 @@ async function sendMessage() {
     }
     scrollToBottom()
   } finally {
-    if (requestController.value === controller) requestController.value = null
-    hasStreamingContent.value = false
-    isLoading.value = false
+    if (requestController.value === controller) {
+      requestController.value = null
+      hasStreamingContent.value = false
+      isLoading.value = false
+    }
   }
 }
 
@@ -502,7 +516,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  requestController.value?.abort()
+  cancelCurrentRequest()
   window.removeEventListener('open-ai-assistant', handleOpenAssistant)
 })
 

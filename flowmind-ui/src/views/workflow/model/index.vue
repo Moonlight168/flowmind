@@ -120,8 +120,6 @@
       designType="flow"
       mode="basic"
       :formData="form"
-      @preview="handleAiPreviewBasic"
-      @discard="discardAiPreviewBasic"
       @fill="handleAiFillBasic"
     />
 
@@ -231,7 +229,6 @@ const aiDesignDialogRef = ref();
 const aiDesigning = ref(false);
 const aiDesignProgress = ref('');
 const aiDesignBasicVisible = ref(false);
-const basicPreviewSnapshot = ref(null);
 const designerPreviewData = ref(null);
 const aiDesignBasicDialogRef = ref();
 const designerFlowInfo = ref({});
@@ -508,24 +505,18 @@ const handleAiDesignBasic = () => {
 /** 基础信息表单 AI 填充 */
 const handleAiFillBasic = (data) => {
   if (!data) return;
-  if (data.flow_name) {
+  if (Object.hasOwn(data, 'flow_name')) {
     form.value.modelName = data.flow_name;
   }
-  if (data.code) {
+  if (Object.hasOwn(data, 'code')) {
     form.value.category = data.code;
   }
-  if (data.description) {
+  if (Object.hasOwn(data, 'description')) {
     form.value.description = data.description;
   }
-  basicPreviewSnapshot.value = null;
-};
-
-const handleAiPreviewBasic = (data) => {
-  basicPreviewSnapshot.value = data;
-};
-
-const discardAiPreviewBasic = () => {
-  basicPreviewSnapshot.value = null;
+  if (Object.hasOwn(data, 'flow_key')) {
+    form.value.modelKey = data.flow_key;
+  }
 };
 
 /** 可视化设计 AI 设计按钮 */

@@ -116,3 +116,17 @@ def test_exclusive_gateway_default_and_structured_condition_are_emitted():
     assert gateway.get("default") == "default_path"
     assert condition.text == "${amount > 100}"
     assert validate_bpmn_xml(xml).is_valid
+
+
+def test_generate_bpmn_does_not_mutate_edges():
+    structure = {
+        "nodes": [{"id": "Task_1", "type": "USER_TASK", "name": "审批"}],
+        "edges": [
+            {"source": "start", "target": "Task_1"},
+            {"source": "Task_1", "target": "end"},
+        ],
+    }
+
+    generate_bpmn_xml(structure, {"code": "test"})
+
+    assert all("flow_id" not in edge for edge in structure["edges"])
