@@ -45,9 +45,9 @@ const props = defineProps({
   height: { type: Number, default: 600 },
   minWidth: { type: Number, default: 340 },
   minHeight: { type: Number, default: 460 },
-  // 默认出现位置（相对视口右下角的右边距 / 顶部偏移）
+  // 默认出现位置：视口右下角（右边距 / 底边距）
   right: { type: Number, default: 24 },
-  top: { type: Number, default: 96 },
+  bottom: { type: Number, default: 20 },
   closable: { type: Boolean, default: true }
 })
 
@@ -71,7 +71,7 @@ function close() {
 function ensureInitialized() {
   if (pos.ready) return
   pos.x = window.innerWidth - size.w - props.right
-  pos.y = props.top
+  pos.y = window.innerHeight - size.h - props.bottom
   pos.ready = true
 }
 

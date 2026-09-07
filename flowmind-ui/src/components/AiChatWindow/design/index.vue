@@ -136,6 +136,30 @@ const title = computed(() => ({
   form: 'AI 设计表单'
 }[props.designType] || 'AI 设计'))
 
+// 首次进入（无历史消息）时展示的固定欢迎语
+const WELCOME_BY_TYPE = {
+  category: '您好！我是 **AI 设计助手**，可以帮您创建和维护流程分类。\n\n' +
+    '试着这样描述：\n' +
+    '- 「创建『费用报销』分类，下设差旅、办公、招待三个子类」\n' +
+    '- 「把『采购管理』下的子类合并，再新增『供应商管理』」\n\n' +
+    '描述越具体，生成越准确。',
+  flow: '您好！我是 **AI 流程设计助手**，可以把业务需求转成可运行的 BPMN 流程。\n\n' +
+    '试着这样描述：\n' +
+    '- 「请假审批：员工提交申请，主管审批通过后归档」\n' +
+    '- 「采购申请需要会签和驳回修改」\n\n' +
+    '也可以让我在现有流程上做局部调整。',
+  form: '您好！我是 **AI 表单设计助手**，可以根据描述生成 v-form-designer 表单。\n\n' +
+    '试着这样描述：\n' +
+    '- 「差旅报销单：申请人、出差事由、金额、附件」\n' +
+    '- 「在表单里加上字段校验和联动」'
+}
+
+function ensureGreeting() {
+  if (messages.value.length) return
+  const text = WELCOME_BY_TYPE[props.designType] || WELCOME_BY_TYPE.category
+  messages.value.push({ role: 'assistant', content: text })
+}
+
 const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
@@ -231,6 +255,7 @@ function restoreSession() {
       console.error('恢复聊天记录失败:', e)
     }
   }
+  ensureGreeting()
 }
 
 onMounted(restoreSession)
@@ -439,6 +464,7 @@ function clearMessages() {
   currentFormData.value = { ...props.formData }
   sessionStorage.removeItem(storageKey.value)
   sessionStorage.removeItem(versionKey.value)
+  ensureGreeting()
   // 同步清除后端 Redis 中的对话历史
   clearDesignState(props.designType, flowKey.value, props.mode).catch((error) => {
     console.warn('清除后端对话历史失败:', error)
