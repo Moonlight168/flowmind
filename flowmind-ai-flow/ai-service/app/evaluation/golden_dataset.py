@@ -7,7 +7,7 @@ import pathlib
 import typing
 from itertools import pairwise
 from typing import Any, Literal
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 import requests
@@ -26,6 +26,7 @@ from app.core.auth_context import set_auth_token
 from app.core.exceptions import FlowDesignException
 from app.design.bpmn_validator import validate_bpmn_xml
 from app.design.validators.vform3_validator import validate_vform3_document
+from app.design.widget_tree import iter_widgets
 from app.graph.design_graph import (
     delete_design_thread,
     invoke_design_workflow,
@@ -196,7 +197,9 @@ def build_workflow_task(auth_token: str) -> typing.Callable[..., dict[str, Any]]
     def run(item: Any, **_: Any) -> dict[str, Any]:
         metadata = decode_dataset_value(item.metadata) or {}
         case_id = str(metadata.get("case_id", "unknown"))
-        thread_id = f"eval-{case_id}-{uuid4().hex[:12]}"
+        # 确定性 thread_id：同一用例每次运行的灰度提示词版本一致，
+        # 评测结果才可复现、可归因（随机 id 会让灰度侧随机命中）。
+        thread_id = f"eval-{case_id}-{uuid5(NAMESPACE_URL, case_id).hex[:12]}"
         set_auth_token(auth_token)
         try:
             case_input = GoldenInput.model_validate(decode_dataset_value(item.input))
@@ -299,17 +302,26 @@ def _append_chain_quality_scores(
 
 def _artifact_is_valid(turn: dict[str, Any]) -> bool:
     artifact = turn.get("form_data") or {}
+    # 空产物不可导入，不得计为有效（否则会系统性抬高评测分数）
+    if not artifact:
+        return False
     if turn.get("validation", {}).get("passed") is False:
         return False
-    if turn.get("design_type") == "flow_design" and artifact.get("bpmn_xml"):
-        return validate_bpmn_xml(artifact["bpmn_xml"]).is_valid
-    if turn.get("design_type") == "form_design":
+    design_type = turn.get("design_type")
+    if design_type == "flow_design":
+        if artifact.get("bpmn_xml"):
+            return validate_bpmn_xml(artifact["bpmn_xml"]).is_valid
+        # basic 模式产物：至少要给出流程名称
+        return bool(artifact.get("flow_name"))
+    if design_type == "form_design":
         try:
             validate_vform3_document(artifact)
         except (ValueError, TypeError):
             return False
         return True
-    return True
+    if design_type == "category_design":
+        return bool(artifact.get("category_name"))
+    return bool(artifact)
 
 
 def _retains_previous_artifact(turns: list[dict[str, Any]]) -> bool:
@@ -340,15 +352,10 @@ def _artifact_element_ids(artifact: dict[str, Any]) -> set[str]:
 
 def _nested_widget_names(widgets: list[dict[str, Any]]) -> set[str]:
     names: set[str] = set()
-    for widget in widgets:
+    for widget in iter_widgets(widgets):
         name = (widget.get("options") or {}).get("name")
         if name:
             names.add(str(name))
-        names.update(_nested_widget_names(widget.get("widgetList") or []))
-        names.update(_nested_widget_names(widget.get("cols") or []))
-        names.update(_nested_widget_names(widget.get("tabs") or []))
-        for row in widget.get("rows") or []:
-            names.update(_nested_widget_names(row.get("cols") or []))
     return names
 
 

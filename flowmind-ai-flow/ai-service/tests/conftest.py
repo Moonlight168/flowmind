@@ -25,6 +25,8 @@ load_dotenv(_env_path)
 # 系统/集成测试固定使用独立 Redis DB，避免误清理本地开发数据。
 os.environ["REDIS_DB"] = os.getenv("TEST_REDIS_DB", "15")
 os.environ["JWT_SECRET"] = "flowmind-system-test-only-" + ("x" * 48)
+# 单元测试可能运行在无 Redis 的环境：允许 checkpoint 降级为内存存储
+os.environ.setdefault("APP_ALLOW_MEMORY_FALLBACK", "true")
 
 
 @pytest.fixture(scope="session")

@@ -80,10 +80,11 @@ def _merge_process_element(
     target = generated_elements.get(element_id)
     if target is None:
         localname = _localname(source)
-        managed_edge = localname == "sequenceFlow" and _edge_is_managed(
-            source, generated_elements
-        )
-        if localname not in _MANAGED_FLOW_ELEMENTS and not managed_edge:
+        if localname == "sequenceFlow":
+            # 生成结果中不存在的连线一律不保留：增量删除节点后其连线两端
+            # 已不在结果中，原样搬回会产生悬空引用（V006/V007）并触发校验死循环。
+            return
+        if localname not in _MANAGED_FLOW_ELEMENTS:
             process.append(deepcopy(source))
         return
     if _localname(source) in OPAQUE_BPMN_NODE_TYPES:
@@ -244,15 +245,6 @@ def _localname(element: etree._Element) -> str:
 
 def _child_identity(element: etree._Element) -> tuple[str, str | None]:
     return _localname(element), element.get("id")
-
-
-def _edge_is_managed(
-    edge: etree._Element, generated_elements: dict[str, etree._Element]
-) -> bool:
-    return all(
-        endpoint in generated_elements
-        for endpoint in (edge.get("sourceRef"), edge.get("targetRef"))
-    )
 
 
 def _align_new_edge_endpoints(

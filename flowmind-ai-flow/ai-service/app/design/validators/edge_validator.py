@@ -5,6 +5,7 @@ FlowMind 智能流程设计服务 - 连线级校验器
 """
 
 import json
+import re
 from collections import deque
 
 from app.design.validators.base import (
@@ -17,6 +18,14 @@ from app.design.validators.node_validator import GATEWAY_TYPES, _form_key_exists
 
 VIRTUAL_START = "start"
 VIRTUAL_END = "end"
+
+_CONDITION_FIELD_RE = re.compile(r"\$\{\s*([A-Za-z_][\w.]*)")
+
+
+def _first_condition_field(condition: str) -> str | None:
+    """提取字符串条件（如 ${amount > 1000}）中引用的第一个表单字段。"""
+    match = _CONDITION_FIELD_RE.search(condition)
+    return match.group(1).split(".")[0] if match else None
 
 
 class EdgeValidator:
@@ -94,16 +103,25 @@ class EdgeValidator:
         if context.forms_lookup_complete:
             for edge in edges:
                 condition = edge.get("condition")
-                if (
-                    isinstance(condition, dict)
-                    and condition.get("field") not in form_fields
-                ):
-                    errors.append(
-                        ValidationError(
-                            "EDGE_E009",
-                            f"条件字段 '{condition.get('field')}' 不存在于可用表单中",
+                if isinstance(condition, dict):
+                    # dict 形态：field 缺失（None）同样视为非法引用
+                    if condition.get("field") not in form_fields:
+                        errors.append(
+                            ValidationError(
+                                "EDGE_E009",
+                                f"条件字段 '{condition.get('field')}' 不存在于可用表单中",
+                            )
                         )
-                    )
+                elif isinstance(condition, str):
+                    # 反解析（XML → nodes）后的条件退化为字符串，同样受字段白名单约束
+                    field = _first_condition_field(condition)
+                    if field and field not in form_fields:
+                        errors.append(
+                            ValidationError(
+                                "EDGE_E009",
+                                f"条件字段 '{field}' 不存在于可用表单中",
+                            )
+                        )
 
         # EDGE_E005: 不允许自环
         for edge in edges:

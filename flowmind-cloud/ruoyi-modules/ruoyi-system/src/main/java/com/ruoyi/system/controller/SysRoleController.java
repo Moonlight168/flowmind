@@ -20,6 +20,7 @@ import com.ruoyi.common.core.web.page.TableDataInfo;
 import com.ruoyi.common.log.annotation.Log;
 import com.ruoyi.common.log.enums.BusinessType;
 import com.ruoyi.common.security.annotation.InnerAuth;
+import com.ruoyi.common.security.annotation.RequiresLogin;
 import com.ruoyi.common.security.annotation.RequiresPermissions;
 import com.ruoyi.common.security.utils.SecurityUtils;
 import com.ruoyi.system.api.domain.SysDept;
@@ -161,8 +162,12 @@ public class SysRoleController extends BaseController
 
     /**
      * 获取角色选择框列表
+     *
+     * 登录即可访问：AI 服务以用户令牌查询角色做设计校验，普通用户没有
+     * system:role:query 权限会导致设计链 403 中断。角色下拉数据（roleId/名称/标识）
+     * 属于低敏感组织元数据，分配审批人界面本就对所有用户可见。
      */
-    @RequiresPermissions("system:role:query")
+    @RequiresLogin
     @GetMapping("/optionselect")
     public AjaxResult optionselect()
     {

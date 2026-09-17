@@ -59,10 +59,15 @@ INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_mo
             - StripPrefix=1
         - id: flowmind-ai-flow
           uri: lb://flowmind-ai-flow
+          metadata:
+            response-timeout: 600000
           predicates:
             - Path=/flowmind-ai/**
           filters:
             - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: flowmind-ai
         - id: flowmind-flowable
           uri: lb://flowmind-flowable
           predicates:
@@ -77,6 +82,7 @@ security:
     enabled: true
     excludeUrls:
       - /system/notice
+      - /flowmind-ai/**
   ignore:
     whites:
       - /auth/logout
@@ -174,10 +180,15 @@ INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_mo
             - StripPrefix=1
         - id: flowmind-ai-flow
           uri: lb://flowmind-ai-flow
+          metadata:
+            response-timeout: 600000
           predicates:
             - Path=/flowmind-ai/**
           filters:
             - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: flowmind-ai
         - id: flowmind-flowable
           uri: lb://flowmind-flowable
           predicates:
@@ -192,6 +203,7 @@ security:
     enabled: true
     excludeUrls:
       - /system/notice
+      - /flowmind-ai/**
   ignore:
     whites:
       - /auth/logout
@@ -231,3 +243,16 @@ INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_mo
       discovery:
         ignored-services:
           - flowmind-ai-flow', '678901234567890abcdef123456789a', NOW(), NOW(), null, '127.0.0.1', '', '', '监控中心', 'null', 'null', 'yaml', 'null', '');
+
+-- 网关熔断降级规则（AI 路由 CircuitBreaker：异常比例≥50% 时熔断 30 秒）
+INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_modified, src_user, src_ip, app_name, tenant_id, c_desc, c_use, effect, type, c_schema, encrypted_data_key) VALUES
+(110, 'sentinel-ruoyi-gateway-degrade', 'DEFAULT_GROUP', '[
+  {
+    "resource": "flowmind-ai",
+    "count": 0.5,
+    "grade": 1,
+    "minRequestAmount": 5,
+    "statIntervalMs": 10000,
+    "timeWindow": 30
+  }
+]', 'c5a1b2d3e4f5678901234567890abcde', NOW(), NOW(), null, '127.0.0.1', '', '', '网关熔断降级规则（AI 路由）', 'null', 'null', 'json', 'null', '');

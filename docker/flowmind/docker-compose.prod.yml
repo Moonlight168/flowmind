@@ -329,8 +329,8 @@ services:
       # Nacos 配置（覆盖 .env 中的 localhost）
       - NACOS_SERVER_ADDR=flowmind-nacos:8848
       - NACOS_REGISTER_IP=flowmind-ai-service
-    ports:
-      - "8000:8000"
+    # 不发布端口：AI 服务按约定只经网关（9001 /flowmind-ai/**）访问，
+    # 避免绕过网关鉴权直连。容器网络内由服务名互访。
     depends_on:
       flowmind-redis:
         condition: service_healthy

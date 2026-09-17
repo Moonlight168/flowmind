@@ -33,7 +33,7 @@ def test_clarification_uses_needs_input_status():
 def test_ready_response_exposes_operations_and_validation(monkeypatch):
     monkeypatch.setattr(
         "app.graph.nodes.finalize.generate_bpmn_xml",
-        lambda structure, category: "<xml/>",
+        lambda structure, category, process_key="": "<xml/>",
     )
     state = {
         "design_type": "flow_design",

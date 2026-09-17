@@ -27,7 +27,6 @@ class Intent(BaseModel):
 def discriminate_intent(
     user_input: str,
     baseline_summary: str = "",
-    version_count: int = 0,
     llm=None,
 ) -> Intent:
     """判别用户意图；判别失败默认 design
@@ -35,14 +34,11 @@ def discriminate_intent(
     Args:
         user_input: 用户输入
         baseline_summary: 当前已有设计的摘要（如"3 个节点"）
-        version_count: 版本历史数量（用于 rollback 消歧）
         llm: 可注入的 LLM（测试用），None 时从统一模型运行时取
     """
     context_lines = []
     if baseline_summary:
         context_lines.append(f"当前已有设计：{baseline_summary}")
-    if version_count > 0:
-        context_lines.append(f"版本历史：共 {version_count} 个版本")
     prompt = render_prompt(
         "agents/intent.md",
         {

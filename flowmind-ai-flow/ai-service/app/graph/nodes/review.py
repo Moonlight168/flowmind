@@ -62,6 +62,10 @@ def review_node(state: AppState) -> AppState:
             f"[review] 检测到死循环，rule_ids={sorted({e.rule_id for e in result.errors})}"
         )
         state["intent"] = "error"
+        # 确定性校验失败：明确告知用户调整需求，而非伪装成可重试的系统错误
+        design_output["error_type"] = "validation_failed"
+        design_output["message"] = "生成结果反复未通过校验，请调整需求后重试"
+        design_output["retryable"] = False
         design_output["review"] = {
             "passed": False,
             "errors": [e.message for e in result.errors],

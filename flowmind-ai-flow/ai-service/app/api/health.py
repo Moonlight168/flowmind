@@ -45,10 +45,14 @@ def _model_status() -> dict[str, Any]:
     }
 
 
-@router.get("/", response_model=ResponseVO[dict[str, str]])
+@router.get("", response_model=ResponseVO[dict[str, str]])
 @log_api_endpoint()
 async def health_check(request: Request) -> ResponseVO[dict[str, str]]:
-    """健康检查接口"""
+    """健康检查接口
+
+    注册为空路径（/health 精确匹配，无尾斜杠）：经网关 StripPrefix 后，
+    尾斜杠路由的 307 重定向会丢失网关前缀导致 404。
+    """
     return ResponseVO.success(
         {
             "status": "healthy",
@@ -68,9 +72,9 @@ async def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
 @router.get("/ready", response_model=None)
 @log_api_endpoint()
 async def readiness_check(request: Request) -> ResponseVO[dict[str, Any]] | JSONResponse:
-    """设计链结构化降级未就绪时阻止实例接收流量。"""
+    """没有可用结构化模型时阻止实例接收流量。"""
     status = _model_status()
     if status["structured_fallback_ready"]:
         return ResponseVO.success(status)
-    body = ResponseVO.error(503, "结构化模型降级未就绪").model_dump()
+    body = ResponseVO.error(503, "无可用结构化模型").model_dump()
     return JSONResponse(status_code=503, content=body)

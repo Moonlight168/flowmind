@@ -3,19 +3,18 @@ FlowMind 智能流程设计服务 - 节点基类
 
 本模块提供节点装饰器，用于统一错误处理和日志记录。
 日志采用三级级别（DEBUG/INFO/ERROR），通过LOG_LEVEL环境变量配置。
+
+节点边界按约定使用 `except Exception` 兜底（仓库规范"禁止 except Exception"
+的例外）：节点异常统一转换为工作流可路由的兜底状态，白名单外的异常类型
+若在此处漏过，会在上游流式边界静默截断且无日志。
 """
 
 import time
 from collections.abc import Callable
 from functools import wraps
 
-import httpx
-import redis
-import requests
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphInterrupt
-from openai import OpenAIError
-from pydantic import ValidationError
 
 from app.graph.state import AppState
 from app.infra.logger import (
@@ -25,21 +24,6 @@ from app.infra.logger import (
 )
 
 NodeFunction = Callable[[AppState], AppState]
-NODE_EXECUTION_ERRORS = (
-    OpenAIError,
-    httpx.HTTPError,
-    redis.RedisError,
-    requests.RequestException,
-    ValidationError,
-    RuntimeError,
-    ValueError,
-    TypeError,
-    KeyError,
-    AttributeError,
-    ConnectionError,
-    TimeoutError,
-    OSError,
-)
 DESIGN_ERROR_MESSAGE = "AI 服务暂时异常，请稍后重试"
 CHAT_ERROR_MESSAGE = "抱歉，AI 服务当前不可用，请稍后重试。"
 
@@ -107,7 +91,7 @@ def node_handler(
                 return result
             except GraphInterrupt:
                 raise
-            except NODE_EXECUTION_ERRORS as e:
+            except Exception as e:
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 logger.error(
                     f"[{name}] 执行失败: {e!s}, 耗时{elapsed_ms}ms [{get_request_id()}] [{session_id}]"

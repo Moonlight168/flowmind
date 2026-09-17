@@ -13,6 +13,24 @@
       <el-button
         link
         type="info"
+        title="回退上一版"
+        :disabled="loading || !canRollback"
+        @click="handleRollback('prev')"
+      >
+        <el-icon><Back /></el-icon>
+      </el-button>
+      <el-button
+        link
+        type="info"
+        title="前进"
+        :disabled="loading || !canRedo"
+        @click="handleRedo"
+      >
+        <el-icon><Right /></el-icon>
+      </el-button>
+      <el-button
+        link
+        type="info"
         title="新建对话"
         :disabled="loading"
         @click="clearMessages"
@@ -98,7 +116,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { designStream, clearDesignState } from '@/api/workflow/design'
-import { ChatDotRound, Plus } from '@element-plus/icons-vue'
+import { ChatDotRound, Plus, Back, Right } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessageBox } from 'element-plus'
@@ -119,6 +137,11 @@ const props = defineProps({
   },
   sessionId: {
     type: String,
+    default: null
+  },
+  // 宿主提供：返回画布/设计器当前最新数据，用于每轮发送前刷新基线
+  getCurrentBaseline: {
+    type: Function,
     default: null
   }
 })
@@ -196,8 +219,11 @@ const storageKey = computed(() => {
   return `ai_design_${props.designType}_${flowKey.value}`
 })
 
-// 版本历史：每轮 AI 生成成功后存一个版本，用于"回到一开始/上一步"
+// 版本历史：每轮 AI 生成成功后存一个版本，用于"回退/前进"
 const VERSION_LIMIT = 20
+const redoVersions = ref([])
+// sessionStorage 不是响应式：版本数必须镜像到 ref，否则按钮状态会永久缓存
+const versionCount = ref(0)
 const versionKey = computed(() => {
   return `ai_design_versions_${props.designType}_${flowKey.value}`
 })
@@ -211,16 +237,25 @@ function getVersions() {
   }
 }
 
+function syncVersionCount() {
+  versionCount.value = getVersions().length
+}
+
 function saveVersion(formData) {
   const versions = getVersions()
   versions.push(cloneData(formData))
   if (versions.length > VERSION_LIMIT) versions.splice(1, 1)
   sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
+  redoVersions.value = []
+  syncVersionCount()
 }
 
 function ensureBaselineVersion() {
   if (getVersions().length === 0) saveVersion(currentFormData.value)
 }
+
+const canRollback = computed(() => versionCount.value >= 2)
+const canRedo = computed(() => redoVersions.value.length > 0)
 
 function rollbackTo(target) {
   const versions = getVersions()
@@ -229,11 +264,40 @@ function rollbackTo(target) {
   if (version) {
     currentFormData.value = cloneData(version)
     emit('fill', currentFormData.value)
-    // 截断到目标版本（丢弃之后的），这样连续"上一步"能逐级回退
+    // 截断到目标版本（丢弃之后的），这样连续"上一步"能逐级回退；
+    // 丢弃的版本进入前进栈，可重做恢复
+    redoVersions.value.push(...versions.slice(idx + 1))
     sessionStorage.setItem(versionKey.value, JSON.stringify(versions.slice(0, idx + 1)))
+    syncVersionCount()
     return true
   }
   return false
+}
+
+function handleRollback(target) {
+  if (rollbackTo(target)) {
+    messages.value.push({ role: 'assistant', content: '已回退到上一版本' })
+  } else {
+    messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
+  }
+  scrollToBottom()
+}
+
+function handleRedo() {
+  const version = redoVersions.value.pop()
+  if (!version) {
+    messages.value.push({ role: 'assistant', content: '没有可前进的版本' })
+    scrollToBottom()
+    return
+  }
+  currentFormData.value = cloneData(version)
+  emit('fill', currentFormData.value)
+  const versions = getVersions()
+  versions.push(cloneData(version))
+  sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
+  syncVersionCount()
+  messages.value.push({ role: 'assistant', content: '已前进到下一版本' })
+  scrollToBottom()
 }
 
 function saveSession() {
@@ -246,6 +310,7 @@ function saveSession() {
 function restoreSession() {
   // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
   currentFormData.value = cloneData(props.formData)
+  syncVersionCount()
   const saved = sessionStorage.getItem(storageKey.value)
   if (saved) {
     try {
@@ -281,6 +346,21 @@ function cancelCurrentRequest() {
   emit('designing', false)
 }
 
+async function refreshBaseline() {
+  // 每轮发送前从宿主取最新画布/数据：AI 增量必须基于用户当前的最新修改，
+  // 而不是打开浮窗那一刻的冻结快照。
+  if (typeof props.getCurrentBaseline !== 'function') return
+  try {
+    const fresh = await props.getCurrentBaseline()
+    if (fresh && Object.keys(fresh).length > 0) {
+      currentFormData.value = { ...currentFormData.value, ...fresh }
+      ensureBaselineVersion()
+    }
+  } catch (e) {
+    console.error('获取最新设计基线失败:', e)
+  }
+}
+
 async function handleSend() {
   if (!inputText.value.trim() || loading.value) return
 
@@ -310,6 +390,7 @@ async function handleSend() {
   let wasAborted = false
 
   try {
+    await refreshBaseline()
     await designStream(props.designType, {
       user_input: userInput,
       current_form_data: currentFormData.value,
@@ -435,6 +516,22 @@ function cloneData(value) {
 
 async function applyPreview() {
   if (!pendingPreview.value) return
+  // 生成期间画布若被手动修改过，应用会整份覆盖这些改动——先提醒用户
+  if (typeof props.getCurrentBaseline === 'function' && previewBaseline.value?.bpmnXml) {
+    try {
+      const fresh = await props.getCurrentBaseline()
+      if (fresh?.bpmnXml && fresh.bpmnXml !== previewBaseline.value.bpmnXml) {
+        await ElMessageBox.confirm(
+          '画布在 AI 生成期间被手动修改过，应用变更将覆盖这些改动，继续吗？',
+          '注意',
+          { type: 'warning', confirmButtonText: '继续应用', cancelButtonText: '取消' }
+        )
+      }
+    } catch (e) {
+      if (e === 'cancel' || e === 'close') return
+      console.error('检查画布最新状态失败:', e)
+    }
+  }
   ensureBaselineVersion()
   const formData = pendingPreview.value.form_data
   currentFormData.value = cloneData(formData)
@@ -459,6 +556,8 @@ function clearMessages() {
   discardPreview()
   messages.value = []
   pendingChoices.value = []
+  redoVersions.value = []
+  syncVersionCount()
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
   // 只清空 AI 生成的数据
   currentFormData.value = { ...props.formData }

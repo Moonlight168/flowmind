@@ -37,7 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 class RedisCheckpoint(BaseCheckpointSaver):
-    """Redis 对话存储（LangGraph 检查点标准接口 + 简化列表管理）"""
+    """Redis 对话存储（LangGraph 检查点标准接口 + 简化列表管理）
+
+    简化版数据（_save_chat_thread / save_preview）的写入失败按约定使用
+    `except Exception` 兜底静默降级（仓库规范"禁止 except Exception"的例外）：
+    列表预览是优化而非正确性，失败不得阻断主流程；主检查点路径仍然失败即抛。
+    """
 
     # LangGraph 内部前缀
     CHECKPOINT_PREFIX = "checkpoint"
@@ -290,6 +295,18 @@ class RedisCheckpoint(BaseCheckpointSaver):
         # 从线程集合中移除
         self.redis.srem(self.CHAT_THREADS_KEY, thread_id)
 
+        # 清理 LangGraph 异步持久化的中间写入键（writes:* 只写不读，
+        # 不随会话删除会残留消息内容直至 TTL）
+        cursor = 0
+        while True:
+            cursor, keys = self.redis.scan(
+                cursor, match=f"writes:*:{thread_id}:*", count=100
+            )
+            if keys:
+                self.redis.delete(*keys)
+            if cursor == 0:
+                break
+
         logger.info(f"Deleted thread: thread_id={thread_id}")
 
     def list_threads(self, limit: int = 100, prefix: str | None = None) -> list[dict]:
@@ -313,25 +330,28 @@ class RedisCheckpoint(BaseCheckpointSaver):
 
             thread_key = self._chat_thread_key(thread_id)
             data = self.redis.get(thread_key)
-            if data:
-                try:
-                    thread_data = ormsgpack.unpackb(data)
-                    threads.append(
-                        {
-                            "thread_id": thread_data.get("thread_id", thread_id),
-                            "preview": thread_data.get("preview", "新对话"),
-                            "updated_at": thread_data.get("updated_at"),
-                        }
-                    )
-                except (ormsgpack.MsgpackDecodeError, TypeError, ValueError) as e:
-                    logger.debug(f"Failed to parse thread data: {e}")
-                    threads.append(
-                        {
-                            "thread_id": thread_id,
-                            "preview": "新对话",
-                            "updated_at": None,
-                        }
-                    )
+            if not data:
+                # 会话键已过期：从集合中惰性清理，避免集合只增不减导致全量扫描劣化
+                self.redis.srem(self.CHAT_THREADS_KEY, thread_id)
+                continue
+            try:
+                thread_data = ormsgpack.unpackb(data)
+                threads.append(
+                    {
+                        "thread_id": thread_data.get("thread_id", thread_id),
+                        "preview": thread_data.get("preview", "新对话"),
+                        "updated_at": thread_data.get("updated_at"),
+                    }
+                )
+            except (ormsgpack.MsgpackDecodeError, TypeError, ValueError) as e:
+                logger.debug(f"Failed to parse thread data: {e}")
+                threads.append(
+                    {
+                        "thread_id": thread_id,
+                        "preview": "新对话",
+                        "updated_at": None,
+                    }
+                )
 
         threads.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
         return threads[:limit]

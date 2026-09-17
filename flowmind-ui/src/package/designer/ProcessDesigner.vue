@@ -363,6 +363,9 @@ export default {
         this.processReZoom();
       } catch (e) {
         console.error(`[Process Designer Warn]: ${e?.message || e}`);
+        // 导入失败时 bpmn-js 已清空画布：必须通知宿主层，
+        // 否则用户会把空图保存进模型
+        this.$emit("import-error", e?.message || e);
       }
     },
 

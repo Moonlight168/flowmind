@@ -70,33 +70,4 @@ def log_api_endpoint(skip_paths: list[str] | None = None):
     return decorator
 
 
-def log_node_execution(node: str):
-    """节点执行装饰器 - 自动绑定 node 名称并记录执行信息"""
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = func(*args, **kwargs)
-                logger.info(
-                    "节点执行完成",
-                    node=node,
-                    elapsed_ms=int((time.time() - start_time) * 1000),
-                )
-                return result
-            except Exception as e:
-                logger.error(
-                    "节点执行失败",
-                    node=node,
-                    error=str(e),
-                    elapsed_ms=int((time.time() - start_time) * 1000),
-                )
-                raise
-
-        return wrapper
-
-    return decorator
-
-
-__all__ = ["log_api_endpoint", "log_node_execution"]
+__all__ = ["log_api_endpoint"]

@@ -4,9 +4,10 @@
 """
 
 import json
-from collections.abc import Iterator
 from copy import deepcopy
 from typing import Any
+
+from app.design.widget_tree import iter_child_lists
 
 
 def apply_design_operations(
@@ -183,12 +184,9 @@ def _remove_flow_node(result: dict[str, Any], node_id: str | None) -> None:
         if edge.get("source") != node_id and edge.get("target") != node_id
     ]
     if len(incoming) == 1 and len(outgoing) == 1:
-        edges.append(
-            {
-                "source": incoming[0].get("source"),
-                "target": outgoing[0].get("target"),
-            }
-        )
+        # 重连边继承原入边的元数据（name/condition/is_default），仅改变 target，
+        # 避免默认分支标记、条件表达式等信息随删除丢失。
+        edges.append({**deepcopy(incoming[0]), "target": outgoing[0].get("target")})
 
 
 def _change_flow_edge(
@@ -304,29 +302,11 @@ def _find_widget_location(
     for widget in widgets:
         if _widget_name(widget) == name:
             return widgets, widget
-        for children in _widget_child_lists(widget):
+        for children in iter_child_lists(widget):
             location = _find_widget_location(children, name)
             if location:
                 return location
     return None
-
-
-def _widget_child_lists(widget: dict[str, Any]) -> Iterator[list[dict[str, Any]]]:
-    direct = widget.get("widgetList")
-    if isinstance(direct, list):
-        yield direct
-    for key in ("cols", "tabs", "rows"):
-        for child in widget.get(key) or []:
-            children = child.get("widgetList") if isinstance(child, dict) else None
-            if isinstance(children, list):
-                yield children
-            if key == "rows" and isinstance(child, dict):
-                for cell in child.get("cols") or child.get("cells") or []:
-                    cell_children = (
-                        cell.get("widgetList") if isinstance(cell, dict) else None
-                    )
-                    if isinstance(cell_children, list):
-                        yield cell_children
 
 
 def _widget_insert_index(widgets: list[dict[str, Any]], after_name: str | None) -> int:

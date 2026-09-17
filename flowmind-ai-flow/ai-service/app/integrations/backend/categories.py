@@ -10,7 +10,7 @@ import requests
 
 from app.config.settings import settings
 from app.infra.logger import logger
-from app.integrations.backend.client import BackendClient
+from app.integrations.backend.client import BackendClient, BackendLookupError
 
 
 class CategoryClient(BackendClient):
@@ -206,10 +206,5 @@ class CategoryClient(BackendClient):
         created = self.create_category(category_name, category_code, remark)
         if created:
             return created
-
-        logger.warning(f"分类创建失败，返回传入参数：{category_name}")
-        return {
-            "categoryName": category_name,
-            "code": category_code,
-            "remark": remark,
-        }
+        # 创建失败必须失败可见，返回入参会伪装成"分类已存在"让调用方继续向下
+        raise BackendLookupError(f"分类创建失败：{category_name}")

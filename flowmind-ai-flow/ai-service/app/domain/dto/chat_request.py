@@ -16,4 +16,6 @@ class ChatRequestDTO(BaseModel):
     """
 
     user_input: str = Field(..., max_length=2000, description="用户输入文本")
-    thread_id: str | None = Field(None, description="会话线程 ID")
+    thread_id: str | None = Field(
+        None, max_length=100, description="会话线程 ID（参与 Redis key 拼接，限制长度）"
+    )

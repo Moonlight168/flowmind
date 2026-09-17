@@ -47,3 +47,13 @@ spring:
             groupId: DEFAULT_GROUP
             data-type: json
             rule-type: gw-flow
+        # 熔断降级规则（AI 路由 CircuitBreaker 使用）
+        ds-degrade:
+          nacos:
+            username: nacos
+            password: nacos
+            server-addr: ${SPRING_CLOUD_NACOS_CONFIG_SERVER_ADDR:localhost:18848}
+            dataId: sentinel-ruoyi-gateway-degrade
+            groupId: DEFAULT_GROUP
+            data-type: json
+            rule-type: degrade

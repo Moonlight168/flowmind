@@ -12,7 +12,9 @@ import lxml.etree as etree
 Bounds = tuple[float, float, float, float]
 
 
-def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
+def generate_bpmn_xml(
+    bpmn_structure: dict, category: dict, process_key: str = ""
+) -> str:
     """生成 BPMN XML 格式的流程定义
 
     支持所有节点类型：USER_TASK、EXCLUSIVE_GATEWAY、PARALLEL_GATEWAY、INCLUSIVE_GATEWAY、
@@ -23,14 +25,20 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
     Args:
         bpmn_structure: 流程结构，包含 nodes 列表和可选的 edges 列表
         category: 分类信息
-
-    Returns:
-        BPMN XML 字符串
+        process_key: 流程标识（模型的 modelKey/flow_key）。
+            Flowable 以 process id 作为流程定义 key，必须与模型标识一致，
+            否则按模型标识反查流程定义会失败；同分类模型还会互相撞 key。
     """
     nodes = bpmn_structure.get("nodes", [])
     custom_edges = bpmn_structure.get("edges", [])
     category_name = category.get("category_name", category.get("categoryName", "流程"))
-    process_id = f"Process_{category.get('code', 'default')}"
+    if process_key:
+        # 清洗非法字符；清洗后为空（如全特殊字符）则回退到分类编码
+        process_id = re.sub(r"[^A-Za-z0-9_-]", "_", process_key) or (
+            f"Process_{category.get('code') or 'default'}"
+        )
+    else:
+        process_id = f"Process_{category.get('code') or 'default'}"
 
     ns = _get_bpmn_namespaces()
     flowable_ns = "http://flowable.org/bpmn"
@@ -46,16 +54,13 @@ def generate_bpmn_xml(bpmn_structure: dict, category: dict) -> str:
     # 创建所有节点元素
     _create_node_elements(process, ns, nodes, node_ids, flowable_ns)
 
-    # 创建连线
-    custom_flow_ids: list[str] = []
-    if custom_edges:
-        custom_flow_ids = _create_custom_edges(process, ns, custom_edges, nodes)
-    else:
-        _create_auto_edges(process, ns, nodes, node_ids)
+    # 创建连线（无自定义 edges 时按线性顺序自动生成，走同一条创建路径）
+    edges = custom_edges or _build_auto_edges_list(nodes, node_ids)
+    custom_flow_ids = _create_custom_edges(process, ns, edges, nodes)
 
     # 生成 BPMNDI 画布布局
     _create_layered_bpmn_diagram(
-        definitions, ns, process_id, nodes, node_ids, custom_edges, custom_flow_ids
+        definitions, ns, process_id, nodes, node_ids, edges, custom_flow_ids
     )
 
     return etree.tostring(
@@ -282,93 +287,6 @@ def _create_node_elements(
             etree.SubElement(process, f"{{{bpmn}}}group", **attrs)
 
 
-def _create_auto_edges(
-    process: etree._Element,
-    ns: dict[str, str],
-    nodes: list[dict],
-    node_ids: list[str],
-) -> None:
-    """自动生成线性连线：Start -> Node1 -> Node2 -> ... -> End"""
-    bpmn = ns["bpmn2"]
-    start_id = "StartEvent_1"
-    end_id = "EndEvent_1"
-    flowable_ns = "http://flowable.org/bpmn"
-
-    # 从 nodes 中查找 START_EVENT 节点获取 form_key
-    start_form_key = ""
-    for node in nodes:
-        if node.get("type", "").upper() == "START_EVENT" and node.get("form_key"):
-            start_form_key = node["form_key"]
-            break
-
-    # 创建开始事件
-    start_attrs = {"id": start_id, "name": "开始"}
-    if start_form_key:
-        # 统一格式：前端 ElementForm 使用 key_{id}
-        if not start_form_key.startswith("key_"):
-            start_form_key = f"key_{start_form_key}"
-        start_attrs[f"{{{flowable_ns}}}formKey"] = start_form_key
-    start_event = etree.SubElement(process, f"{{{bpmn}}}startEvent", **start_attrs)
-    if nodes:
-        etree.SubElement(start_event, f"{{{bpmn}}}outgoing").text = "Flow_1"
-    else:
-        etree.SubElement(start_event, f"{{{bpmn}}}outgoing").text = "Flow_End"
-
-    # 创建结束事件
-    end_event = etree.SubElement(process, f"{{{bpmn}}}endEvent", id=end_id, name="结束")
-    etree.SubElement(end_event, f"{{{bpmn}}}incoming").text = "Flow_End"
-
-    if not nodes:
-        etree.SubElement(
-            process,
-            f"{{{bpmn}}}sequenceFlow",
-            id="Flow_End",
-            sourceRef=start_id,
-            targetRef=end_id,
-        )
-        return
-
-    # 为每个节点添加 incoming/outgoing
-    for i, node_id in enumerate(node_ids):
-        node_elem = process.find(f".//*[@id='{node_id}']")
-        if node_elem is None:
-            continue
-        etree.SubElement(node_elem, f"{{{bpmn}}}incoming").text = (
-            "Flow_1" if i == 0 else f"Flow_{i + 1}"
-        )
-        etree.SubElement(node_elem, f"{{{bpmn}}}outgoing").text = (
-            "Flow_End" if i == len(node_ids) - 1 else f"Flow_{i + 2}"
-        )
-
-    # 开始 -> 第一个节点
-    etree.SubElement(
-        process,
-        f"{{{bpmn}}}sequenceFlow",
-        id="Flow_1",
-        sourceRef=start_id,
-        targetRef=node_ids[0],
-    )
-
-    # 节点之间
-    for i in range(len(node_ids) - 1):
-        etree.SubElement(
-            process,
-            f"{{{bpmn}}}sequenceFlow",
-            id=f"Flow_{i + 2}",
-            sourceRef=node_ids[i],
-            targetRef=node_ids[i + 1],
-        )
-
-    # 最后一个节点 -> 结束
-    etree.SubElement(
-        process,
-        f"{{{bpmn}}}sequenceFlow",
-        id="Flow_End",
-        sourceRef=node_ids[-1],
-        targetRef=end_id,
-    )
-
-
 def _unique_flow_ids(edges: list[dict]) -> list[str]:
     """Fill missing IDs without colliding with IDs preserved from the baseline."""
     used = {
@@ -398,7 +316,7 @@ def _create_custom_edges(
     edges: list[dict],
     nodes: list[dict] | None = None,
 ) -> list[str]:
-    """根据自定义 edges 创建连线"""
+    """根据 edges 创建连线与开始/结束事件（无自定义边时传入自动线性边列表）。"""
     bpmn = ns["bpmn2"]
     start_id = "StartEvent_1"
     end_id = "EndEvent_1"

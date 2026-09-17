@@ -15,8 +15,14 @@ try:
     checkpointer = RedisCheckpoint()
     checkpointer.redis.ping()
 except (RedisError, OSError, ValueError, TypeError) as exc:
-    if not settings.app.debug:
-        raise RuntimeError("Redis checkpoint 初始化失败，生产环境禁止降级") from exc
+    # 会话数据必须可靠：Redis 连不上直接拒绝启动，避免生产静默降级为
+    # 内存存储（重启即丢会话、会话锁失效）。显式配置 APP_ALLOW_MEMORY_FALLBACK=true
+    # 才允许内存降级，仅供无 Redis 的本地调试。
+    if not settings.app.allow_memory_fallback:
+        raise RuntimeError(
+            "Redis checkpoint 初始化失败，拒绝启动（本地调试可设置 "
+            "APP_ALLOW_MEMORY_FALLBACK=true 允许内存降级）"
+        ) from exc
     logger.warning(f"Redis checkpoint 初始化失败，降级到 MemorySaver: {exc!s}")
     checkpointer = MemorySaver()
 

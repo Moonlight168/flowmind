@@ -33,8 +33,8 @@ async def lifespan(app: FastAPI):
 
     if not settings.jwt_secret:
         logger.warning(
-            "未配置 JWT_SECRET：当前启用签名校验后所有受保护接口都会 403，"
-            "请配置与 RuoYi 签发端一致的密钥（HS512 建议 ≥64 字节）"
+            "未配置 JWT_SECRET：AI 服务自身不校验签名（按约定由网关统一鉴权），"
+            "请确保服务端口不对外直接暴露"
         )
 
     # 注册到 Nacos（失败时会抛出异常）
@@ -56,9 +56,10 @@ app = FastAPI(
     title="FlowMind 智能流程设计服务",
     description="基于规则约束和大模型辅助的智能流程设计服务",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    # 生产环境关闭 API 文档（暴露模型拓扑等内部信息），debug 模式保留便于联调
+    docs_url="/docs" if settings.app.debug else None,
+    redoc_url="/redoc" if settings.app.debug else None,
+    openapi_url="/openapi.json" if settings.app.debug else None,
     lifespan=lifespan,
 )
 

@@ -4,8 +4,6 @@ FlowMind 智能流程设计服务 - 健康检查单元测试
 验证模型健康接口只输出脱敏后的运行时配置。
 """
 
-import json
-
 import pytest
 
 from app.api import health
@@ -55,29 +53,28 @@ async def test_model_health_uses_safe_runtime_description(
         "fallback_enabled": True,
         "fallback_max_retries": 3,
         "eligible_structured_provider_count": 1,
-        "structured_fallback_ready": False,
-        "not_ready_reasons": ["structured_provider_count_lt_2"],
+        "structured_fallback_ready": True,
+        "not_ready_reasons": [],
         "providers": providers,
     }
     assert "api_key" not in str(result.data)
     assert "base_url" not in str(result.data)
 
 
-async def test_readiness_returns_503_without_structured_fallback(
+async def test_readiness_returns_503_without_any_configured_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(health, "get_model_runtime", lambda: _runtime("only"))
+    monkeypatch.setattr(health, "get_model_runtime", lambda: _runtime())
 
     response = await health.readiness_check.__wrapped__(None)
 
     assert response.status_code == 503
-    assert json.loads(response.body)["message"] == "结构化模型降级未就绪"
 
 
-async def test_readiness_accepts_two_structured_providers(
+async def test_readiness_accepts_single_structured_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = _runtime("primary", "backup")
+    runtime = _runtime("primary")
     monkeypatch.setattr(health, "get_model_runtime", lambda: runtime)
 
     response = await health.readiness_check.__wrapped__(None)
@@ -86,29 +83,28 @@ async def test_readiness_accepts_two_structured_providers(
     assert response.data["structured_fallback_ready"] is True
 
 
-async def test_readiness_rejects_disabled_fallback(
+async def test_readiness_accepts_disabled_fallback_with_configured_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = _runtime("primary", "backup", enabled=False)
+    # 降级开关关闭不影响就绪判定：只要有一个可用模型即可接流量
+    runtime = _runtime("primary", enabled=False)
     monkeypatch.setattr(health, "get_model_runtime", lambda: runtime)
 
     response = await health.readiness_check.__wrapped__(None)
 
-    assert response.status_code == 503
+    assert response.code == 200
+    assert runtime.describe_readiness()["fallback_enabled"] is False
 
 
-async def test_readiness_rejects_zero_retry_budget(
+async def test_readiness_accepts_zero_retry_budget_with_configured_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    runtime = _runtime("primary", "backup", max_retries=0)
+    runtime = _runtime("primary", max_retries=0)
     monkeypatch.setattr(health, "get_model_runtime", lambda: runtime)
 
     response = await health.readiness_check.__wrapped__(None)
 
-    assert response.status_code == 503
-    assert "fallback_retry_budget_zero" in runtime.describe_readiness()[
-        "not_ready_reasons"
-    ]
+    assert response.code == 200
 
 
 @pytest.mark.parametrize(
@@ -126,9 +122,10 @@ async def test_readiness_rejects_zero_retry_budget(
         },
     ],
 )
-async def test_readiness_rejects_invalid_provider(
+async def test_readiness_excludes_invalid_provider_from_candidates(
     monkeypatch: pytest.MonkeyPatch, backup_config: dict[str, str]
 ) -> None:
+    # 未配置的占位 Provider 不进降级候选：不影响就绪判定，也不吃重试预算
     runtime = ModelRuntime(
         providers={
             "primary": {
@@ -147,5 +144,5 @@ async def test_readiness_rejects_invalid_provider(
 
     response = await health.readiness_check.__wrapped__(None)
 
-    assert response.status_code == 503
+    assert response.code == 200
     assert runtime.describe_readiness()["eligible_structured_provider_count"] == 1

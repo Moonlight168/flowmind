@@ -205,18 +205,10 @@ class ModelRuntime:
 
     def describe_readiness(self) -> dict[str, Any]:
         """返回结构化降级候选和具体未就绪原因。"""
-        eligible = [
-            name
-            for name in self._candidates(structured=True)
-            if self._provider_is_configured(name)
-        ]
+        eligible = self._candidates(structured=True)
         reasons = []
-        if not self._config.enabled:
-            reasons.append("fallback_disabled")
-        if self._config.max_retries < 1:
-            reasons.append("fallback_retry_budget_zero")
-        if len(eligible) < 2:
-            reasons.append("structured_provider_count_lt_2")
+        if len(eligible) < 1:
+            reasons.append("no_configured_structured_provider")
         return {
             "fallback_enabled": self._config.enabled,
             "fallback_max_retries": self._config.max_retries,
@@ -226,7 +218,13 @@ class ModelRuntime:
         }
 
     def _candidates(self, structured: bool) -> list[str]:
-        candidates = [name for name in self._priority if name in self._providers]
+        # 未配置（占位/示例值）的 Provider 不算可用模型，不进降级候选，
+        # 否则它们会吃掉重试预算，让真正可用的备用 Provider 永远轮不到。
+        candidates = [
+            name
+            for name in self._priority
+            if name in self._providers and self._provider_is_configured(name)
+        ]
         if structured:
             candidates = [
                 name

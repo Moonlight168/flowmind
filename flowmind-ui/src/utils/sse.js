@@ -1,4 +1,25 @@
 import { getToken } from '@/utils/auth'
+import { promptRelogin } from '@/utils/relogin'
+
+/**
+ * HTTP 层失败：读取响应体错误信息；401 走与 request.js 一致的重新登录引导。
+ */
+async function raiseHttpError(response) {
+  let message = `请求失败: ${response.status}`
+  try {
+    const body = await response.json()
+    if (body?.message || body?.msg) {
+      message = body.message || body.msg
+    }
+  } catch (e) {
+    // 响应体不是 JSON（如网关返回的纯文本错误），保留状态码信息
+  }
+  if (response.status === 401) {
+    promptRelogin()
+    throw new Error('登录状态已过期，请重新登录')
+  }
+  throw new Error(message)
+}
 
 /**
  * 发起 POST SSE 请求并逐条解析 data 事件。
@@ -16,7 +37,7 @@ export async function postSse(path, data, onEvent, options = {}) {
   })
 
   if (!response.ok) {
-    throw new Error(`请求失败: ${response.status}`)
+    await raiseHttpError(response)
   }
   if (!response.body) {
     throw new Error('浏览器不支持流式响应')

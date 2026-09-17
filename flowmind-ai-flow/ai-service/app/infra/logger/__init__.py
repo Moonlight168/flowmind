@@ -12,7 +12,6 @@ Usage:
 
 from .decorators import (
     log_api_endpoint,
-    log_node_execution,
 )
 from .logger_config import (
     bind_contextvars,
@@ -42,7 +41,6 @@ __all__ = [
     "get_trace_id",
     "log_api_endpoint",
     "log_context",
-    "log_node_execution",
     "logger",
     "set_request_id",
     "set_session_id",

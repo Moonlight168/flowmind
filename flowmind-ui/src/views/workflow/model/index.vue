@@ -132,6 +132,7 @@
           :designer-form="designerForm.form"
           :bpmn-xml="designerPreviewData?.bpmn_xml || bpmnXml"
           @save="onSaveDesigner"
+          @import-error="onAiImportError"
         >
           <template #custom-buttons>
             <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
@@ -151,6 +152,7 @@
       designType="flow"
       mode="design"
       :formData="designerFlowInfo"
+      :get-current-baseline="getCurrentBaseline"
       @preview="handleAiPreview"
       @discard="discardAiPreview"
       @fill="handleAiFill"
@@ -502,60 +504,68 @@ const handleAiDesignBasic = () => {
   aiDesignBasicVisible.value = true;
 };
 
-/** 基础信息表单 AI 填充 */
+/** 基础信息表单 AI 填充（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFillBasic = (data) => {
   if (!data) return;
-  if (Object.hasOwn(data, 'flow_name')) {
-    form.value.modelName = data.flow_name;
+  const flowName = data.flow_name || data.modelName;
+  if (flowName) {
+    form.value.modelName = flowName;
   }
-  if (Object.hasOwn(data, 'code')) {
-    form.value.category = data.code;
+  const category = data.code || data.category;
+  if (category) {
+    form.value.category = category;
   }
-  if (Object.hasOwn(data, 'description')) {
+  if (data.description) {
     form.value.description = data.description;
   }
-  if (Object.hasOwn(data, 'flow_key')) {
-    form.value.modelKey = data.flow_key;
+  // 值有效才覆盖：后端可能返回 flow_key: null，直接赋值会清空模型标识
+  const flowKey = data.flow_key || data.modelKey;
+  if (flowKey) {
+    form.value.modelKey = flowKey;
   }
 };
 
-/** 可视化设计 AI 设计按钮 */
-const handleAiDesign = async () => {
-  // 从设计器获取最新的 BPMN XML（包括未保存的修改）
+/** AI 浮窗每轮发送前调用的最新基线：画布 XML + 流程基本信息 */
+const getCurrentBaseline = async () => {
+  let latestXml = designerFlowInfo.value.bpmnXml;
   if (modelDesignerRef.value) {
-    const latestXml = await modelDesignerRef.value.getCurrentXml();
-    if (latestXml) {
-      bpmnXml.value = latestXml;
-    }
+    const xml = await modelDesignerRef.value.getCurrentXml();
+    if (xml) latestXml = xml;
   }
-  // 同步流程基本信息到 designerFlowInfo
-  designerFlowInfo.value = {
+  return {
     ...designerFlowInfo.value,
     modelId: designerForm.modelId,
     modelName: designerForm.form.processName || designerFlowInfo.value.modelName || '',
     modelKey: designerForm.form.processKey || designerFlowInfo.value.modelKey || '',
-    category: designerFlowInfo.value.category || '',
-    description: designerFlowInfo.value.description || '',
-    bpmnXml: bpmnXml.value,
+    bpmnXml: latestXml,
   };
+};
+
+/** 可视化设计 AI 设计按钮：同步最新画布后打开浮窗 */
+const handleAiDesign = async () => {
+  designerFlowInfo.value = await getCurrentBaseline();
+  bpmnXml.value = designerFlowInfo.value.bpmnXml;
   // 等待 Vue 更新后再打开弹窗
   await nextTick();
   aiDesignVisible.value = true;
 };
 
-/** 可视化设计 AI 填充 */
+/** 可视化设计 AI 填充（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (data) => {
   if (!data) return;
   // 填充 BPMN XML 到设计器
-  if (data.bpmn_xml && data.bpmn_xml.trim()) {
-    bpmnXml.value = data.bpmn_xml;
+  const xml = data.bpmn_xml || data.bpmnXml;
+  if (xml && xml.trim()) {
+    bpmnXml.value = xml;
   }
   // 填充流程基本信息
-  if (data.flow_name) {
-    designerForm.form.processName = data.flow_name;
+  const flowName = data.flow_name || data.flowName;
+  if (flowName) {
+    designerForm.form.processName = flowName;
   }
-  if (data.flow_key) {
-    designerForm.form.processKey = data.flow_key;
+  const flowKey = data.flow_key || data.flowKey;
+  if (flowKey) {
+    designerForm.form.processKey = flowKey;
   }
   designerPreviewData.value = null;
 };
@@ -566,6 +576,13 @@ const handleAiPreview = (data) => {
 
 const discardAiPreview = () => {
   designerPreviewData.value = null;
+};
+
+/** AI 预览 XML 渲染失败：丢弃预览回退到上一次有效设计，避免保存空图 */
+const onAiImportError = () => {
+  if (!designerPreviewData.value) return;
+  designerPreviewData.value = null;
+  proxy?.$modal.msgError('AI 生成的流程图形渲染失败，已回退到上一次有效的设计');
 };
 
 /** AI 生成状态：开始/结束 */

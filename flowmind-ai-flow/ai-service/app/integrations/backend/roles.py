@@ -23,16 +23,20 @@ class RoleClient(BackendClient):
         return settings.backend.role_api_path
 
     def search_roles(self, role_name: str | None = None) -> list[dict[str, Any]]:
-        """搜索角色（支持按名称搜索）
+        """搜索角色（全量获取后按名称过滤）
 
-        Args:
-            role_name: 角色名称（可选）
-
-        Returns:
-            匹配的角色列表，不存在返回空列表
+        使用 /optionselect 而非 /list：
+        - /list 需要 system:role:list 权限，非管理员用户会 403 并中断设计链；
+        - /list 是分页接口（默认 10 条），角色较多时会被截断误判"角色不存在"。
+        optionselect 登录即可用且返回全量，字段与校验器（roleId）兼容。
         """
-        url = f"{self.base_url}{self.api_path}/list"
-        params = {"roleName": role_name} if role_name else {}
-        rows = self._get_list(url, params=params, resource_name="角色")
+        url = f"{self.base_url}{self.api_path}/optionselect"
+        rows = self._get_list(url, params={}, resource_name="角色")
+        if role_name:
+            rows = [
+                row
+                for row in rows
+                if role_name in str(row.get("roleName") or row.get("role_name") or "")
+            ]
         logger.info(f"搜索到 {len(rows)} 个角色")
         return rows

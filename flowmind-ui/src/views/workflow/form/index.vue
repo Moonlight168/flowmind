@@ -84,6 +84,7 @@
       v-model="aiDesignVisible"
       designType="form"
       :formData="form"
+      :get-current-baseline="getCurrentBaseline"
       @preview="handleAiPreview"
       @discard="discardAiPreview"
       @fill="handleAiFill"
@@ -300,26 +301,32 @@ const handleDelete = async (row) => {
   proxy?.$modal.msgSuccess("删除成功");
 }
 
-/** AI 设计按钮 */
-const handleAiDesign = () => {
-  // 同步设计器的最新数据到 form.value，确保 AiChatWindow 能获取到
+/** AI 浮窗每轮发送前调用的最新基线：表单设计器当前 JSON + 表单信息 */
+const getCurrentBaseline = () => {
   if (vfDesignerRef.value && vfDesignerRef.value.getFormJson) {
     const formJson = vfDesignerRef.value.getFormJson();
     if (formJson && Object.keys(formJson).length > 0) {
       form.value.content = JSON.stringify(formJson);
     }
   }
+  return { ...form.value };
+};
+
+/** AI 设计按钮：同步设计器最新数据后打开浮窗 */
+const handleAiDesign = () => {
+  getCurrentBaseline();
   aiDesignVisible.value = true;
 };
 
-/** AI 填充表单 */
+/** AI 填充表单（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (data) => {
   // data 是 form_data（完整 VForm3 JSON + form_name）
   if (!data) return;
 
   // 更新表单名称
-  if (data.form_name) {
-    form.value.formName = data.form_name;
+  const formName = data.form_name || data.formName;
+  if (formName) {
+    form.value.formName = formName;
   }
 
   // 提取 VForm3 需要的核心字段，存储到 form.value.content

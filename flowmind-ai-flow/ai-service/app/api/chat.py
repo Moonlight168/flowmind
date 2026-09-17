@@ -10,11 +10,9 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import quote, unquote
 
-import httpx
 import redis
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from openai import OpenAIError
 
 from app.api._sse import to_async_stream
 from app.api.deps import require_auth
@@ -27,7 +25,6 @@ from app.graph.chat_graph import (
     stream_chat_workflow,
 )
 from app.infra.logger import generate_trace_id, logger, set_trace_id
-from app.llm import PartialStreamError
 
 router = APIRouter(
     prefix="/chat",
@@ -98,16 +95,10 @@ def chat_stream(
                 trace_id=trace_id,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except (
-            OpenAIError,
-            httpx.HTTPError,
-            redis.RedisError,
-            RuntimeError,
-            ValueError,
-            OSError,
-            PartialStreamError,
-        ) as exc:
-            logger.error(f"[chat-stream] 流式调用失败: {exc}")
+        except Exception as exc:
+            # 流式边界兜底（与设计端点一致）：白名单外的异常会穿透到桥接层
+            # 造成流静默截断且服务端无日志，这里统一转为 error 事件。
+            logger.error(f"[chat-stream] 流式调用失败: {exc}", exc_info=True)
             error = {"type": "error", "message": "AI 服务暂时异常，请稍后重试"}
             yield f"data: {json.dumps(error, ensure_ascii=False)}\n\n"
 
@@ -126,7 +117,7 @@ async def get_chat_state(
     """获取会话状态和消息历史"""
     state = get_chat_workflow_state(_chat_thread_id(current_user, thread_id))
     if state is None:
-        return ResponseVO.error("会话不存在或已过期", code=404)
+        return ResponseVO.error(404, "会话不存在或已过期")
 
     return ResponseVO.success({"messages": state.get("messages", [])})
 
@@ -165,10 +156,10 @@ async def batch_delete_chat_state(
 
 
 @router.get("/history", response_model=ResponseVO[list[dict[str, Any]]])
-async def get_chat_history(
+def get_chat_history(
     current_user: TokenUser = Depends(require_auth),
 ) -> ResponseVO[list[dict[str, Any]]]:
-    """获取会话历史列表"""
+    """获取会话历史列表（同步函数：内部为阻塞式 Redis 调用，由 FastAPI 线程池执行）"""
     try:
         checkpointer = chat_workflow.checkpointer
         if not hasattr(checkpointer, "list_threads"):

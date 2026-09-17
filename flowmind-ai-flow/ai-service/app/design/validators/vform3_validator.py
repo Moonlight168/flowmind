@@ -8,6 +8,7 @@ from app.design.validators.base import (
     ValidatorContext,
 )
 from app.design.vform3_transformer import transform_to_vform3
+from app.design.widget_tree import iter_widgets
 
 
 class VForm3Validator:
@@ -29,20 +30,10 @@ def validate_vform3_document(document: dict) -> None:
         raise ValueError("widgetList 必须是数组")
     if not isinstance(document.get("formConfig"), dict):
         raise ValueError("formConfig 必须是对象")
-    for widget in _walk_document_widgets(document["widgetList"]):
+    for widget in iter_widgets(document["widgetList"]):
         if not all(key in widget for key in ("id", "key", "type", "options")):
             if widget.get("internal") and all(
                 key in widget for key in ("id", "type", "options")
             ):
                 continue
             raise ValueError("组件缺少 VForm3 必需字段")
-
-
-def _walk_document_widgets(widgets: list[dict]):
-    for widget in widgets:
-        yield widget
-        yield from _walk_document_widgets(widget.get("widgetList") or [])
-        yield from _walk_document_widgets(widget.get("cols") or [])
-        yield from _walk_document_widgets(widget.get("tabs") or [])
-        for row in widget.get("rows") or []:
-            yield from _walk_document_widgets(row.get("cols") or [])

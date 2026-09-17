@@ -52,6 +52,12 @@
             <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
 
+        <!-- Sentinel 熔断器（AI 路由快速失败，避免 AI 服务不可用时请求压满网关） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-sentinel</artifactId>
+        </dependency>
+
         <!-- SpringBoot Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

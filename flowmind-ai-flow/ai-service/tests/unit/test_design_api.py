@@ -1,18 +1,30 @@
 """Design API conversation namespace tests."""
 
 from app.api.design import SSE_HEADERS, _design_thread_id, _safe_stream_error
+from app.core.auth import TokenUser
+
+
+def _user(user_id: int, user_key: str) -> TokenUser:
+    return TokenUser(user_id=user_id, username="test", user_key=user_key)
 
 
 def test_design_thread_namespace_separates_artifact_mode_and_user():
-    base = _design_thread_id("flow_design", "user-a", "design", "artifact-1")
-    assert base != _design_thread_id("flow_design", "user-a", "basic", "artifact-1")
-    assert base != _design_thread_id("form_design", "user-a", "design", "artifact-1")
-    assert base != _design_thread_id("flow_design", "user-b", "design", "artifact-1")
+    base = _design_thread_id("flow_design", _user(1, "key-a"), "design", "artifact-1")
+    assert base != _design_thread_id("flow_design", _user(1, "key-a"), "basic", "artifact-1")
+    assert base != _design_thread_id("form_design", _user(1, "key-a"), "design", "artifact-1")
+    assert base != _design_thread_id("flow_design", _user(2, "key-a"), "design", "artifact-1")
+
+
+def test_design_thread_namespace_is_stable_across_relogin():
+    # 隔离键使用 user_id：同一用户重新登录（user_key 变化）后会话保持连续
+    first = _design_thread_id("flow_design", _user(1, "key-old"), "design", "artifact-1")
+    second = _design_thread_id("flow_design", _user(1, "key-new"), "design", "artifact-1")
+    assert first == second
 
 
 def test_design_thread_namespace_does_not_expose_raw_business_identifier():
     thread_id = _design_thread_id(
-        "flow_design", "user-a", "design", "sensitive-business-key"
+        "flow_design", _user(1, "key-a"), "design", "sensitive-business-key"
     )
     assert "sensitive-business-key" not in thread_id
 

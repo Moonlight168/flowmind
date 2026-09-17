@@ -163,7 +163,7 @@ const { proxy } = getCurrentInstance()
 const route = useRoute()
 
 // 已有 AI 设计按钮的页面，隐藏全局助手
-const PAGE_WITH_AI_DESIGN = ['/process/model', '/process/form', '/process/category']
+const PAGE_WITH_AI_DESIGN = ['/workflow/model', '/workflow/form', '/workflow/category']
 const hasPageAiDesign = computed(() => PAGE_WITH_AI_DESIGN.includes(route.path))
 
 // 引入 Pinia Store
@@ -503,9 +503,6 @@ defineExpose({
 
 // 生命周期
 onMounted(async () => {
-  // 监听打开事件
-  window.addEventListener('open-ai-assistant', handleOpenAssistant)
-
   // 恢复会话
   if (aiSession.hasActiveSession) {
     const chatHistory = await aiSession.restoreSession()
@@ -517,15 +514,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cancelCurrentRequest()
-  window.removeEventListener('open-ai-assistant', handleOpenAssistant)
 })
-
-/**
- * 处理打开 AI 助手事件
- */
-function handleOpenAssistant() {
-  isVisible.value = true
-}
 </script>
 
 <style lang="scss" scoped>

@@ -12,6 +12,7 @@ from app.design.validators.base import (
     ValidationResult,
     ValidatorContext,
 )
+from app.design.widget_tree import iter_widgets
 
 # 用户指令中表示"删除"意图的关键词
 DELETE_KEYWORDS = ("删", "去掉", "移除")
@@ -80,6 +81,29 @@ class BaselineValidator:
                     )
                 ]
             )
+
+        # 结构字段防改：节点类型变化或表单绑定被解绑会造成数据绑定/引擎语义
+        # 静默漂移，LLM 顺手的"附赠修改"应被确定性校验拦截。
+        baseline_by_id = {n.get("id"): n for n in baseline_nodes if n.get("id")}
+        changed = []
+        for out_node in output.get("nodes") or []:
+            base = baseline_by_id.get(out_node.get("id"))
+            if base is None:
+                continue
+            label = out_node.get("name") or out_node.get("id")
+            if base.get("type") and base.get("type") != out_node.get("type"):
+                changed.append(f"{label}:type")
+            if base.get("form_key") and not out_node.get("form_key"):
+                changed.append(f"{label}:form_key")
+        if changed and not self._has_delete_intent(context):
+            return ValidationResult.from_errors(
+                [
+                    ValidationError(
+                        "BASE_B004",
+                        f"修改了基线节点的结构字段 {changed}，用户未要求",
+                    )
+                ]
+            )
         return ValidationResult.ok()
 
     def _validate_form(
@@ -128,24 +152,8 @@ def _is_valid_edge_split(edge: tuple, output: dict) -> bool:
 
 def _widget_names(widgets: list[dict]) -> set[str]:
     names: set[str] = set()
-    for widget in widgets:
+    for widget in iter_widgets(widgets):
         name = (widget.get("options") or {}).get("name")
         if name:
             names.add(name)
-        direct = widget.get("widgetList")
-        if isinstance(direct, list):
-            names.update(_widget_names(direct))
-        for key in ("cols", "tabs", "rows"):
-            for child in widget.get(key) or []:
-                if not isinstance(child, dict):
-                    continue
-                children = child.get("widgetList")
-                if isinstance(children, list):
-                    names.update(_widget_names(children))
-                for cell in child.get("cols") or child.get("cells") or []:
-                    cell_children = (
-                        cell.get("widgetList") if isinstance(cell, dict) else None
-                    )
-                    if isinstance(cell_children, list):
-                        names.update(_widget_names(cell_children))
     return names

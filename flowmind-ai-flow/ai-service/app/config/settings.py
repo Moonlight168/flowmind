@@ -48,19 +48,6 @@ DEFAULT_MODELS = [
 ]
 
 
-class DatabaseSettings(BaseSettings):
-    """数据库配置"""
-
-    url: str | None = Field(
-        default=None,
-        alias="DATABASE_URL",
-    )
-
-    model_config = SettingsConfigDict(
-        env_prefix="DB_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
-
-
 class RedisSettings(BaseSettings):
     """Redis 配置"""
 
@@ -107,6 +94,10 @@ class AppSettings(BaseSettings):
     workers: int = Field(
         default=4,
         description="uvicorn worker 进程数（debug 模式强制为 1）",
+    )
+    allow_memory_fallback: bool = Field(
+        default=False,
+        description="Redis checkpoint 不可用时是否允许降级为内存存储（仅限本地调试）",
     )
 
     model_config = SettingsConfigDict(
@@ -267,7 +258,6 @@ class Settings(BaseSettings):
         protected_namespaces=("settings_",),  # 禁用 model_ 命名空间保护
     )
 
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     fallback: FallbackSettings = Field(default_factory=FallbackSettings)
     app: AppSettings = Field(default_factory=AppSettings)

@@ -5,6 +5,8 @@ FlowMind 智能流程设计服务 - BPMN XML 校验器
 并把生成的 bpmn_xml 与统一后的 category 缓存进 design_output，供 format_node 复用。
 """
 
+from lxml import etree
+
 from app.design.bpmn_generator import generate_bpmn_xml
 from app.design.bpmn_merge import preserve_bpmn_metadata
 from app.design.bpmn_validator import validate_bpmn_xml
@@ -56,8 +58,8 @@ class BPMNXMLValidator:
             if original_xml and not is_full_replace:
                 bpmn_xml = preserve_bpmn_metadata(original_xml, bpmn_xml)
             result = validate_bpmn_xml(bpmn_xml)
-        except (ValueError, TypeError, KeyError, AttributeError) as e:
-            # 生成失败（如非法节点类型导致 XML 构造异常）
+        except (ValueError, TypeError, KeyError, AttributeError, etree.XMLSyntaxError) as e:
+            # 生成失败（如非法节点类型导致 XML 构造异常）或基线 XML 解析失败
             return ValidationResult.from_errors(
                 [ValidationError("BPMN_V012", f"BPMN XML 生成失败: {e}")]
             )

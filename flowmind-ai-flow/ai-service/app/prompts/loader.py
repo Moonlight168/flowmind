@@ -94,7 +94,9 @@ def resolve_prompt_version(
     weighted = _weighted_versions(versions)
     if not weighted:
         return _selection(relative_path, versions, stable_version, stable_version)
-    bucket = _release_bucket(f"{release_key}:{relative_path}")
+    # 分桶种子只用 release_key：同一次请求内所有提示词文件命中同一灰度侧，
+    # 避免链路内混用稳定版与灰度版导致 A/B 结论被混合效应污染。
+    bucket = _release_bucket(release_key)
     cumulative = 0.0
     for version, weight in weighted:
         cumulative += weight

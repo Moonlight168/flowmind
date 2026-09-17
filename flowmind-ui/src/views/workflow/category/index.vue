@@ -76,7 +76,7 @@
       </template>
     </el-dialog>
 
-    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
+    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" :get-current-baseline="getCurrentBaseline" @fill="handleAiFill" />
   </div>
 </template>
 
@@ -209,10 +209,14 @@ const handleExport = () => {
 const handleAiDesign = () => {
   aiDesignVisible.value = true;
 }
-/** AI 填充数据 */
+/** AI 浮窗每轮发送前调用的最新基线：对话框表单当前值 */
+const getCurrentBaseline = () => {
+  return { ...form.value };
+}
+/** AI 填充数据（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (formData) => {
   if (formData) {
-    form.value.categoryName = formData.category_name || '';
+    form.value.categoryName = formData.category_name || formData.categoryName || '';
     form.value.code = formData.code || '';
     form.value.remark = formData.remark || '';
   }

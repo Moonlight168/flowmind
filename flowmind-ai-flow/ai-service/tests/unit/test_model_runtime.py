@@ -47,12 +47,21 @@ class _PartialStreamModel:
         raise ConnectionError("stream interrupted")
 
 
+def _configured(model_name: str) -> dict[str, str]:
+    """通过 _provider_is_configured 校验的 Provider 配置。"""
+    return {
+        "model_name": model_name,
+        "base_url": "https://api.test.com/v1",
+        "api_key": "test-key",
+    }
+
+
 def test_execute_switches_provider_after_runtime_failure() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
         providers={
-            "primary": {"model_name": "primary-model"},
-            "fallback": {"model_name": "fallback-model"},
+            "primary": _configured("primary-model"),
+            "fallback": _configured("fallback-model"),
         },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
@@ -68,7 +77,10 @@ def test_execute_switches_provider_after_runtime_failure() -> None:
 def test_stream_switches_provider_before_first_token() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
-        providers={"primary": {}, "fallback": {}},
+        providers={
+            "primary": _configured("p"),
+            "fallback": _configured("f"),
+        },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
         model_builder=lambda provider, _config, _task: _FakeModel(provider, calls),
@@ -77,6 +89,30 @@ def test_stream_switches_provider_before_first_token() -> None:
     chunks = list(runtime.stream("chat", [], config={"callbacks": []}))
 
     assert chunks == ["fallback", " ok"]
+    assert calls == ["primary", "fallback"]
+
+
+def test_execute_skips_unconfigured_placeholder_providers() -> None:
+    calls: list[str] = []
+    runtime = ModelRuntime(
+        providers={
+            "primary": _configured("primary-model"),
+            "placeholder": {
+                "model_name": "your_model_here",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "your_api_key_here",
+            },
+            "fallback": _configured("fallback-model"),
+        },
+        priority=["primary", "placeholder", "fallback"],
+        config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
+        model_builder=lambda provider, _config, _task: _FakeModel(provider, calls),
+    )
+
+    result = runtime.execute("chat", lambda model: model.invoke([]))
+
+    # 占位配置不进降级候选，不占用重试预算
+    assert result == "fallback ok"
     assert calls == ["primary", "fallback"]
 
 
@@ -118,7 +154,10 @@ def test_describe_providers_returns_only_safe_runtime_metadata() -> None:
 def test_execute_respects_disabled_fallback() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
-        providers={"primary": {}, "fallback": {}},
+        providers={
+            "primary": _configured("p"),
+            "fallback": _configured("f"),
+        },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(enabled=False, max_retries=10, retry_interval=0),
         model_builder=lambda provider, _config, _task: _FakeModel(provider, calls),
@@ -134,8 +173,11 @@ def test_execute_filters_models_without_structured_output() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
         providers={
-            "plain": {"supports_structured_output": False},
-            "structured": {"supports_structured_output": True},
+            "plain": {**_configured("plain-model"), "supports_structured_output": False},
+            "structured": {
+                **_configured("structured-model"),
+                "supports_structured_output": True,
+            },
         },
         priority=["plain", "structured"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
@@ -151,7 +193,11 @@ def test_execute_filters_models_without_structured_output() -> None:
 def test_execute_limits_additional_provider_attempts() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
-        providers={"primary": {}, "secondary": {}, "third": {}},
+        providers={
+            "primary": _configured("p"),
+            "secondary": _configured("s"),
+            "third": _configured("t"),
+        },
         priority=["primary", "secondary", "third"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
         model_builder=lambda provider, _config, _task: _FakeModel("primary", calls),
@@ -168,7 +214,10 @@ def test_execute_waits_configured_interval_before_fallback(monkeypatch) -> None:
     waits: list[float] = []
     monkeypatch.setattr("app.llm.runtime.time.sleep", waits.append)
     runtime = ModelRuntime(
-        providers={"primary": {}, "fallback": {}},
+        providers={
+            "primary": _configured("p"),
+            "fallback": _configured("f"),
+        },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0.25),
         model_builder=lambda provider, _config, _task: _FakeModel(provider, calls),
@@ -182,7 +231,10 @@ def test_execute_waits_configured_interval_before_fallback(monkeypatch) -> None:
 def test_stream_does_not_replay_after_first_token() -> None:
     calls: list[str] = []
     runtime = ModelRuntime(
-        providers={"primary": {}, "fallback": {}},
+        providers={
+            "primary": _configured("p"),
+            "fallback": _configured("f"),
+        },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
         model_builder=lambda provider, _config, _task: _PartialStreamModel(
@@ -214,7 +266,10 @@ def test_execute_observes_each_provider_attempt(monkeypatch) -> None:
 
     monkeypatch.setattr("app.llm.runtime.observe_model_attempt", _observe)
     runtime = ModelRuntime(
-        providers={"primary": {}, "fallback": {}},
+        providers={
+            "primary": _configured("p"),
+            "fallback": _configured("f"),
+        },
         priority=["primary", "fallback"],
         config=ModelRuntimeConfig(max_retries=1, retry_interval=0),
         model_builder=lambda provider, _config, _task: _FakeModel(provider, calls),
@@ -254,7 +309,7 @@ def test_compression_token_limit_comes_from_settings(monkeypatch) -> None:
     monkeypatch.setattr("app.llm.runtime.settings.compress.summary_max_tokens", 123)
     monkeypatch.setattr("app.llm.runtime.ChatOpenAI", lambda **kwargs: kwargs)
     runtime = ModelRuntime(
-        providers={"primary": {"model_name": "model-a"}},
+        providers={"primary": _configured("model-a")},
         priority=["primary"],
         config=ModelRuntimeConfig(retry_interval=0),
     )

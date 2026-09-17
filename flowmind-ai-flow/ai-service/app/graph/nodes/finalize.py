@@ -101,14 +101,20 @@ def _format_validated_artifact(state: AppState, result: dict) -> dict:
             "flow_name": result.get("flow_name", ""),
             "code": result.get("code", ""),
             "description": result.get("description", ""),
-            "flow_key": result.get("flow_key") or current.get("flow_key"),
+            # 基线兜底：模型未给 flow_key 时保留模型标识（前端字段为驼峰 modelKey）
+            "flow_key": result.get("flow_key")
+            or current.get("flow_key")
+            or current.get("modelKey"),
         }
 
     nodes, edges = result.get("nodes", []), result.get("edges", [])
     category = build_category(result, current)
     bpmn_xml = result.get("bpmn_xml")
     if not bpmn_xml:
-        bpmn_xml = generate_bpmn_xml({"nodes": nodes, "edges": edges}, category)
+        process_key = current.get("modelKey") or current.get("flow_key") or ""
+        bpmn_xml = generate_bpmn_xml(
+            {"nodes": nodes, "edges": edges}, category, process_key
+        )
     return {**current, "nodes": nodes, "edges": edges, "bpmn_xml": bpmn_xml}
 
 

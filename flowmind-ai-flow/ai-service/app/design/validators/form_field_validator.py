@@ -13,6 +13,7 @@ from app.design.validators.base import (
     ValidatorContext,
 )
 from app.design.vform3_transformer import CONTAINER_TYPES, DISPLAY_TYPES, FIELD_TYPES
+from app.design.widget_tree import iter_widgets
 
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 OPTION_ITEM_TYPES = {"radio", "checkbox", "select", "cascader"}
@@ -31,7 +32,7 @@ class FormFieldValidator:
             return ValidationResult.from_errors(errors)
 
         seen_names: set[str] = set()
-        for widget in _walk_widgets(widgets):
+        for widget in iter_widgets(widgets):
             options = widget.get("options", {}) or {}
             name = options.get("name", "")
             widget_type = (widget.get("type") or "").lower()
@@ -155,19 +156,6 @@ def _max_depth(items: list[dict]) -> int:
         if children:
             depth = max(depth, 1 + _max_depth(children))
     return depth
-
-
-def _walk_widgets(widgets: list[dict]):
-    for widget in widgets:
-        yield widget
-        yield from _walk_widgets(widget.get("widgetList") or [])
-        for child in widget.get("cols") or []:
-            yield from _walk_widgets([child])
-        for child in widget.get("tabs") or []:
-            yield from _walk_widgets(child.get("widgetList") or [])
-        for row in widget.get("rows") or []:
-            for cell in row.get("cols") or []:
-                yield from _walk_widgets(cell.get("widgetList") or [])
 
 
 def _has_valid_children(widget: dict) -> bool:
