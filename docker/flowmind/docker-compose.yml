@@ -41,21 +41,25 @@ services:
       service: flowmind-flowable
 
   flowmind-file:
+    profiles: ["optional"]
     extends:
       file: docker-compose.prod.yml
       service: flowmind-file
 
   flowmind-gen:
+    profiles: ["optional"]
     extends:
       file: docker-compose.prod.yml
       service: flowmind-gen
 
   flowmind-job:
+    profiles: ["optional"]
     extends:
       file: docker-compose.prod.yml
       service: flowmind-job
 
   flowmind-monitor:
+    profiles: ["optional"]
     extends:
       file: docker-compose.prod.yml
       service: flowmind-monitor

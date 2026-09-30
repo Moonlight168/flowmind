@@ -161,18 +161,26 @@ docker compose -f docker-compose.langfuse.yml up -d
 
 ### 开发环境（Docker，支持热更新）
 
-默认 Compose 会启动完整开发环境：MySQL、Redis、Nacos、Java 微服务、Vite 前端和 AI 服务。
+默认 Compose 只启动 AI 功能所需的开发链路：MySQL、Redis、Nacos、Gateway、Auth、System、Flowable、Vite 前端和 AI 服务。File、Gen、Job、Monitor 改为可选服务。
 
 ```bash
 cd docker\flowmind
 docker compose up -d --remove-orphans
 ```
 
+需要全部可选服务时：
+
+```bash
+docker compose --profile optional up -d
+```
+
+也可以只启动某一个，例如 `docker compose up -d flowmind-file`。
+
 也可以在仓库根目录运行 `bin\start.bat`。开发入口仍为 http://localhost:18088。
 
 `--remove-orphans` 会清理之前由生产 Compose 创建的 Nginx 容器。日志中的 `/docker-entrypoint.sh: Configuration complete` 表示 Nginx 配置成功；若随后出现 `port is already allocated`，说明旧 Nginx 与开发 Vite 同时绑定了 18088。
 
-前端源码挂载到 Node 22 容器，由 Vite 自动热更新；AI 的 `app/` 挂载到容器，由 Uvicorn `--reload` 自动重载。Java 服务未引入 DevTools，修改后仍需重新打包并重启对应容器。Langfuse 与 Sentinel 不会默认启动。
+前端源码挂载到 Node 22 容器，由 Vite 自动热更新；AI 的 `app/` 挂载到容器，由 Uvicorn `--reload` 自动重载。Java 服务未引入 DevTools，修改后仍需重新打包并重启对应容器。File、Gen、Job、Monitor、Langfuse 与 Sentinel 不会默认启动。
 
 ### 宿主机开发（可选）
 

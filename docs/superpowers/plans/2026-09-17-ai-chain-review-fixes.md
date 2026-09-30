@@ -70,7 +70,7 @@
 - 网关保留 Sentinel Gateway 与 Nacos 降级规则，移除与当前 Spring Cloud 组合不兼容且重复的 route `CircuitBreaker` 过滤器；Java 镜像不再把 JAR 目录声明为匿名卷，避免重建容器后继续运行旧产物。
 - AI 镜像的 Debian 系统包源切换为阿里云镜像并增加 APT 重试，避免国内网络下构建中断。
 - 生产 Compose 的前端静态文件、Java JAR 和 AI Python 源码均在构建时复制进镜像，不挂载业务源码，也未启用 Uvicorn reload，因此代码修改不会自动热更新，需重新构建对应产物和镜像并重建容器。
-- Compose 按职责拆分：`docker-compose.yml` 启动完整开发栈，以 Vite 和 Uvicorn 提供热更新；`docker-compose.prod.yml` 独立启动包含 Nginx、Java 微服务、AI 服务和基础设施的完整生产栈；`docker-compose.langfuse.yml` 独立管理 Langfuse。开发启动使用 `--remove-orphans` 清理生产栈遗留的 Nginx，避免它与 Vite 同时占用 18088。
+- Compose 按职责拆分：`docker-compose.yml` 默认启动 AI 功能所需的开发链路，以 Vite 和 Uvicorn 提供热更新，File、Gen、Job、Monitor 通过 `optional` profile 按需启动；`docker-compose.prod.yml` 独立启动包含 Nginx、全部 Java 微服务、AI 服务和基础设施的完整生产栈；`docker-compose.langfuse.yml` 独立管理 Langfuse。开发启动使用 `--remove-orphans` 清理生产栈遗留的 Nginx，避免它与 Vite 同时占用 18088。
 - FlowMind Langfuse 使用独立 PostgreSQL、ClickHouse、Redis、MinIO 和命名卷，首次启动自动初始化 `flowmind` 项目；UI 默认发布到 13001，避免与其他项目的常用端口冲突。
 - 生产 AI 容器通过 `http://flowmind-langfuse-web:3000` 走 Compose 内部网络，本机开发 AI 通过 `http://localhost:13001` 访问；真实密钥和基础设施密码仅放在被 Git 忽略的 `docker/flowmind/.env`。
 - Nginx 入口通过 `FLOWMIND_HTTP_PORT` 配置，默认 `18088:80`，不再需要额外的本机覆盖 Compose。

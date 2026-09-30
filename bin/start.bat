@@ -25,6 +25,6 @@ echo   Nacos:    http://localhost:19090/nacos
 echo.
 echo Vue and AI source changes reload automatically.
 echo Java changes still require rebuilding and restarting the affected service.
-echo Langfuse and Sentinel remain optional and are not started.
+echo File, Gen, Job, Monitor, Langfuse and Sentinel remain optional and are not started.
 
 exit /b 0
