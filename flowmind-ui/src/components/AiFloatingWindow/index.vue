@@ -5,6 +5,7 @@
       ref="rootEl"
       class="fm-float-window"
       :style="windowStyle"
+      @mousedown="bringToFront"
     >
       <!-- 头部：拖拽区域 -->
       <div class="fm-fw-header" @mousedown.prevent="onHeaderMouseDown">
@@ -36,6 +37,8 @@
 <script>
 // 模块级共享：多个浮动窗口按创建顺序错开初始位置，避免同时打开时完全重叠
 let windowSeq = 0
+// 模块级共享：点击窗口时递增 z-index，保证被点窗口置顶
+let zCounter = 3100
 </script>
 
 <script setup>
@@ -43,6 +46,7 @@ import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { Close, MoreFilled } from '@element-plus/icons-vue'
 
 const seq = ++windowSeq
+const zIndex = ref(++zCounter)
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -68,11 +72,16 @@ const windowStyle = computed(() => ({
   left: pos.x + 'px',
   top: pos.y + 'px',
   width: size.w + 'px',
-  height: size.h + 'px'
+  height: size.h + 'px',
+  zIndex: zIndex.value
 }))
 
 function close() {
   emit('update:modelValue', false)
+}
+
+function bringToFront() {
+  zIndex.value = ++zCounter
 }
 
 function ensureInitialized() {
@@ -177,7 +186,6 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .fm-float-window {
   position: fixed;
-  z-index: 3100;
   display: flex;
   flex-direction: column;
   overflow: hidden;
