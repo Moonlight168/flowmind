@@ -1,0 +1,155 @@
+name: flowmind-langfuse
+
+services:
+  flowmind-langfuse-postgres:
+    container_name: flowmind-langfuse-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-flowmind_langfuse}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:?LANGFUSE_POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-langfuse}
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  flowmind-langfuse-clickhouse:
+    container_name: flowmind-langfuse-clickhouse
+    image: clickhouse/clickhouse-server
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:?LANGFUSE_CLICKHOUSE_PASSWORD is required}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  flowmind-langfuse-minio:
+    container_name: flowmind-langfuse-minio
+    image: minio/minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-flowmind}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:?LANGFUSE_MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - langfuse_minio_data:/data
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  flowmind-langfuse-redis:
+    container_name: flowmind-langfuse-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${LANGFUSE_REDIS_AUTH:?LANGFUSE_REDIS_AUTH is required}", "--maxmemory-policy", "noeviction"]
+    environment:
+      LANGFUSE_REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:?LANGFUSE_REDIS_AUTH is required}
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${LANGFUSE_REDIS_AUTH}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  flowmind-langfuse-worker:
+    container_name: flowmind-langfuse-worker
+    image: langfuse/langfuse-worker:4
+    restart: always
+    depends_on: &langfuse-depends-on
+      flowmind-langfuse-postgres:
+        condition: service_healthy
+      flowmind-langfuse-clickhouse:
+        condition: service_healthy
+      flowmind-langfuse-minio:
+        condition: service_healthy
+      flowmind-langfuse-redis:
+        condition: service_healthy
+    environment: &langfuse-environment
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-flowmind_langfuse}:${LANGFUSE_POSTGRES_PASSWORD:?LANGFUSE_POSTGRES_PASSWORD is required}@flowmind-langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-langfuse}
+      SALT: ${LANGFUSE_SALT:?LANGFUSE_SALT is required}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?LANGFUSE_ENCRYPTION_KEY is required}
+      CLICKHOUSE_MIGRATION_URL: clickhouse://flowmind-langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://flowmind-langfuse-clickhouse:8123
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:?LANGFUSE_CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-flowmind}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:?LANGFUSE_MINIO_ROOT_PASSWORD is required}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://flowmind-langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_MINIO_ROOT_USER:-flowmind}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_ROOT_PASSWORD:?LANGFUSE_MINIO_ROOT_PASSWORD is required}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://flowmind-langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      REDIS_HOST: flowmind-langfuse-redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:?LANGFUSE_REDIS_AUTH is required}
+      TELEMETRY_ENABLED: "false"
+    networks:
+      - flowmind-network
+
+  flowmind-langfuse-web:
+    container_name: flowmind-langfuse-web
+    image: langfuse/langfuse:4
+    restart: always
+    depends_on: *langfuse-depends-on
+    ports:
+      - "${LANGFUSE_PORT:-13001}:3000"
+    environment:
+      <<: *langfuse-environment
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:13001}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?LANGFUSE_NEXTAUTH_SECRET is required}
+      LANGFUSE_INIT_ORG_ID: flowmind
+      LANGFUSE_INIT_ORG_NAME: FlowMind
+      LANGFUSE_INIT_PROJECT_ID: flowmind
+      LANGFUSE_INIT_PROJECT_NAME: flowmind
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:?LANGFUSE_INIT_PROJECT_PUBLIC_KEY is required}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:?LANGFUSE_INIT_PROJECT_SECRET_KEY is required}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@flowmind.local}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-FlowMind Admin}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?LANGFUSE_INIT_USER_PASSWORD is required}
+    networks:
+      - flowmind-network
+
+networks:
+  flowmind-network:
+    external: true
+    name: flowmind_flowmind-network
+
+volumes:
+  langfuse_postgres_data:
+    name: flowmind_langfuse_postgres_data
+  langfuse_clickhouse_data:
+    name: flowmind_langfuse_clickhouse_data
+  langfuse_clickhouse_logs:
+    name: flowmind_langfuse_clickhouse_logs
+  langfuse_minio_data:
+    name: flowmind_langfuse_minio_data

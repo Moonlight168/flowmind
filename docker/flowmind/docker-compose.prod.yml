@@ -1,10 +1,103 @@
-# FlowMind 完整环境：开发基础设施 + Java 微服务 + AI 服务 + Nginx 前端
+# FlowMind 完整生产环境：基础设施 + Java 微服务 + AI 服务 + Nginx 前端
 # 启动：docker compose -f docker-compose.prod.yml up -d --build
 
-include:
-  - docker-compose.yml
-
 services:
+  # ==================== FlowMind 基础服务 ====================
+
+  flowmind-mysql:
+    container_name: flowmind-mysql
+    image: mysql:5.7
+    restart: always
+    ports:
+      - "13306:3306"
+    volumes:
+      - ../cloud/mysql/conf:/etc/mysql/conf.d
+      - ../cloud/mysql/logs:/logs
+      - ../cloud/mysql/data:/var/lib/mysql
+      - ../../sql/00-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ../../sql:/opt/flowmind-sql:ro
+    command: >
+      mysqld
+      --innodb-buffer-pool-size=512M
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+8:00
+      --lower-case-table-names=1
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: flowmind-cloud
+      TZ: Asia/Shanghai
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  flowmind-redis:
+    container_name: flowmind-redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "16379:6379"
+    volumes:
+      - ../cloud/redis/conf/redis.conf:/flowmind/redis/redis.conf
+      - ../cloud/redis/data:/data
+    command: redis-server /flowmind/redis/redis.conf
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  flowmind-sentinel:
+    container_name: flowmind-sentinel
+    image: bladex/sentinel-dashboard:latest
+    profiles: ["sentinel"]
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "18718:8858"
+    networks:
+      - flowmind-network
+
+  flowmind-nacos:
+    container_name: flowmind-nacos
+    image: nacos/nacos-server:v2.3.2
+    restart: always
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?NACOS_AUTH_TOKEN is required}
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?NACOS_AUTH_IDENTITY_VALUE is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - ../cloud/nacos/logs:/home/nacos/logs
+      - ../cloud/nacos/conf/application.properties:/home/nacos/conf/application.properties
+    ports:
+      - "18848:8848"
+      - "19090:8080"
+      - "19848:9848"
+      - "19849:9849"
+    depends_on:
+      flowmind-mysql:
+        condition: service_healthy
+    networks:
+      - flowmind-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   # ==================== Java 微服务 ====================
 
   # 网关服务
@@ -29,7 +122,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -56,7 +149,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9002/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -83,7 +176,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9003/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -110,7 +203,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9007/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -133,7 +226,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9006/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -156,7 +249,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9004/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -179,7 +272,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9005/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -202,7 +295,7 @@ services:
     networks:
       - flowmind-network
     ports:
-      - "8090:9008"
+      - "18090:9008"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9008/actuator/health"]
       interval: 30s
@@ -243,8 +336,6 @@ services:
     depends_on:
       flowmind-redis:
         condition: service_healthy
-      flowmind-langfuse-web:
-        condition: service_started
     networks:
       - flowmind-network
     healthcheck:
@@ -265,7 +356,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      - "${FLOWMIND_HTTP_PORT:-8088}:80"
+      - "${FLOWMIND_HTTP_PORT:-18088}:80"
     volumes:
       - ../cloud/nginx/html/dist:/flowmind/flowmind-ui
       - ../cloud/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
@@ -279,3 +370,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+networks:
+  flowmind-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

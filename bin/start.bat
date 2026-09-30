@@ -1,141 +1,30 @@
 @echo off
-setlocal enabledelayedexpansion
-:: FlowMind unified startup script
+setlocal
 
 set "SCRIPT_DIR=%~dp0"
 set "DOCKER_DIR=%SCRIPT_DIR%..\docker\flowmind"
-set "BACKEND_DIR=%SCRIPT_DIR%..\flowmind-cloud"
-set "FRONTEND_DIR=%SCRIPT_DIR%..\flowmind-ui"
-set "AI_DIR=%SCRIPT_DIR%..\flowmind-ai-flow\ai-service"
-set "VENV_PY=%SCRIPT_DIR%..\.venv\Scripts\python.exe"
 
 echo.
 echo ============================================
-echo FlowMind Unified Startup
+echo FlowMind Docker Development Environment
 echo ============================================
 echo.
 
-:: ---------- Service state checks ----------
-set "BACKEND_SKIP=0"
-netstat -ano | findstr /C:":9001 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 set "BACKEND_SKIP=1"
-
-set "AI_SKIP=0"
-netstat -ano | findstr /C:":8000 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 set "AI_SKIP=1"
-
-set "FRONTEND_SKIP=0"
-netstat -ano | findstr /C:":88 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 set "FRONTEND_SKIP=1"
-
-if "%BACKEND_SKIP%"=="1" echo [INFO] Backend Gateway already running
-if "%AI_SKIP%"=="1" echo [INFO] AI service already running
-if "%FRONTEND_SKIP%"=="1" echo [INFO] Frontend already running
-echo.
-
-:: ---------- Step 1: Docker containers ----------
-echo [Step 1/4] Starting Docker containers...
 cd /d "%DOCKER_DIR%"
-docker compose up -d --wait --wait-timeout 180
+docker compose up -d --remove-orphans --wait --wait-timeout 300
 if errorlevel 1 (
-    echo [ERROR] Docker containers failed to become healthy
+    echo [ERROR] Docker development environment failed to start
     exit /b 1
 )
-echo [OK] Docker containers started
+
 echo.
-
-:: ---------- Step 2: AI service (FastAPI + LangGraph, port 8000) ----------
-if "%AI_SKIP%"=="1" goto ai_skip
-if not exist "%VENV_PY%" (
-    echo [WARN] Python venv not found: %VENV_PY%
-    echo        AI service skipped. Create the repository .venv, then rerun this script.
-    goto ai_skip
-)
-
-echo [Step 2/4] Starting AI service...
-:: cmd always exports a stray PROMPT var ($P$G); pydantic-settings would parse it as the
-:: nested "prompt" config field and crash. Strip it so the child process inherits clean env.
-set "PROMPT="
-start "FlowMind-AI" /min /D "%AI_DIR%" "%VENV_PY%" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-set /a ELAPSED=0
-:wait_ai
-ping -n 3 127.0.0.1 >nul
-set /a ELAPSED+=2
-netstat -ano | findstr /C:":8000 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 goto ai_ready
-if !ELAPSED! lss 180 goto wait_ai
-echo [ERROR] AI service startup timeout (port 8000 not listening). Check .venv deps and Nacos.
-exit /b 1
-
-:ai_ready
-echo [OK] AI service started
-goto ai_done
-:ai_skip
-echo [SKIP] AI service already running
-:ai_done
+echo [OK] FlowMind development environment started
+echo   Frontend: http://localhost:18088
+echo   Monitor:  http://localhost:18090
+echo   Nacos:    http://localhost:19090/nacos
 echo.
-
-:: ---------- Step 3: Java backend ----------
-if "%BACKEND_SKIP%"=="1" goto backend_skip
-
-echo [Step 3/4] Starting Java backend...
-start "FlowMind-Backend" /min "%BACKEND_DIR%\bin\run-all.bat"
-
-set /a ELAPSED=0
-:wait_backend
-ping -n 3 127.0.0.1 >nul
-set /a ELAPSED+=2
-netstat -ano | findstr /C:":9001 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 goto backend_ready
-netstat -ano | findstr /C:":9002 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 goto backend_ready
-if !ELAPSED! lss 180 goto wait_backend
-echo [ERROR] Backend startup timeout
-exit /b 1
-
-:backend_ready
-echo [OK] Java backend started
-goto backend_done
-:backend_skip
-echo [SKIP] Backend already running
-:backend_done
-echo.
-
-:: ---------- Step 4: Frontend (vite dev, port 88) ----------
-if "%FRONTEND_SKIP%"=="1" goto frontend_skip
-
-echo [Step 4/4] Starting Frontend...
-start "FlowMind-Frontend" /min /D "%FRONTEND_DIR%" cmd /c "yarn dev"
-
-set /a ELAPSED=0
-:wait_frontend
-ping -n 3 127.0.0.1 >nul
-set /a ELAPSED+=2
-netstat -ano | findstr /C:":88 " | findstr "LISTENING" >nul 2>&1
-if not errorlevel 1 goto frontend_ready
-if !ELAPSED! lss 90 goto wait_frontend
-echo [ERROR] Frontend startup timeout. Open a terminal in flowmind-ui to see vite errors.
-exit /b 1
-
-:frontend_ready
-echo [OK] Frontend started
-goto frontend_done
-:frontend_skip
-echo [SKIP] Frontend already running
-:frontend_done
-echo.
-
-echo ============================================
-echo FlowMind startup complete!
-echo ============================================
-echo.
-echo Services:
-echo   - Docker:   http://localhost:19090 (Nacos)
-echo   - Langfuse: http://localhost:3001
-echo   - AI:       http://localhost:8000 (docs: /docs)
-echo   - Gateway:  http://localhost:9001
-echo   - Frontend: http://localhost:88
-echo.
+echo Vue and AI source changes reload automatically.
+echo Java changes still require rebuilding and restarting the affected service.
+echo Langfuse and Sentinel remain optional and are not started.
 
 exit /b 0

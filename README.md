@@ -147,25 +147,36 @@ cd docker\flowmind
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-该命令启动前端、Java 微服务、AI 服务、MySQL、Redis、Nacos、Sentinel，以及 FlowMind 独立的 Langfuse。默认入口为 http://localhost:8088，Langfuse 为 http://localhost:3001。
+该命令启动前端、Java 微服务、AI 服务、MySQL、Redis 和 Nacos，默认入口为 http://localhost:18088。Sentinel 与 Langfuse 均按需单独启动：
 
-### 开发环境（启动脚本）
-
-前提：Docker 服务已启动且可用
+从开发环境切换到生产环境前，先执行 `docker compose down --remove-orphans`，避免 Vite 与 Nginx 同时占用 18088。
 
 ```bash
-bin\start.bat
+# 可选：Sentinel
+docker compose --profile sentinel up -d flowmind-sentinel
+
+# 可选：独立 Langfuse（复用 FlowMind 网络和原有独立数据卷）
+docker compose -f docker-compose.langfuse.yml up -d
 ```
 
-自动启动：Docker 基础环境（含独立 Langfuse）→ AI 服务 → Java 后端 → 前端
+### 开发环境（Docker，支持热更新）
 
-开发脚本为前端启用 Vite 热更新、为 AI 启用 Uvicorn `--reload`；Java 服务未引入 DevTools，修改后需重启对应服务。
+默认 Compose 会启动完整开发环境：MySQL、Redis、Nacos、Java 微服务、Vite 前端和 AI 服务。
 
-**已启动服务**：AI (8000)、Gateway (9001)、Auth (9002)、System (9003)、Flowable (9007)
+```bash
+cd docker\flowmind
+docker compose up -d --remove-orphans
+```
 
-**未启动（可选）**：Gen (9004)、Job (9005)、File (9006)、Visual
+也可以在仓库根目录运行 `bin\start.bat`。开发入口仍为 http://localhost:18088。
 
-AI 服务由脚本自动拉起（使用仓库根 `.venv` + `uvicorn app.main:app`，依赖已按 `requirements.txt` 安装）；手动启动方式：
+`--remove-orphans` 会清理之前由生产 Compose 创建的 Nginx 容器。日志中的 `/docker-entrypoint.sh: Configuration complete` 表示 Nginx 配置成功；若随后出现 `port is already allocated`，说明旧 Nginx 与开发 Vite 同时绑定了 18088。
+
+前端源码挂载到 Node 22 容器，由 Vite 自动热更新；AI 的 `app/` 挂载到容器，由 Uvicorn `--reload` 自动重载。Java 服务未引入 DevTools，修改后仍需重新打包并重启对应容器。Langfuse 与 Sentinel 不会默认启动。
+
+### 宿主机开发（可选）
+
+需要单独调试某个进程时，也可以在宿主机手动启动 AI：
 
 ```bash
 cd flowmind-ai-flow/ai-service
@@ -178,12 +189,13 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 服务端口
 
-本地开发（`bin/start.bat` / `flowmind-cloud/bin/run-all.bat`）：
+开发 Docker 的前端从宿主机 18088 映射到 Vite 容器 88；直接在宿主机运行 Vite 时才使用 88。
 
 | 服务                 | 端口                     | 访问地址                            |
 | -------------------- | ------------------------ | ----------------------------------- |
-| 前端（开发）         | 88                       | http://localhost:88                 |
-| 前端（生产 Nginx）   | 8088                     | http://localhost:8088               |
+| 前端（开发 Docker）  | 18088（容器内 88）       | http://localhost:18088              |
+| 前端（宿主机 Vite）  | 88                       | http://localhost:88                 |
+| 前端（生产 Nginx）   | 18088                    | http://localhost:18088              |
 | API 网关（Gateway）  | 9001                     | http://localhost:9001               |
 | Auth 认证            | 9002                     | —                                   |
 | System 系统          | 9003                     | —                                   |
@@ -192,9 +204,9 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
 | MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
 | Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
-| Langfuse             | 3001（容器内 3000）     | http://localhost:3001               |
+| Langfuse             | 13001（容器内 3000）    | http://localhost:13001              |
 
-> 可选模块端口：Gen 9004、Job 9005、File 9006。开发基础设施使用 `docker/flowmind/docker-compose.yml`；完整生产式编排使用同目录的 `docker-compose.prod.yml`。
+> 可选模块端口：Gen 9004、Job 9005、File 9006。完整开发环境使用 `docker-compose.yml`，独立 Langfuse 使用 `docker-compose.langfuse.yml`，完整生产环境使用 `docker-compose.prod.yml`。
 
 ## 项目仓库
 
