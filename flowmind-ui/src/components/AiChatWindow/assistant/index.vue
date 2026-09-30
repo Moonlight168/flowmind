@@ -105,19 +105,16 @@
           :key="message.id"
           :message="message"
         />
-        <!-- 加载状态 -->
-        <div v-if="isLoading && !hasStreamingContent" class="message assistant flex gap-3 mb-4">
-          <div class="message-avatar flex-shrink-0 flex items-center justify-center text-blue-500">
-            <el-icon :size="20"><ChatDotRound /></el-icon>
-          </div>
-          <div class="message-content max-w-[75%]">
-            <div class="thinking-indicator flex items-center gap-2 px-3.5 py-2.5 bg-white rounded-3xl text-sm">
-              <span class="typing-dot" v-for="i in 3" :key="i"></span>
-              <span class="text-gray-500 ml-2">AI 正在思考中...</span>
-            </div>
-          </div>
-        </div>
       </div>
+
+      <Transition name="status-fade">
+        <div v-if="isLoading && !hasStreamingContent" class="assistant-status" role="status" aria-live="polite">
+          <span>AI 正在思考</span>
+          <span class="thinking-dots" aria-hidden="true">
+            <i v-for="i in 3" :key="i"></i>
+          </span>
+        </div>
+      </Transition>
 
       <!-- 输入区域 -->
       <div class="window-input p-3 bg-white border-t border-gray-200 flex gap-2 items-center">
@@ -597,12 +594,18 @@ onUnmounted(() => {
           color: #303133;
           padding: 10px 14px;
           resize: none;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
           font-size: 14px;
           box-shadow: inset 0 0 0 1px #e4e7ed;
           transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
           &::placeholder {
             color: #a0a0a0;
+          }
+
+          &::-webkit-scrollbar {
+            display: none;
           }
 
           &:focus {
@@ -783,21 +786,45 @@ onUnmounted(() => {
   }
 }
 
-// Thinking 动画样式
-.thinking-indicator {
-  .typing-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: #409eff;
-    animation: typing 1.4s infinite;
-    animation-fill-mode: both;
+.assistant-status {
+  position: absolute;
+  left: 16px;
+  bottom: 72px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: #606266;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #e4e7ed;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(31, 45, 61, 0.1);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
 
-    &:nth-child(1) { animation-delay: 0s; }
+.thinking-dots {
+  display: flex;
+  gap: 3px;
+
+  i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #409eff;
+    animation: typing 1.4s infinite both;
+
     &:nth-child(2) { animation-delay: 0.2s; }
     &:nth-child(3) { animation-delay: 0.4s; }
   }
 }
+
+.status-fade-enter-active,
+.status-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.status-fade-enter-from,
+.status-fade-leave-to { opacity: 0; transform: translateY(4px); }
 
 @keyframes typing {
   0%, 100% {
