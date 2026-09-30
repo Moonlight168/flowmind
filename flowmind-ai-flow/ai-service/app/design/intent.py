@@ -24,9 +24,18 @@ class Intent(BaseModel):
     choices: list[str] = Field(default_factory=list)
 
 
+#: 设计窗口类型 → 中文标签（供意图判别上下文使用）
+DESIGN_TYPE_LABELS = {
+    "flow_design": "流程设计",
+    "form_design": "表单设计",
+    "category_design": "流程分类设计",
+}
+
+
 def discriminate_intent(
     user_input: str,
     baseline_summary: str = "",
+    design_type: str = "",
     llm=None,
 ) -> Intent:
     """判别用户意图；判别失败默认 design
@@ -34,9 +43,14 @@ def discriminate_intent(
     Args:
         user_input: 用户输入
         baseline_summary: 当前已有设计的摘要（如"3 个节点"）
+        design_type: 当前设计窗口类型（flow_design/form_design/category_design），
+            用于约束 choices 不跨设计类型
         llm: 可注入的 LLM（测试用），None 时从统一模型运行时取
     """
     context_lines = []
+    if design_type:
+        label = DESIGN_TYPE_LABELS.get(design_type, design_type)
+        context_lines.append(f"当前设计窗口：{label}")
     if baseline_summary:
         context_lines.append(f"当前已有设计：{baseline_summary}")
     prompt = render_prompt(

@@ -3,8 +3,8 @@
     :model-value="visible"
     :title="title"
     :icon="ChatDotRound"
-    :width="540"
-    :height="640"
+    :width="440"
+    :height="600"
     :min-width="380"
     :min-height="460"
     @update:model-value="visible = $event"
@@ -58,16 +58,6 @@
           </template>
         </div>
       </div>
-      <div v-if="pendingChoices.length" class="clarification-choices">
-        <el-button
-          v-for="(choice, index) in pendingChoices"
-          :key="index"
-          size="small"
-          @click="selectChoice(choice)"
-        >
-          {{ choiceLabel(choice) }}
-        </el-button>
-      </div>
     </div>
 
     <div v-if="pendingPreview" class="change-preview">
@@ -91,6 +81,17 @@
         <el-button @click="discardPreview">放弃</el-button>
         <el-button type="primary" @click="applyPreview">应用变更</el-button>
       </div>
+    </div>
+
+    <div v-if="pendingChoices.length" class="clarification-choices">
+      <el-button
+        v-for="(choice, index) in pendingChoices"
+        :key="index"
+        size="small"
+        @click="selectChoice(choice)"
+      >
+        {{ choiceLabel(choice) }}
+      </el-button>
     </div>
 
     <div class="dialog-footer">
@@ -694,5 +695,5 @@ defineExpose({
 .change-preview__fields dt { color: #606266; }
 .change-preview__fields dd { margin: 0; color: #303133; overflow-wrap: anywhere; }
 .change-preview__actions { display: flex; justify-content: flex-end; gap: 8px; }
-.clarification-choices { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 12px; background: #f5f7fa; }
+.clarification-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 16px; background: #fff; }
 </style>

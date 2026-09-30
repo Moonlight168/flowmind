@@ -323,6 +323,8 @@ services:
       - REDIS_PORT=6379
       # 服务配置
       - SERVICE_PORT=8000
+      # 后端业务 API 经网关访问（覆盖 .env 默认的 localhost:9001）
+      - BACKEND_BASE_URL=http://flowmind-gateway:9001
       # Compose 内部直接访问 FlowMind 独立 Langfuse
       - LANGFUSE_BASE_URL=http://flowmind-langfuse-web:3000
       - LANGFUSE_TRACING_ENABLED=true

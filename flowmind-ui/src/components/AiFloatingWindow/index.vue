@@ -33,9 +33,16 @@
   </teleport>
 </template>
 
+<script>
+// 模块级共享：多个浮动窗口按创建顺序错开初始位置，避免同时打开时完全重叠
+let windowSeq = 0
+</script>
+
 <script setup>
 import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { Close, MoreFilled } from '@element-plus/icons-vue'
+
+const seq = ++windowSeq
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -70,8 +77,9 @@ function close() {
 
 function ensureInitialized() {
   if (pos.ready) return
-  pos.x = window.innerWidth - size.w - props.right
-  pos.y = window.innerHeight - size.h - props.bottom
+  const offset = (seq - 1) * 40
+  pos.x = Math.max(0, window.innerWidth - size.w - props.right - offset)
+  pos.y = Math.max(0, window.innerHeight - size.h - props.bottom - offset)
   pos.ready = true
 }
 

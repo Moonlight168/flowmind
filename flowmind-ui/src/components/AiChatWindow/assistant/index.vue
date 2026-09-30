@@ -16,7 +16,7 @@
       title="AI 助手"
       :icon="ChatDotRound"
       :width="440"
-      :height="620"
+      :height="600"
       :min-width="MIN_WIDTH"
       :min-height="MIN_HEIGHT"
       @update:model-value="handleVisibleChange"

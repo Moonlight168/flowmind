@@ -46,6 +46,7 @@ def generate_node(state: AppState) -> AppState:
     intent = (
         discriminate_intent(
             user_input,
+            design_type=design_type,
             baseline_summary=_baseline_summary(current_form_data, design_type),
         )
         if not state.get("review_retry_count")
