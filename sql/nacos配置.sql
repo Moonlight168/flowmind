@@ -65,9 +65,6 @@ INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_mo
             - Path=/flowmind-ai/**
           filters:
             - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: flowmind-ai
         - id: flowmind-flowable
           uri: lb://flowmind-flowable
           predicates:
@@ -186,9 +183,6 @@ INSERT INTO config_info (id, data_id, group_id, content, md5, gmt_create, gmt_mo
             - Path=/flowmind-ai/**
           filters:
             - StripPrefix=1
-            - name: CircuitBreaker
-              args:
-                name: flowmind-ai
         - id: flowmind-flowable
           uri: lb://flowmind-flowable
           predicates:
