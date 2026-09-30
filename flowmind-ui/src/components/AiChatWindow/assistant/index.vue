@@ -120,28 +120,29 @@
       </div>
 
       <!-- 输入区域 -->
-      <div class="window-input p-3 bg-white border-t border-gray-200 flex gap-2 items-end">
+      <div class="window-input p-3 bg-white border-t border-gray-200 flex gap-2 items-center">
         <div class="flex-1 relative">
           <el-input
             v-model="inputMessage"
             type="textarea"
             :rows="1"
             :maxlength="MAX_INPUT_LENGTH"
-            placeholder=""
-            @keydown.enter.exact="sendMessage"
+            placeholder="输入消息，按 Enter 发送"
+            @keydown.enter.exact.prevent="sendMessage"
             :disabled="isLoading"
             class="flex-1"
-            show-word-limit
           />
         </div>
         <el-button
           type="primary"
+          :icon="Promotion"
           :loading="isLoading"
+          :disabled="!inputMessage.trim() || isLoading"
           @click="sendMessage"
           class="send-button flex-shrink-0"
-        >
-          发送
-        </el-button>
+          aria-label="发送消息"
+          title="发送"
+        />
       </div>
 
       </div>
@@ -152,7 +153,7 @@
 <script setup>
 import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Close, Delete, Plus, List } from '@element-plus/icons-vue'
+import { ChatDotRound, Close, Delete, Plus, List, Promotion } from '@element-plus/icons-vue'
 import { aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
@@ -587,13 +588,18 @@ onUnmounted(() => {
 
       .el-textarea {
         :deep(.el-textarea__inner) {
-          background: #f5f7fa;
-          border: 1px solid #dcdfe6;
-          border-radius: 6px;
+          box-sizing: border-box;
+          height: 40px;
+          min-height: 40px !important;
+          background: #f7f8fa;
+          border: 1px solid transparent;
+          border-radius: 12px;
           color: #303133;
           padding: 10px 14px;
           resize: none;
           font-size: 14px;
+          box-shadow: inset 0 0 0 1px #e4e7ed;
+          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 
           &::placeholder {
             color: #a0a0a0;
@@ -602,23 +608,25 @@ onUnmounted(() => {
           &:focus {
             border-color: #409eff;
             background: #fff;
+            box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.12);
           }
         }
       }
 
       .send-button {
-        background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+        width: 40px;
+        height: 40px;
+        background: #409eff;
         border: none;
-        border-radius: 6px;
-        padding: 8px 18px;
+        border-radius: 12px;
+        padding: 0;
         color: #fff;
-        font-weight: 500;
-        font-size: 14px;
-        transition: all 0.3s ease;
+        font-size: 16px;
+        transition: background 0.2s, box-shadow 0.2s;
 
         &:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 10px rgba(64, 158, 255, 0.35);
+          background: #337ecc;
+          box-shadow: 0 4px 12px rgba(64, 158, 255, 0.28);
         }
 
         &:disabled {

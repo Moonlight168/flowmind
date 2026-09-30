@@ -104,11 +104,17 @@
         :disabled="loading"
         size="default"
         maxlength="2000"
-        show-word-limit
       />
-      <el-button type="primary" @click="handleSend" :loading="loading" :disabled="!inputText.trim()">
-        发送
-      </el-button>
+      <el-button
+        class="send-button"
+        type="primary"
+        :icon="Promotion"
+        @click="handleSend"
+        :loading="loading"
+        :disabled="!inputText.trim() || loading"
+        aria-label="发送消息"
+        title="发送"
+      />
     </div>
   </AiFloatingWindow>
 </template>
@@ -116,7 +122,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { designStream, clearDesignState } from '@/api/workflow/design'
-import { ChatDotRound, Plus, Back, Right } from '@element-plus/icons-vue'
+import { ChatDotRound, Plus, Back, Right, Promotion } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessageBox } from 'element-plus'
@@ -634,12 +640,43 @@ defineExpose({
 
 .dialog-footer {
   display: flex;
+  align-items: center;
   gap: 10px;
   padding: 12px 16px;
   border-top: 1px solid #ebeef5;
 
   .el-input {
     flex: 1;
+
+    :deep(.el-input__wrapper) {
+      min-height: 40px;
+      padding: 0 14px;
+      background: #f7f8fa;
+      border-radius: 12px;
+      box-shadow: inset 0 0 0 1px #e4e7ed;
+      transition: box-shadow 0.2s, background 0.2s;
+
+      &.is-focus {
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.12), inset 0 0 0 1px #409eff;
+      }
+    }
+  }
+
+  .send-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: #409eff;
+    font-size: 16px;
+    transition: background 0.2s, box-shadow 0.2s;
+
+    &:hover:not(:disabled) {
+      background: #337ecc;
+      box-shadow: 0 4px 12px rgba(64, 158, 255, 0.28);
+    }
   }
 }
 

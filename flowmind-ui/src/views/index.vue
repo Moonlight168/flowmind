@@ -4,7 +4,7 @@
       <el-col :sm="24" :lg="12" style="padding-left: 20px">
         <h2>FlowMind 智能流程审批平台</h2>
         <p>
-          FlowMind 是一款基于微服务架构的智能流程审批系统，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用 Flowable 工作流引擎，结合 React 模式 Agent 架构，为企业提供高效、稳定、可扩展的审批解决方案。
+          FlowMind 是一款 AI 驱动的智能流程审批平台。用户可以通过自然语言设计流程分类、审批流程和业务表单，由 LangGraph ReAct Agent 生成可运行的 BPMN，再交给 Flowable 引擎部署执行。系统采用 Vue 3、Spring Cloud 与 FastAPI 微服务架构，并通过 Langfuse 观测 AI 调用链路。
         </p>
         <p>
           <b>当前版本:</b> <span>v{{ version }}</span>
@@ -38,6 +38,7 @@
               <li>Redis</li>
               <li>MySQL</li>
               <li>LangChain/LangGraph</li>
+              <li>Langfuse</li>
             </ul>
           </el-col>
           <el-col :span="6">
@@ -61,14 +62,17 @@
         <el-card class="update-log">
           <template v-slot:header>
             <div class="clearfix">
-              <span>系统架构</span>
+              <span>服务入口</span>
             </div>
           </template>
           <div class="body">
             <ul>
-              <li><strong>flowmind-ui</strong> - Vue3 前端，端口 88（dev）/ 80（prod）</li>
-              <li><strong>flowmind-cloud</strong> - Spring Cloud 微服务（Gateway 9001 / Auth 9002 / System 9003 / Flowable 9007）</li>
-              <li><strong>flowmind-ai-flow</strong> - AI 服务（FastAPI + LangGraph），端口 8000</li>
+              <li><strong>管理后台</strong> - http://localhost:18088</li>
+              <li><strong>服务监控</strong> - http://localhost:18090</li>
+              <li><strong>Nacos 控制台</strong> - http://localhost:19090/nacos</li>
+              <li><strong>MySQL / Redis</strong> - localhost:13306 / localhost:16379</li>
+              <li><strong>Langfuse</strong> - http://localhost:13001（按需启动）</li>
+              <li><strong>内部服务</strong> - Java 9001–9008、AI 8000，仅通过 Docker 网络和网关访问</li>
             </ul>
             <p class="mt-4">
               <i class="el-icon-s-promotion"></i> 项目地址：<el-link href="https://gitee.com/wish168/flowmind"
