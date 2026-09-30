@@ -105,16 +105,20 @@
           :key="message.id"
           :message="message"
         />
+        <Transition name="status-fade">
+          <div v-if="isLoading && !hasStreamingContent" class="thinking-message" role="status" aria-live="polite">
+            <div class="thinking-avatar">
+              <el-icon :size="16"><ChatDotRound /></el-icon>
+            </div>
+            <div class="thinking-bubble">
+              <span>AI 正在思考</span>
+              <span class="thinking-dots" aria-hidden="true">
+                <i v-for="i in 3" :key="i"></i>
+              </span>
+            </div>
+          </div>
+        </Transition>
       </div>
-
-      <Transition name="status-fade">
-        <div v-if="isLoading && !hasStreamingContent" class="assistant-status" role="status" aria-live="polite">
-          <span>AI 正在思考</span>
-          <span class="thinking-dots" aria-hidden="true">
-            <i v-for="i in 3" :key="i"></i>
-          </span>
-        </div>
-      </Transition>
 
       <!-- 输入区域 -->
       <div class="window-input p-3 bg-white border-t border-gray-200 flex gap-2 items-center">
@@ -786,23 +790,36 @@ onUnmounted(() => {
   }
 }
 
-.assistant-status {
-  position: absolute;
-  left: 16px;
-  bottom: 72px;
-  z-index: 2;
+.thinking-message {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+}
+
+.thinking-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  color: #409eff;
+  background: #ecf5ff;
+  border-radius: 50%;
+}
+
+.thinking-bubble {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   color: #606266;
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #e4e7ed;
-  border-radius: 999px;
-  box-shadow: 0 6px 18px rgba(31, 45, 61, 0.1);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
+  font-size: 13px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 14px 14px 14px 4px;
+  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.06);
 }
 
 .thinking-dots {
