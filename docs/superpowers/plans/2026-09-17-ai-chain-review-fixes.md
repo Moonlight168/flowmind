@@ -50,7 +50,7 @@
 
 ### Java 后端（flowmind-cloud）
 
-- 网关 AI 路由加 `metadata.response-timeout: 600000`（对齐 AI 侧会话锁 TTL）+ CircuitBreaker 过滤器（新增 `spring-cloud-starter-circuitbreaker-reactor-sentinel` 依赖，Nacos 新增 degrade 规则 dataId）。
+- 网关 AI 路由加 `metadata.response-timeout: 600000`（对齐 AI 侧会话锁 TTL）+ CircuitBreaker 过滤器（新增 `spring-cloud-circuitbreaker-sentinel` 依赖，Nacos 新增 degrade 规则 dataId）。
 - `security.xss.excludeUrls` 增加 `/flowmind-ai/**`（AntPathMatcher 通配，dev/prod 两段）。
 - `/role/optionselect` 权限放宽为 `@RequiresLogin`。
 - `AuthFilter` 令牌透传保持全局（下游 HeaderInterceptor 依赖 Authorization 头解析登录用户），补充注释说明。
@@ -63,7 +63,19 @@
 
 ### 部署配置
 
-- prod compose 移除 AI 服务 `8000:8000` 端口发布（只经网关访问）；dev compose 保留（宿主机网关路由依赖该映射）。
+- prod compose 不发布 AI 服务 `8000:8000`（只经网关访问）；开发环境由宿主机直接运行 AI 服务并监听 8000。
+
+### 2026-09-30 全栈 Docker 启动验证
+
+- 修正网关 Sentinel 熔断依赖的 artifactId 为 BOM 实际管理的 `spring-cloud-circuitbreaker-sentinel`，恢复 Maven 全量打包。
+- AI 镜像的 Debian 系统包源切换为阿里云镜像并增加 APT 重试，避免国内网络下构建中断。
+- 生产 Compose 的前端静态文件、Java JAR 和 AI Python 源码均在构建时复制进镜像，不挂载业务源码，也未启用 Uvicorn reload，因此代码修改不会自动热更新，需重新构建对应产物和镜像并重建容器。
+- Compose 收敛为两份：`docker-compose.yml` 统一启动开发基础设施与 FlowMind 独立 Langfuse；`docker-compose.prod.yml` 通过 `include` 复用基础设施并增加前端、Java 微服务和 AI 服务。
+- FlowMind Langfuse 使用独立 PostgreSQL、ClickHouse、Redis、MinIO 和命名卷，首次启动自动初始化 `flowmind` 项目；UI 默认发布到 3001，避免与其他项目的 3000 端口冲突。
+- 生产 AI 容器通过 `http://flowmind-langfuse-web:3000` 走 Compose 内部网络，本机开发 AI 通过 `http://localhost:3001` 访问；真实密钥和基础设施密码仅放在被 Git 忽略的 `docker/flowmind/.env`。
+- Nginx 入口通过 `FLOWMIND_HTTP_PORT` 配置，默认 `8088:80`，不再需要额外的本机覆盖 Compose。
+- MySQL 与 Nacos 凭据均改为 Compose 必填环境变量；Nacos 数据源密码从容器环境解析，受版本控制的示例只保留占位符。
+- 开发启动脚本为 AI 的 Uvicorn 启用 `--reload`；前端继续使用 Vite 热更新，Java 未引入额外 DevTools，修改后仍按现有流程重启。
 
 ## 验证结果
 

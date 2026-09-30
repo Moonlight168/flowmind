@@ -144,8 +144,10 @@ bin\build.bat
 
 ```bash
 cd docker\flowmind
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+该命令启动前端、Java 微服务、AI 服务、MySQL、Redis、Nacos、Sentinel，以及 FlowMind 独立的 Langfuse。默认入口为 http://localhost:8088，Langfuse 为 http://localhost:3001。
 
 ### 开发环境（启动脚本）
 
@@ -155,7 +157,9 @@ docker-compose -f docker-compose.prod.yml up -d --build
 bin\start.bat
 ```
 
-自动启动：Docker 基础环境 → AI 服务 → Java 后端 → 前端
+自动启动：Docker 基础环境（含独立 Langfuse）→ AI 服务 → Java 后端 → 前端
+
+开发脚本为前端启用 Vite 热更新、为 AI 启用 Uvicorn `--reload`；Java 服务未引入 DevTools，修改后需重启对应服务。
 
 **已启动服务**：AI (8000)、Gateway (9001)、Auth (9002)、System (9003)、Flowable (9007)
 
@@ -179,7 +183,7 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | 服务                 | 端口                     | 访问地址                            |
 | -------------------- | ------------------------ | ----------------------------------- |
 | 前端（开发）         | 88                       | http://localhost:88                 |
-| 前端（生产 Nginx）   | 80                       | http://localhost                    |
+| 前端（生产 Nginx）   | 8088                     | http://localhost:8088               |
 | API 网关（Gateway）  | 9001                     | http://localhost:9001               |
 | Auth 认证            | 9002                     | —                                   |
 | System 系统          | 9003                     | —                                   |
@@ -188,8 +192,9 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
 | MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
 | Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
+| Langfuse             | 3001（容器内 3000）     | http://localhost:3001               |
 
-> 可选模块端口：Gen 9004、Job 9005、File 9006。`docker/ai-service/` 为 vLLM 推理引擎（宿主机 8001），AI 业务服务由 `bin/start.bat` 本地启动或生产编排运行；整体生产编排位于 `docker/flowmind/`。
+> 可选模块端口：Gen 9004、Job 9005、File 9006。开发基础设施使用 `docker/flowmind/docker-compose.yml`；完整生产式编排使用同目录的 `docker-compose.prod.yml`。
 
 ## 项目仓库
 
@@ -210,4 +215,4 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
 
-**最后更新**: 2026-09-07
+**最后更新**: 2026-09-30

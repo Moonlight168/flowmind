@@ -24,7 +24,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":9007 " ^| findstr "LISTE
 echo [OK] FlowMind processes stopped
 echo.
 
-set "DOCKER_DIR=%SCRIPT_DIR%..\docker\cloud"
+set "DOCKER_DIR=%SCRIPT_DIR%..\docker\flowmind"
 
 echo [3/3] Stopping Docker containers...
 cd /d "%DOCKER_DIR%"

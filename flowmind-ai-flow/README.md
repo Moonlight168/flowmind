@@ -84,7 +84,7 @@ flowmind-ai-flow/
     └── pyproject.toml
 ```
 
-> AI 服务的 Docker Compose 在仓库根目录 `docker/ai-service/docker-compose.yml`（含 vllm + ai-service）。
+> 开发基础设施（含 FlowMind 独立 Langfuse）位于 `docker/flowmind/docker-compose.yml`；完整 Docker 环境位于同目录的 `docker-compose.prod.yml`。
 
 ## 核心 API
 
