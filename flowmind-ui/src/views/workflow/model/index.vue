@@ -638,15 +638,6 @@ onMounted(async () => {
 .ai-designer-wrap {
   position: relative;
   min-height: 60vh;
-  transition: margin-right 0.2s ease;
-}
-
-.ai-designer-wrap--with-panel {
-  margin-right: 560px;
-}
-
-@media (max-width: 1100px) {
-  .ai-designer-wrap--with-panel { margin-right: 0; }
 }
 
 .ai-design-mask {

@@ -26,6 +26,23 @@ class CategoryValidator:
         code = output.get("code", "") or ""
         remark = output.get("remark", "") or ""
 
+        # CAT_C005: flow basic 只能选用已有分类。系统一个分类都没有时，
+        # 模型无论输出什么编码都过不了校验，重试也不会变——直接给出可操作提示，
+        # 避免退化成"反复未通过校验"这种无法据以修改需求的死循环报错。
+        if (
+            context.design_type == "flow_design"
+            and context.mode == "basic"
+            and context.categories_lookup_complete
+            and not context.available_categories
+        ):
+            errors.append(
+                ValidationError(
+                    "CAT_C005",
+                    "当前系统还没有流程分类，请先在「流程分类」中创建分类，再回来生成流程",
+                )
+            )
+            return ValidationResult.from_errors(errors)
+
         # CAT_C001: category_name 长度 1-30 非空白
         if not name or not name.strip() or len(name) > 30:
             errors.append(
@@ -79,6 +96,17 @@ class CategoryValidator:
                     severity=ValidationSeverity.WARNING,
                 )
             )
+
+        # CAT_C006: flow basic 的流程描述长度 ≤200（与前端表单 maxlength 一致）
+        if context.design_type == "flow_design" and context.mode == "basic":
+            description = output.get("description", "") or ""
+            if len(description) > 200:
+                errors.append(
+                    ValidationError(
+                        "CAT_C006",
+                        f"流程描述不能超过 200 字（当前 {len(description)} 字），请提炼要点",
+                    )
+                )
 
         return ValidationResult.from_errors(errors + warnings)
 

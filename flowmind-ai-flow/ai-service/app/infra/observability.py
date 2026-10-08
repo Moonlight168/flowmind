@@ -186,7 +186,7 @@ def observe_model_attempt(
     try:
         observation = stack.enter_context(
             get_client().start_as_current_observation(
-                name="flowmind.model_attempt",
+                name=f"模型调用 · {provider}",
                 as_type="span",
                 metadata=metadata,
             )

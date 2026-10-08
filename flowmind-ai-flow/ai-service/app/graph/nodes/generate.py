@@ -72,9 +72,14 @@ def generate_node(state: AppState) -> AppState:
         }
         state["messages"].append(AIMessage(content="已回到指定版本"))
         return state
-    # 构建对话历史（从 messages 提取，移除 system 和 最后一条 user）
+    # 构建对话历史（从 messages 提取）
+    history_messages = state.get("messages", [])
+    history_count = state.get("history_count")
+    if history_count is not None and 0 <= history_count < len(history_messages):
+        # 回退场景：只保留回退点之前的历史 + 本次新输入
+        history_messages = [*history_messages[:history_count], history_messages[-1]]
     conversation_history = []
-    for msg in state.get("messages", []):
+    for msg in history_messages:
         if isinstance(msg, HumanMessage):
             conversation_history.append({"role": "user", "content": msg.content})
         elif isinstance(msg, AIMessage):

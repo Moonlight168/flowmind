@@ -55,6 +55,18 @@ def review_node(state: AppState) -> AppState:
     pipeline = _build_pipeline(design_type, context.mode)
     result = pipeline.run(design_output, context)
 
+    # 权威数据缺失/不匹配类问题重试也不会变（没有分类/表单、分类不存在），
+    # 直接追问用户，而不是让校验失败重试到死循环。
+    ask = _design_clarification(result.errors, context)
+    if ask:
+        state["intent"] = "clarification"
+        design_output["message"] = ask
+        design_output["kind"] = "clarification"
+        design_output["review"] = {"passed": True, "errors": [], "suggestions": []}
+        state["design_output"] = design_output
+        logger.info("[review] 依赖数据不可用，转为向用户追问")
+        return state
+
     # 死循环检测：连续 2 次错误 rule_id 集合相同 → error
     history = state.get("review_error_history") or []
     if pipeline.detect_loop(result.errors, [frozenset(h) for h in history]):
@@ -62,9 +74,13 @@ def review_node(state: AppState) -> AppState:
             f"[review] 检测到死循环，rule_ids={sorted({e.rule_id for e in result.errors})}"
         )
         state["intent"] = "error"
-        # 确定性校验失败：明确告知用户调整需求，而非伪装成可重试的系统错误
+        # 确定性校验失败：优先透出具体校验原因（如"还没有流程分类"），
+        # 它比通用文案更能指导用户下一步动作；无具体原因时才退回通用提示
+        first_error = result.errors[0].message if result.errors else None
         design_output["error_type"] = "validation_failed"
-        design_output["message"] = "生成结果反复未通过校验，请调整需求后重试"
+        design_output["message"] = (
+            first_error or "生成结果反复未通过校验，请调整需求后重试"
+        )
         design_output["retryable"] = False
         design_output["review"] = {
             "passed": False,
@@ -221,3 +237,39 @@ def _extract_gateway_id(error_message: str) -> str | None:
     """从验证错误信息中提取网关 ID，如 'Gateway_1' / 'gateway_condition'"""
     match = re.search(r"'(Gateway_\w+|gw_\w+|gateway_\w+)'", error_message)
     return match.group(1) if match else None
+
+
+#: "分类不可用"的校验规则（flow basic 选用分类）
+_CATEGORY_ASK_RULES = {"CAT_C003", "CAT_C005"}
+
+
+def _design_clarification(
+    errors: list[ValidationError], context: ValidatorContext
+) -> str | None:
+    """权威数据缺失/不匹配导致的问题，重试无法修复，转为面向用户的追问。
+
+    无相关内容返回 None（交给正常的重试或死循环处理）。
+    """
+    rule_ids = {e.rule_id for e in errors}
+
+    # 流程设计没有表单：开始节点强制要 form_key，重试不可能通过
+    if "NODE_N010" in rule_ids:
+        return "当前系统还没有表单，请先创建表单，再回来生成流程"
+
+    # 流程基本信息选用分类：没有分类 / 模型给的分类不存在
+    if context.design_type == "flow_design" and context.mode == "basic":
+        if rule_ids & _CATEGORY_ASK_RULES:
+            available = context.available_categories
+            if not available:
+                return "当前系统还没有流程分类，请先在「流程分类」中创建分类，再回来生成流程"
+            names = "、".join(
+                str(category.get("categoryName") or category.get("code"))
+                for category in available[:10]
+                if category.get("categoryName") or category.get("code")
+            )
+            return (
+                f"没有找到匹配的流程分类。现有分类：{names}。"
+                "请确认要归到哪个分类，或先在「流程分类」中创建"
+            )
+
+    return None

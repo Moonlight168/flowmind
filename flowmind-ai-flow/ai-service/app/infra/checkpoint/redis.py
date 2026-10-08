@@ -130,6 +130,27 @@ class RedisCheckpoint(BaseCheckpointSaver):
             metadata=payload["metadata"],
         )
 
+    def trim_messages(self, thread_id: str, count: int, ns: str = "") -> None:
+        """裁剪 checkpoint 的 messages 到 count 条（版本覆盖时丢弃旧分支对话）。"""
+        key = self._checkpoint_key(thread_id, ns)
+        data = self.redis.get(key)
+        if not data:
+            return
+        typed = ormsgpack.unpackb(data)
+        payload = self.serde.loads_typed(typed)
+        checkpoint = payload.get("checkpoint") or {}
+        channel_values = checkpoint.get("channel_values", {})
+        if not isinstance(channel_values, dict):
+            return
+        messages = channel_values.get("messages", [])
+        if isinstance(messages, list) and len(messages) > count:
+            channel_values["messages"] = messages[:count]
+            checkpoint["updated_channels"] = ["messages"]
+            self.redis.setex(
+                key, self.ttl_seconds, ormsgpack.packb(self.serde.dumps_typed(payload))
+            )
+            logger.debug(f"Trimmed checkpoint messages: thread_id={thread_id}, count={count}")
+
     def put(
         self,
         config: RunnableConfig,

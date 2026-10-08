@@ -66,7 +66,7 @@ def test_chat_entry_attaches_callback_and_records_output(monkeypatch):
     result = chat_module.invoke_chat_workflow("hello", "thread-1", "trace-1")
 
     assert result["chat_response"] == "ok"
-    assert captured["observation_name"] == "flowmind.chat"
+    assert captured["observation_name"] == "助手对话"
     assert captured["graph_config"]["callbacks"] == ["langfuse"]
     assert observation.output == {"chat_response": "ok"}
 
@@ -82,7 +82,7 @@ def test_stream_chat_entry_yields_tokens_and_records_final_output(monkeypatch):
             captured["stream_mode"] = stream_mode
             yield "custom", {"type": "delta", "content": "你"}
             yield "custom", {"type": "delta", "content": "好"}
-            yield "updates", {"chat": {"chat_response": "你好"}}
+            yield "updates", {"对话": {"chat_response": "你好"}}
 
         def get_state(self, config):
             raise AssertionError("updates 已包含最终结果，不应再次读取状态")
@@ -169,7 +169,7 @@ def test_design_entry_attaches_callback_and_records_output(monkeypatch):
     )
 
     assert result == expected_output
-    assert captured["observation_name"] == "flowmind.design"
+    assert captured["observation_name"] == "设计-流程模型"
     assert captured["graph_config"]["callbacks"] == ["langfuse"]
     assert observation.output == expected_output
 
@@ -209,7 +209,8 @@ def test_stream_design_entry_keeps_observation_until_final_output(monkeypatch):
         )
     )
 
-    assert events[-1] == {"type": "done", **expected_output}
-    assert captured["observation_name"] == "flowmind.design"
+    # done 事件附带回传分支消息数（前端作为版本指针）
+    assert events[-1] == {"type": "done", "message_count": 0, **expected_output}
+    assert captured["observation_name"] == "设计-流程模型"
     assert captured["graph_config"]["callbacks"] == ["langfuse"]
     assert observation.output == expected_output

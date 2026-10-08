@@ -35,8 +35,6 @@
 </template>
 
 <script>
-// 模块级共享：多个浮动窗口按创建顺序错开初始位置，避免同时打开时完全重叠
-let windowSeq = 0
 // 模块级共享：点击窗口时递增 z-index，保证被点窗口置顶
 let zCounter = 3100
 </script>
@@ -45,7 +43,6 @@ let zCounter = 3100
 import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { Close, MoreFilled } from '@element-plus/icons-vue'
 
-const seq = ++windowSeq
 const zIndex = ref(++zCounter)
 
 const props = defineProps({
@@ -86,9 +83,8 @@ function bringToFront() {
 
 function ensureInitialized() {
   if (pos.ready) return
-  const offset = (seq - 1) * 40
-  pos.x = Math.max(0, window.innerWidth - size.w - props.right - offset)
-  pos.y = Math.max(0, window.innerHeight - size.h - props.bottom - offset)
+  pos.x = window.innerWidth - size.w - props.right
+  pos.y = window.innerHeight - size.h - props.bottom
   pos.ready = true
 }
 

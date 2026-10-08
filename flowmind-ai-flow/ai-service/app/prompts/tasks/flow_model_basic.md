@@ -10,3 +10,8 @@
 ```
 
 只在 changes 中包含用户要求修改或新建所必需的字段。code 必须来自 search_categories 返回的真实 code；没有可用分类时追问或明确报错，不得编造。
+
+字段要求：
+- flow_name：流程名称，2-30 字
+- code：所属流程分类的编码，必须来自 search_categories 结果
+- description：流程描述，不超过 200 字。用户描述较长时提炼要点，不要截断成半句话

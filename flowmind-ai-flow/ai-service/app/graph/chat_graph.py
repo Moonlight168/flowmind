@@ -26,9 +26,9 @@ def create_chat_workflow() -> StateGraph:
     """创建简化的聊天 Workflow"""
     workflow = StateGraph(AppState)
 
-    workflow.add_node("chat", chat_node)
-    workflow.set_entry_point("chat")
-    workflow.add_edge("chat", END)
+    workflow.add_node("对话", chat_node)
+    workflow.set_entry_point("对话")
+    workflow.add_edge("对话", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
@@ -79,7 +79,7 @@ def invoke_chat_workflow(
         prompt_release(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
-            "flowmind.chat",
+            "助手对话",
             input={"user_input": user_input},
             session_id=thread_id,
             trace_id=trace_id,
@@ -115,7 +115,7 @@ def stream_chat_workflow(
         prompt_release(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
-            "flowmind.chat",
+            "助手对话",
             input={"user_input": user_input},
             session_id=thread_id,
             trace_id=trace_id,
@@ -132,7 +132,7 @@ def stream_chat_workflow(
                 if isinstance(data, dict) and data.get("type") == "delta":
                     yield data
             elif stream_mode == "updates":
-                node_state = data.get("chat", {}) if isinstance(data, dict) else {}
+                node_state = data.get("对话", {}) if isinstance(data, dict) else {}
                 if isinstance(node_state, dict):
                     final_response = str(node_state.get("chat_response") or "")
 

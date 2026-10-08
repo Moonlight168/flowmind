@@ -40,6 +40,22 @@ from app.integrations.backend import request_cache
 from app.prompts import prompt_release
 
 LOCK_TTL_SECONDS = 600
+
+#: 设计类型 → 中文标签（用于 Langfuse trace name，提高排查可读性）
+_DESIGN_TYPE_LABELS = {
+    "category_design": "流程分类",
+    "flow_design": "流程",
+    "form_design": "表单",
+}
+
+
+def _design_trace_name(design_type: str, mode: str = "design") -> str:
+    # 流程设计分两个窗口：基本信息（basic）与流程模型（design），trace 名需区分
+    if design_type == "flow_design":
+        return "设计-流程信息" if mode == "basic" else "设计-流程模型"
+    return f"设计-{_DESIGN_TYPE_LABELS.get(design_type, design_type)}"
+
+
 _RELEASE_LOCK_SCRIPT = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
     return redis.call('del', KEYS[1])
@@ -114,7 +130,7 @@ def _result_router(state: AppState) -> str:
 
     # 成功 + 审查通过 = 结束
     if intent == "success" and review_passed:
-        return "format"
+        return "格式化"
 
     # 成功 + 审查失败 + 未超重试次数 = 重试
     if (
@@ -122,48 +138,48 @@ def _result_router(state: AppState) -> str:
         and not review_passed
         and review_retry_count < settings.validation.review_max_retry_count
     ):
-        return "design"
+        return "设计生成"
 
     # 其他情况（错误 或 超重试）= 结束
-    return "format"
+    return "格式化"
 
 
 def create_design_workflow() -> StateGraph:
     workflow = StateGraph(AppState)
 
-    workflow.add_node("prepare", prepare_design_node)
-    workflow.add_node("design", generate_node)
-    workflow.add_node("review", review_node)
-    workflow.add_node("format", finalize_node)
+    workflow.add_node("预处理", prepare_design_node)
+    workflow.add_node("设计生成", generate_node)
+    workflow.add_node("校验", review_node)
+    workflow.add_node("格式化", finalize_node)
 
-    workflow.set_entry_point("prepare")
+    workflow.set_entry_point("预处理")
 
     workflow.add_conditional_edges(
-        "prepare",
-        lambda state: "format" if state.get("intent") == "error" else "design",
-        {"design": "design", "format": "format"},
+        "预处理",
+        lambda state: "格式化" if state.get("intent") == "error" else "设计生成",
+        {"设计生成": "设计生成", "格式化": "格式化"},
     )
 
-    # design → review/format 的条件路由
-    # clarification 和 error 直接进入 format，success 进入 review
+    # 设计生成 → 校验/格式化 的条件路由
+    # clarification 和 error 直接进入格式化，success 进入校验
     workflow.add_conditional_edges(
-        "design",
+        "设计生成",
         lambda state: (
-            "format" if state.get("intent") in ("clarification", "error") else "review"
+            "格式化" if state.get("intent") in ("clarification", "error") else "校验"
         ),
-        {"review": "review", "format": "format"},
+        {"校验": "校验", "格式化": "格式化"},
     )
 
     workflow.add_conditional_edges(
-        "review",
+        "校验",
         _result_router,
         {
-            "design": "design",
-            "format": "format",
+            "设计生成": "设计生成",
+            "格式化": "格式化",
         },
     )
 
-    workflow.add_edge("format", END)
+    workflow.add_edge("格式化", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
@@ -179,6 +195,7 @@ def _prepare_design_call(
     current_form_data: dict | None,
     mode: str,
     allow_full_replace: bool,
+    history_count: int | None,
     kwargs: dict,
 ) -> tuple[dict, str, AppState]:
     """准备 config 与 initial_state（invoke 与 stream 共用）"""
@@ -196,6 +213,7 @@ def _prepare_design_call(
         "design_type": design_type,
         "mode": mode,
         "allow_full_replace": allow_full_replace,
+        "history_count": history_count,
         "intent": "clarification",
         "review_retry_count": 0,
         "review_error_history": [],
@@ -211,6 +229,7 @@ def invoke_design_workflow(
     current_form_data: dict | None = None,
     mode: str = "design",
     allow_full_replace: bool = False,
+    history_count: int | None = None,
     **kwargs,
 ) -> dict:
     """设计 Workflow 调用入口（同步，返回最终 design_output）"""
@@ -222,6 +241,7 @@ def invoke_design_workflow(
         current_form_data,
         mode,
         allow_full_replace,
+        history_count,
         kwargs,
     )
 
@@ -233,7 +253,7 @@ def invoke_design_workflow(
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
-            "flowmind.design",
+            _design_trace_name(design_type, mode),
             input={
                 "design_type": design_type,
                 "mode": mode,
@@ -278,6 +298,7 @@ def stream_design_workflow(
     current_form_data: dict | None = None,
     mode: str = "design",
     allow_full_replace: bool = False,
+    history_count: int | None = None,
     **kwargs,
 ) -> Iterator[dict[str, Any]]:
     """流式设计 Workflow：逐个 yield 进度事件，最后 yield done 事件（含完整 design_output）"""
@@ -289,6 +310,7 @@ def stream_design_workflow(
         current_form_data,
         mode,
         allow_full_replace,
+        history_count,
         kwargs,
     )
 
@@ -301,7 +323,7 @@ def stream_design_workflow(
         _thread_lock(thread_id),
         log_context(trace_id=trace_id, request_id=thread_id[:8] if thread_id else None),
         observe_workflow(
-            "flowmind.design",
+            _design_trace_name(design_type, mode),
             input={
                 "design_type": design_type,
                 "mode": mode,
@@ -322,17 +344,22 @@ def stream_design_workflow(
     ):
         design_count = 0
         last_error_count = 0
+        # 本轮开始前的 checkpoint 消息数：用于算出本轮真实新增了几条
+        before_state = design_workflow.get_state(config)
+        before_count = (
+            len((before_state.values or {}).get("messages") or []) if before_state else 0
+        )
         for step in design_workflow.stream(
             initial_state, langchain_config(config), stream_mode="updates"
         ):
             for node_name, node_state in step.items():
-                if node_name == "prepare":
+                if node_name == "预处理":
                     yield {
                         "type": "progress",
                         "phase": "prepare",
                         "message": "正在解析当前设计和会话上下文",
                     }
-                elif node_name == "design":
+                elif node_name == "设计生成":
                     design_count += 1
                     if design_count == 1:
                         yield {
@@ -346,7 +373,7 @@ def stream_design_workflow(
                             "phase": "design",
                             "message": f"发现 {last_error_count} 处问题，正在修正（第 {design_count - 1}/{max_retry} 次）",
                         }
-                elif node_name == "review":
+                elif node_name == "校验":
                     yield {
                         "type": "progress",
                         "phase": "review",
@@ -358,7 +385,7 @@ def stream_design_workflow(
                         else {}
                     )
                     last_error_count = len(review_info.get("errors", []))
-                elif node_name == "format":
+                elif node_name == "格式化":
                     yield {
                         "type": "progress",
                         "phase": "format",
@@ -366,14 +393,21 @@ def stream_design_workflow(
                     }
 
         final_state = design_workflow.get_state(config)
-        design_output = (
-            (final_state.values or {}).get("design_output", {}) if final_state else {}
-        )
+        final_values = (final_state.values or {}) if final_state else {}
+        design_output = final_values.get("design_output", {})
         if isinstance(design_output, dict):
             design_output["trace_id"] = trace_id
+        # 本轮的分支长度：checkpoint 会保留被回退的旧分支，只有传了指针时
+        # 真实分支长度才是「指针 + 本轮新增」，前端拿它当下一轮的版本指针
+        final_count = len(final_values.get("messages") or [])
+        added = max(0, final_count - before_count)
+        branch_count = (
+            final_count if history_count is None else history_count + added
+        )
         record_observation_output(observation, design_output)
         yield {
             "type": "done",
+            "message_count": branch_count,
             **(design_output if isinstance(design_output, dict) else {}),
         }
 

@@ -1,7 +1,7 @@
 <template>
-  <div class="ai-assistant-container" v-if="!hasPageAiDesign">
+  <div class="ai-assistant-container">
     <!-- 浮窗按钮 -->
-    <el-tooltip v-if="!isVisible" content="AI 助手" placement="left" effect="dark">
+    <el-tooltip v-if="!isVisible && activeAiWindow !== 'design'" content="AI 助手" placement="left" effect="dark">
       <div
         class="ai-assistant-button cursor-pointer hover:scale-110 transition-all duration-300"
         @click="toggleVisible"
@@ -152,21 +152,16 @@
 </template>
 
 <script setup>
-import { ref, nextTick, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, nextTick, watch, getCurrentInstance, onMounted, onUnmounted, computed } from 'vue'
 import { ChatDotRound, Close, Delete, Plus, List, Promotion } from '@element-plus/icons-vue'
 import { aiFormChatStream, getAiFormState, deleteAiFormState, batchDeleteAiFormState, getChatHistoryList } from '@/api/workflow/ai'
 import { ElMessage } from 'element-plus'
 import { useAiSessionStore } from '@/store/modules/aiSession'
 import MessageItem from './MessageItem.vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
+import { activeAiWindow } from '@/utils/aiWindow'
 
 const { proxy } = getCurrentInstance()
-const route = useRoute()
-
-// 已有 AI 设计按钮的页面，隐藏全局助手
-const PAGE_WITH_AI_DESIGN = ['/workflow/model', '/workflow/form', '/workflow/category']
-const hasPageAiDesign = computed(() => PAGE_WITH_AI_DESIGN.includes(route.path))
 
 // 引入 Pinia Store
 const aiSession = useAiSessionStore()
@@ -203,29 +198,36 @@ const MIN_HEIGHT = 400
 
 // 切换窗口可见性
 async function toggleVisible() {
-  isVisible.value = !isVisible.value
-  if (!isVisible.value) cancelCurrentRequest()
   if (isVisible.value) {
-    // 恢复已有会话
-    if (aiSession.hasActiveSession) {
-      const chatHistory = await aiSession.restoreSession()
-      if (chatHistory && chatHistory.length > 0) {
-        messages.value = chatHistory.map((msg) => createMessage(msg))
-      } else {
-        showWelcome()
-      }
-    } else if (messages.value.length === 0) {
+    isVisible.value = false
+    if (activeAiWindow.value === 'assistant') activeAiWindow.value = null
+    cancelCurrentRequest()
+    return
+  }
+  // 打开：先恢复会话再显示窗口，避免先渲染顶部再跳到底部
+  if (aiSession.hasActiveSession) {
+    const chatHistory = await aiSession.restoreSession()
+    if (chatHistory && chatHistory.length > 0) {
+      messages.value = chatHistory.map((msg) => createMessage(msg))
+    } else {
       showWelcome()
     }
-    // 加载历史列表
-    handleLoadHistoryList()
+  } else if (messages.value.length === 0) {
+    showWelcome()
   }
+  isVisible.value = true
+  activeAiWindow.value = 'assistant'
+  handleLoadHistoryList()
+  scrollToBottom()
 }
 
 // AiFloatingWindow 头部关闭按钮回调
 function handleVisibleChange(val) {
   isVisible.value = val
-  if (!val) cancelCurrentRequest()
+  if (!val) {
+    if (activeAiWindow.value === 'assistant') activeAiWindow.value = null
+    cancelCurrentRequest()
+  }
 }
 
 function cancelCurrentRequest() {
@@ -516,6 +518,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cancelCurrentRequest()
+})
+
+// 设计窗口打开时关闭全局助手
+watch(activeAiWindow, (kind) => {
+  if (kind === 'design' && isVisible.value) {
+    isVisible.value = false
+    cancelCurrentRequest()
+  }
 })
 </script>
 

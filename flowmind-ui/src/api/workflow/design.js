@@ -10,6 +10,18 @@ export function clearDesignState(designType, threadId, mode = 'design') {
 }
 
 /**
+ * 回退设计会话历史：把后端 checkpoint 的对话裁剪到 message_count 条。
+ * 版本覆盖（应用变更）后调用，丢弃旧分支对话。
+ */
+export function rollbackDesignState(designType, data) {
+  return request({
+    url: '/flowmind-ai/design/state/' + designType + '/rollback',
+    method: 'post',
+    data
+  })
+}
+
+/**
  * 流式设计（SSE）：POST + 逐条解析后端推送的进度/done 事件
  *
  * @param {string} designType - 'category' | 'flow' | 'form'

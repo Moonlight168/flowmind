@@ -27,3 +27,23 @@ class DesignRequestDTO(BaseModel):
         default=False,
         description="用户已明确选择并确认允许替换全部现有设计",
     )
+    history_count: int | None = Field(
+        default=None,
+        ge=0,
+        description="回退场景：只取前 N 条对话历史（版本指针）；不传则用完整历史",
+    )
+
+
+class RollbackRequestDTO(BaseModel):
+    """回退设计会话历史请求（版本覆盖时裁剪 checkpoint 对话）"""
+
+    message_count: int = Field(..., ge=0, description="裁剪到前 N 条消息")
+    thread_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="会话标识，同设计请求的 thread_id",
+    )
+    mode: Literal["basic", "design"] = Field(
+        default="design",
+        description="设计模式，与设计请求保持一致",
+    )

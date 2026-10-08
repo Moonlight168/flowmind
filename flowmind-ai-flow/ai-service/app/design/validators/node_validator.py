@@ -122,6 +122,21 @@ class NodeValidator:
                     )
                 )
 
+        # NODE_N010: 流程的开始节点强制要求 form_key 且必须来自 search_forms，
+        # 系统一个表单都没有时无论重试多少次都过不了，直接报可操作错误。
+        if (
+            context.design_type == "flow_design"
+            and context.mode == "design"
+            and context.forms_lookup_complete
+            and not context.available_forms
+        ):
+            errors.append(
+                ValidationError(
+                    "NODE_N010",
+                    "当前系统还没有表单，请先创建表单后再生成流程",
+                )
+            )
+
         # NODE_N005: START_EVENT 必须有 form_key；所有显式引用都必须存在。
         for node in nodes:
             form_key = node.get("form_key", "")

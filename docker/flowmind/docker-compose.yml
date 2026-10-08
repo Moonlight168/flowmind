@@ -1,10 +1,11 @@
-# FlowMind 完整开发环境：基础设施 + Java 后端 + Vite / Uvicorn 热更新
+# FlowMind AI 开发环境：只保留 AI 服务链路必需的基础设施与后端，其余微服务不启动
 # 启动：docker compose up -d --remove-orphans
 # --remove-orphans 会在从生产栈切回开发栈时清理占用 18088 的旧 Nginx 容器。
 
 services:
-  # 只复用生产文件中的基础设施与后端定义，不把生产 Nginx 引入开发模型。
+  # 只复用生产文件中 AI 服务必需的基础设施与后端定义，不把生产 Nginx 引入开发模型。
   # 这样 --remove-orphans 能在环境切换时识别并清理旧 Nginx 容器。
+  # 必需后端：gateway（业务 API 入口）/ auth（登录）/ system（角色）/ flowable（分类·表单·流程模型）。
   flowmind-mysql:
     extends:
       file: docker-compose.prod.yml
@@ -39,30 +40,6 @@ services:
     extends:
       file: docker-compose.prod.yml
       service: flowmind-flowable
-
-  flowmind-file:
-    profiles: ["optional"]
-    extends:
-      file: docker-compose.prod.yml
-      service: flowmind-file
-
-  flowmind-gen:
-    profiles: ["optional"]
-    extends:
-      file: docker-compose.prod.yml
-      service: flowmind-gen
-
-  flowmind-job:
-    profiles: ["optional"]
-    extends:
-      file: docker-compose.prod.yml
-      service: flowmind-job
-
-  flowmind-monitor:
-    profiles: ["optional"]
-    extends:
-      file: docker-compose.prod.yml
-      service: flowmind-monitor
 
   flowmind-ui:
     container_name: flowmind-ui

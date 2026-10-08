@@ -14,16 +14,33 @@
         link
         type="info"
         title="回退上一版"
-        :disabled="loading || !canRollback"
+        :disabled="loading || pendingPreview || !canRollback"
         @click="handleRollback('prev')"
       >
         <el-icon><Back /></el-icon>
       </el-button>
+      <el-select
+        v-model="currentVersionIndex"
+        class="version-select"
+        size="small"
+        teleported
+        popper-class="version-select-popper"
+        :placeholder="''"
+        :disabled="loading || pendingPreview || versionCount < 2"
+        @change="jumpToVersion"
+      >
+        <el-option
+          v-for="(v, i) in versionOptions"
+          :key="i"
+          :label="`v${i + 1} · ${v.time || '—'}`"
+          :value="i"
+        />
+      </el-select>
       <el-button
         link
         type="info"
         title="前进"
-        :disabled="loading || !canRedo"
+        :disabled="loading || pendingPreview || !canRedo"
         @click="handleRedo"
       >
         <el-icon><Right /></el-icon>
@@ -41,7 +58,7 @@
 
     <div class="dialog-messages" ref="messagesContainer">
       <MessageItem
-        v-for="(msg, index) in messages"
+        v-for="(msg, index) in visibleMessages"
         :key="index"
         :message="msg"
       />
@@ -121,12 +138,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { designStream, clearDesignState } from '@/api/workflow/design'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { designStream, clearDesignState, rollbackDesignState } from '@/api/workflow/design'
 import { ChatDotRound, Plus, Back, Right, Promotion } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { activeAiWindow } from '@/utils/aiWindow'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -160,11 +178,16 @@ const visible = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-const title = computed(() => ({
-  category: 'AI 设计分类',
-  flow: 'AI 设计流程',
-  form: 'AI 设计表单'
-}[props.designType] || 'AI 设计'))
+const title = computed(() => {
+  // 流程设计分两个窗口：基本信息（basic）与流程模型（design）
+  if (props.designType === 'flow') {
+    return props.mode === 'basic' ? '流程信息' : '流程模型'
+  }
+  return {
+    category: '流程分类',
+    form: '表单设计'
+  }[props.designType] || 'AI 设计'
+})
 
 // 首次进入（无历史消息）时展示的固定欢迎语
 const WELCOME_BY_TYPE = {
@@ -173,7 +196,14 @@ const WELCOME_BY_TYPE = {
     '- 「创建『费用报销』分类，下设差旅、办公、招待三个子类」\n' +
     '- 「把『采购管理』下的子类合并，再新增『供应商管理』」\n\n' +
     '描述越具体，生成越准确。',
-  flow: '您好！我是 **AI 流程设计助手**，可以把业务需求转成可运行的 BPMN 流程。\n\n' +
+  // 流程基本信息：只生成名称、分类、描述
+  'flow:basic': '您好！我是 **AI 流程基本信息助手**，可以根据描述生成流程的名称、分类和描述。\n\n' +
+    '试着这样描述：\n' +
+    '- 「员工请假审批流程，归到人事管理分类」\n' +
+    '- 「采购申请流程，用于供应商采购审批」\n\n' +
+    '生成后点「应用变更」填入基本信息表单。',
+  // 流程模型：生成 BPMN 节点与连线
+  flow: '您好！我是 **AI 流程模型设计助手**，可以把业务需求转成可运行的 BPMN 流程图。\n\n' +
     '试着这样描述：\n' +
     '- 「请假审批：员工提交申请，主管审批通过后归档」\n' +
     '- 「采购申请需要会签和驳回修改」\n\n' +
@@ -186,12 +216,25 @@ const WELCOME_BY_TYPE = {
 
 function ensureGreeting() {
   if (messages.value.length) return
-  const text = WELCOME_BY_TYPE[props.designType] || WELCOME_BY_TYPE.category
-  messages.value.push({ role: 'assistant', content: text })
+  const key = props.designType === 'flow' && props.mode === 'basic'
+    ? 'flow:basic'
+    : props.designType
+  const text = WELCOME_BY_TYPE[key] || WELCOME_BY_TYPE.category
+  // 欢迎语是纯前端展示，不在后端 checkpoint 里，标记 local 以便算后端历史条数
+  messages.value.push({ role: 'assistant', content: text, local: true })
 }
 
 const inputText = ref('')
 const messages = ref([])
+// 版本导航时只改显示范围，不截断 messages —— 这样切回新版本能恢复历史。
+// null 表示显示全部（停在最新版本）；数字表示只显示前 N 条。
+const displayLimit = ref(null)
+const visibleMessages = computed(() =>
+  displayLimit.value == null ? messages.value : messages.value.slice(0, displayLimit.value)
+)
+// 后端 checkpoint 的逻辑消息条数（由 done 事件回传）。前端条数与后端不一致
+// （后端会因校验重试追加消息），版本指针必须用后端自己的计数才准确。
+const lastBackendCount = ref(null)
 const loading = ref(false)
 const progressText = ref('')
 const pendingPreview = ref(null)
@@ -222,89 +265,110 @@ const flowKey = computed(() => {
   return fd.modelId || fd.modelKey || fd.formId || props.sessionId || localSessionId.value
 })
 
+// 存储命名空间：必须区分 mode，否则基本信息（basic）与流程模型（design）窗口
+// 会共用同一份会话消息与版本历史，互相污染
 const storageKey = computed(() => {
-  return `ai_design_${props.designType}_${flowKey.value}`
+  return `ai_design_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
-// 版本历史：每轮 AI 生成成功后存一个版本，用于"回退/前进"
+// 版本历史：每次"应用变更"存一个版本；导航（回退/前进/下拉）只移动当前指针，不删除版本
 const VERSION_LIMIT = 20
-const redoVersions = ref([])
 // sessionStorage 不是响应式：版本数必须镜像到 ref，否则按钮状态会永久缓存
 const versionCount = ref(0)
+// 当前所在版本索引；null 表示还没有任何版本
+const currentVersionIndex = ref(null)
 const versionKey = computed(() => {
-  return `ai_design_versions_${props.designType}_${flowKey.value}`
+  return `ai_design_versions_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
 function getVersions() {
   const saved = sessionStorage.getItem(versionKey.value)
+  let list = []
   try {
-    return saved ? JSON.parse(saved) : []
+    list = saved ? JSON.parse(saved) : []
   } catch (e) {
     return []
   }
+  // 兼容旧格式（纯 formData 数组）→ 统一为带元数据的版本对象
+  return list.map((item) =>
+    item && typeof item === 'object' && 'data' in item
+      ? item
+      : { data: item, time: '' }
+  )
 }
 
+// 下拉框选项（依赖 versionCount 触发重算，sessionStorage 本身非响应式）
+const versionOptions = computed(() => {
+  versionCount.value
+  return getVersions()
+})
+
 function syncVersionCount() {
-  versionCount.value = getVersions().length
+  const versions = getVersions()
+  versionCount.value = versions.length
+  if (!versions.length) {
+    currentVersionIndex.value = null
+  } else if (currentVersionIndex.value == null || currentVersionIndex.value >= versions.length) {
+    currentVersionIndex.value = versions.length - 1
+  }
 }
 
 function saveVersion(formData) {
   const versions = getVersions()
-  versions.push(cloneData(formData))
-  if (versions.length > VERSION_LIMIT) versions.splice(1, 1)
+  // 从当前版本继续：丢弃当前版本之后的
+  if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
+    versions.splice(currentVersionIndex.value + 1)
+  }
+  versions.push({
+    data: cloneData(formData),
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    messageCount: messages.value.length,
+    // 后端 checkpoint 的逻辑条数，作为回退/分叉时的历史指针
+    backendCount: lastBackendCount.value
+  })
+  if (versions.length > VERSION_LIMIT) versions.splice(0, versions.length - VERSION_LIMIT)
   sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
-  redoVersions.value = []
+  currentVersionIndex.value = versions.length - 1
   syncVersionCount()
 }
 
-function ensureBaselineVersion() {
-  if (getVersions().length === 0) saveVersion(currentFormData.value)
-}
+const canRollback = computed(() => currentVersionIndex.value > 0)
+const canRedo = computed(() =>
+  currentVersionIndex.value != null && currentVersionIndex.value < versionCount.value - 1
+)
 
-const canRollback = computed(() => versionCount.value >= 2)
-const canRedo = computed(() => redoVersions.value.length > 0)
-
-function rollbackTo(target) {
+function jumpToVersion(index) {
   const versions = getVersions()
-  const idx = target === 'start' ? 0 : versions.length - 2  // "prev" = 倒数第二
-  const version = versions[idx]
-  if (version) {
-    currentFormData.value = cloneData(version)
-    emit('fill', currentFormData.value)
-    // 截断到目标版本（丢弃之后的），这样连续"上一步"能逐级回退；
-    // 丢弃的版本进入前进栈，可重做恢复
-    redoVersions.value.push(...versions.slice(idx + 1))
-    sessionStorage.setItem(versionKey.value, JSON.stringify(versions.slice(0, idx + 1)))
-    syncVersionCount()
-    return true
-  }
-  return false
+  if (index < 0 || index >= versions.length) return
+  const version = versions[index]
+  currentVersionIndex.value = index
+  currentFormData.value = cloneData(version.data)
+  // 只改显示范围，不截断 messages —— 切回较新版本时历史能恢复
+  displayLimit.value =
+    typeof version.messageCount === 'number' && version.messageCount < messages.value.length
+      ? version.messageCount
+      : null
+  saveSession()
+  emit('fill', currentFormData.value)
+  ElMessage.info(`已跳转到版本 ${index + 1}`)
 }
 
 function handleRollback(target) {
-  if (rollbackTo(target)) {
-    messages.value.push({ role: 'assistant', content: '已回退到上一版本' })
-  } else {
-    messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
+  const index = target === 'start' ? 0 : currentVersionIndex.value - 1
+  if (index < 0 || index === currentVersionIndex.value) {
+    ElMessage.info('没有可回退的版本')
+    return
   }
-  scrollToBottom()
+  jumpToVersion(index)
 }
 
 function handleRedo() {
-  const version = redoVersions.value.pop()
-  if (!version) {
-    messages.value.push({ role: 'assistant', content: '没有可前进的版本' })
-    scrollToBottom()
+  const index = currentVersionIndex.value + 1
+  if (currentVersionIndex.value == null || index >= versionCount.value) {
+    ElMessage.info('没有可前进的版本')
     return
   }
-  currentFormData.value = cloneData(version)
-  emit('fill', currentFormData.value)
-  const versions = getVersions()
-  versions.push(cloneData(version))
-  sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
-  syncVersionCount()
-  messages.value.push({ role: 'assistant', content: '已前进到下一版本' })
-  scrollToBottom()
+  jumpToVersion(index)
 }
 
 function saveSession() {
@@ -328,14 +392,22 @@ function restoreSession() {
     }
   }
   ensureGreeting()
+  scrollToBottom()
 }
 
 onMounted(restoreSession)
 
+// 全局助手打开时关闭设计窗口
+watch(activeAiWindow, (kind) => {
+  if (kind === 'assistant') emit('update:modelValue', false)
+})
+
 watch(visible, (val) => {
   if (val) {
     restoreSession()
+    activeAiWindow.value = 'design'
   } else {
+    if (activeAiWindow.value === 'design') activeAiWindow.value = null
     cancelCurrentRequest()
     discardPreview()
     saveSession()
@@ -361,7 +433,6 @@ async function refreshBaseline() {
     const fresh = await props.getCurrentBaseline()
     if (fresh && Object.keys(fresh).length > 0) {
       currentFormData.value = { ...currentFormData.value, ...fresh }
-      ensureBaselineVersion()
     }
   } catch (e) {
     console.error('获取最新设计基线失败:', e)
@@ -386,6 +457,15 @@ async function handleSend() {
   inputText.value = ''
   pendingChoices.value = []
 
+  // 停在旧版本时继续生成 = 分叉：截断当前显示范围之后的历史，再追加本轮输入
+  let forkBackendCount = null
+  if (displayLimit.value != null && displayLimit.value < messages.value.length) {
+    const versions = getVersions()
+    forkBackendCount = versions[currentVersionIndex.value]?.backendCount ?? null
+    messages.value = messages.value.slice(0, displayLimit.value)
+  }
+  displayLimit.value = null
+
   messages.value.push({ role: 'user', content: userInput })
   scrollToBottom()
 
@@ -403,7 +483,8 @@ async function handleSend() {
       current_form_data: currentFormData.value,
       mode: props.mode,
       thread_id: flowKey.value,
-      allow_full_replace: allowFullReplace.value
+      allow_full_replace: allowFullReplace.value,
+      history_count: forkBackendCount
     }, (event) => {
       if (requestController.value !== controller) return
       if (event.type === 'progress') {
@@ -411,15 +492,21 @@ async function handleSend() {
         emit('progress', event.message)
       } else if (event.type === 'done') {
         const data = event
+        if (typeof data.message_count === 'number') {
+          lastBackendCount.value = data.message_count
+        }
         pendingChoices.value = data.status === 'needs_input' && Array.isArray(data.choices)
           ? data.choices
           : []
         // 回退指令：恢复到目标版本（后端判别返回 rollback）
         if (data.kind === 'rollback') {
-          if (rollbackTo(data.target)) {
-            messages.value.push({ role: 'assistant', content: data.message || '已回退到指定版本' })
+          const target = data.target
+          const index = target === 'start' ? 0 : currentVersionIndex.value - 1
+          if (index >= 0 && index !== currentVersionIndex.value) {
+            jumpToVersion(index)
+            messages.value.push({ role: 'assistant', content: data.message || '已回退到指定版本', local: true })
           } else {
-            messages.value.push({ role: 'assistant', content: '没有可回退的版本' })
+            messages.value.push({ role: 'assistant', content: '没有可回退的版本', local: true })
           }
           scrollToBottom()
         } else if (data.status === 'ready' && data.form_data != null) {
@@ -432,7 +519,7 @@ async function handleSend() {
           scrollToBottom()
         }
       } else if (event.type === 'error') {
-        messages.value.push({ role: 'assistant', content: event.message || '服务暂时不可用，请稍后重试。' })
+        messages.value.push({ role: 'assistant', content: event.message || '服务暂时不可用，请稍后重试。', local: true })
         scrollToBottom()
       }
     }, controller.signal)
@@ -442,7 +529,7 @@ async function handleSend() {
       return
     }
     console.error('AI 设计失败:', error)
-    messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。' })
+    messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。', local: true })
     scrollToBottom()
   } finally {
     if (requestController.value === controller) {
@@ -457,11 +544,11 @@ async function handleSend() {
 }
 
 function scrollToBottom() {
-  setTimeout(() => {
+  nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
-  }, 0)
+  })
 }
 
 onBeforeUnmount(cancelCurrentRequest)
@@ -539,14 +626,35 @@ async function applyPreview() {
       console.error('检查画布最新状态失败:', e)
     }
   }
-  ensureBaselineVersion()
+  // 从旧版本继续生成：应用将丢弃当前版本之后的版本，先确认
+  const versions = getVersions()
+  if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
+    const dropped = versions.length - 1 - currentVersionIndex.value
+    try {
+      await ElMessageBox.confirm(
+        `将从版本 ${currentVersionIndex.value + 1} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
+        '提示',
+        { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
+  }
   const formData = pendingPreview.value.form_data
   currentFormData.value = cloneData(formData)
   emit('fill', formData)
   saveVersion(formData)
+  // 版本覆盖：裁剪后端 checkpoint 到新版本的消息长度，丢弃旧分支对话
+  // 版本覆盖：裁剪后端 checkpoint 到本轮的分支长度（丢弃回退掉的旧分支）
+  if (lastBackendCount.value != null) {
+    rollbackDesignState(props.designType, {
+      message_count: lastBackendCount.value,
+      thread_id: flowKey.value,
+      mode: props.mode
+    }).catch((e) => console.warn('回退会话历史失败:', e))
+  }
   pendingPreview.value = null
   previewBaseline.value = null
-  visible.value = false
 }
 
 function discardPreview() {
@@ -562,8 +670,9 @@ function clearMessages() {
   cancelCurrentRequest()
   discardPreview()
   messages.value = []
+  displayLimit.value = null
+  lastBackendCount.value = null
   pendingChoices.value = []
-  redoVersions.value = []
   syncVersionCount()
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
   // 只清空 AI 生成的数据
@@ -583,6 +692,34 @@ defineExpose({
 </script>
 
 <style lang="scss" scoped>
+.version-select {
+  width: 128px;
+  margin: 0 4px;
+
+  :deep(.el-select__wrapper) {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: none;
+    min-height: 26px;
+  }
+  :deep(.el-select__selection) {
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+  :deep(.el-select__placeholder) {
+    color: transparent;
+    flex: 1;
+    justify-content: center;
+  }
+  :deep(.el-select__selected-item) {
+    color: #fff;
+    flex: 1;
+    justify-content: center;
+  }
+  :deep(.el-select__caret) {
+    color: #fff;
+  }
+}
+
 .dialog-messages {
   flex: 1;
   min-height: 0;
@@ -696,4 +833,11 @@ defineExpose({
 .change-preview__fields dd { margin: 0; color: #303133; overflow-wrap: anywhere; }
 .change-preview__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .clarification-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 16px; background: #fff; }
+</style>
+
+<style>
+/* 版本下拉框弹出层 teleport 到 body，需高于浮窗 z-index（3100+） */
+.version-select-popper {
+  z-index: 3300 !important;
+}
 </style>

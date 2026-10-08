@@ -51,13 +51,17 @@
 
     <!-- 流程表单设计器对话框 -->
     <el-dialog
-      :title="designer.title"
       v-model="designer.visible"
       fullscreen
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
-      <div id="form-designer" :class="['ai-designer-wrap', { 'ai-designer-wrap--with-panel': aiDesignVisible }]">
+      <template #header>
+        <div class="designer-dialog-header">
+          <span class="designer-dialog-title">{{ designer.title }}</span>
+        </div>
+      </template>
+      <div id="form-designer" class="ai-designer-wrap">
         <v-form-designer
           ref="vfDesignerRef"
           :resetFormJson="true"
@@ -65,12 +69,12 @@
           v-if="designer.visible"
           :global-dsv="{}"
         >
-          <!-- 自定义按钮插槽 -->
-          <template #customToolButtons>
-            <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
-            <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
-          </template>
         </v-form-designer>
+        <!-- 定位到 vform3 自带工具栏（PC/Pad/H5 那行）的最右侧 -->
+        <div class="ai-designer-actions" :style="actionsStyle">
+          <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
+          <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
+        </div>
         <div v-if="aiDesigning" class="ai-design-mask">
           <div class="ai-design-mask-spinner"></div>
           <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
@@ -374,14 +378,33 @@ const onAiProgress = (msg) => {
   aiDesignProgress.value = msg;
 };
 
+/** 把 AI 设计/保存 对齐到 vform3 自带工具栏那一行（PC/Pad/H5）的最右侧。
+ *  右边界取工具栏自身的右边缘，而不是设计器整体 —— 后者会落到属性面板右边。 */
+const actionsStyle = ref({});
+const positionDesignerActions = () => {
+  const wrap = document.getElementById('form-designer');
+  const toolbar = wrap?.querySelector('.toolbar-container');
+  if (!wrap || !toolbar) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const toolbarRect = toolbar.getBoundingClientRect();
+  actionsStyle.value = {
+    top: `${toolbarRect.top - wrapRect.top}px`,
+    right: `${Math.max(0, wrapRect.right - toolbarRect.right + 12)}px`,
+    height: `${toolbarRect.height}px`
+  };
+};
+
 /** 表单设计器打开后 */
 const handleDesignerOpened = () => {
   // Dialog 完全打开后的回调，确保 DOM 已渲染
+  nextTick(positionDesignerActions);
+  window.addEventListener('resize', positionDesignerActions);
 };
 
 /** 表单设计器关闭后 */
 const handleDesignerClosed = () => {
   // 清理状态
+  window.removeEventListener('resize', positionDesignerActions);
   aiDesignDialogRef.value?.clearMessages();
 };
 
@@ -460,15 +483,27 @@ getList();
 .ai-designer-wrap {
   position: relative;
   min-height: 60vh;
-  transition: margin-right 0.2s ease;
 }
 
-.ai-designer-wrap--with-panel {
-  margin-right: 560px;
+.designer-dialog-header {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
 }
 
-@media (max-width: 1100px) {
-  .ai-designer-wrap--with-panel { margin-right: 0; }
+.designer-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+/* 定位到 vform3 工具栏（PC/Pad/H5）那一行的最右侧，top/right/height 由脚本按实际位置算 */
+.ai-designer-actions {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ai-design-mask {

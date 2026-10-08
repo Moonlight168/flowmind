@@ -87,6 +87,29 @@ def test_node_form_key_is_rejected_when_authoritative_form_list_is_empty():
     assert any(e.rule_id == "NODE_N005" for e in result.errors)
 
 
+def test_no_forms_at_all_reports_actionable_hint():
+    """开始节点强制要 form_key 且必须来自 search_forms，一个表单都没有时重试无解。"""
+    nodes = [{"id": "s", "name": "开始", "type": "START_EVENT", "form_key": "1"}]
+    result = NodeValidator().validate(
+        {"nodes": nodes}, _ctx(forms_lookup_complete=True, available_forms=[])
+    )
+    assert any(e.rule_id == "NODE_N010" for e in result.errors)
+
+
+def test_no_forms_hint_only_applies_to_flow_design():
+    nodes = [{"id": "s", "name": "开始", "type": "START_EVENT", "form_key": "1"}]
+    result = NodeValidator().validate(
+        {"nodes": nodes},
+        _ctx(
+            design_type="form_design",
+            mode="design",
+            forms_lookup_complete=True,
+            available_forms=[],
+        ),
+    )
+    assert not any(e.rule_id == "NODE_N010" for e in result.errors)
+
+
 def test_node_numeric_form_id_matches_string_form_key():
     nodes = [{"id": "s", "name": "开始", "type": "START_EVENT", "form_key": "key_12"}]
     result = NodeValidator().validate(
@@ -254,10 +277,54 @@ def test_flow_basic_category_must_come_from_authoritative_list():
             "flow_design",
             mode="basic",
             categories_lookup_complete=True,
-            available_categories=[],
+            available_categories=[{"categoryId": 1, "code": "leave"}],
         ),
     )
     assert any(e.rule_id == "CAT_C003" for e in result.errors)
+
+
+def test_flow_basic_without_any_category_reports_actionable_hint():
+    """系统一个分类都没有时重试也不会变，应给出可操作提示而非编码格式错误。"""
+    result = CategoryValidator().validate(
+        {"flow_name": "报销", "code": ""},
+        _ctx(
+            "flow_design",
+            mode="basic",
+            categories_lookup_complete=True,
+            available_categories=[],
+        ),
+    )
+
+    assert any(e.rule_id == "CAT_C005" for e in result.errors)
+    assert not any(e.rule_id == "CAT_C002" for e in result.errors)
+
+
+def test_flow_basic_description_over_200_chars_is_rejected():
+    result = CategoryValidator().validate(
+        {"flow_name": "报销", "code": "leave", "description": "描" * 201},
+        _ctx(
+            "flow_design",
+            mode="basic",
+            categories_lookup_complete=True,
+            available_categories=[{"categoryId": 1, "code": "leave"}],
+        ),
+    )
+
+    assert any(e.rule_id == "CAT_C006" for e in result.errors)
+
+
+def test_flow_basic_description_at_200_chars_is_allowed():
+    result = CategoryValidator().validate(
+        {"flow_name": "报销", "code": "leave", "description": "描" * 200},
+        _ctx(
+            "flow_design",
+            mode="basic",
+            categories_lookup_complete=True,
+            available_categories=[{"categoryId": 1, "code": "leave"}],
+        ),
+    )
+
+    assert not any(e.rule_id == "CAT_C006" for e in result.errors)
 
 
 def test_flow_basic_may_select_the_current_category():
