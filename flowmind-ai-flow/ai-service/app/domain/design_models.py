@@ -107,6 +107,13 @@ FlowOperation = Annotated[
 
 class FlowDesign(StrictModel):
     operations: list[FlowOperation] = Field(min_length=1)
+    #: 系统没有可用表单时给出建议的开始表单名；实际创建由前端在应用变更时完成
+    start_form_name: str | None = None
+
+
+#: 待创建的开始表单占位 key：后端据此生成 bpmn_xml，前端创建表单后替换成真实 key_<formId>
+#: （与前端 AiChatWindow/design 里的同名常量保持一致）
+PENDING_FORM_KEY = "key_ai_pending_form"
 
 
 class FormWidget(StrictModel):
@@ -187,6 +194,8 @@ class FlowMetadataChanges(StrictModel):
     code: str | None = None
     description: str | None = None
     flow_key: str | None = None
+    #: 分类不存在时给出分类名称，前端据此在应用变更时创建
+    category_name: str | None = None
 
 
 class UpdateFlowMetadataOperation(StrictModel):

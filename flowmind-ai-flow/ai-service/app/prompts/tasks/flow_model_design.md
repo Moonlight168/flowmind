@@ -19,14 +19,22 @@
 {"operations":[{"op":"add_node","node":{"type":"USER_TASK","id":"finance_approve","name":"财务审批","candidate_groups":["ROLE2"]},"after_id":"manager_approve"}]}
 ```
 
+没有可用表单时，顶层追加 `start_form_name`：
+
+```json
+{"operations":[{"op":"replace_graph","nodes":[...],"edges":[...]}],"start_form_name":"请假申请单"}
+```
+
 ## BPMN 和业务约束
 
 - 流程必须有且仅有一个开始事件，并至少有一个结束事件。
-- `START_EVENT.form_key` 必须来自 `search_forms`。
+- `START_EVENT.form_key` 必须来自 `search_forms`。若系统里**一个表单都没有**，不要编造 form_key，
+  改为在顶层输出 `start_form_name`（按流程语义建议的表单名，如「请假申请单」）；
+  系统会创建这张空表单并与流程一起提交，字段由用户后续完善。
 - `USER_TASK` 必须绑定审批人、候选角色或表单；`candidate_groups` 必须来自 `search_roles` 返回的 `key`。
-- 使用角色、表单、分类或已有模型前必须查询后端，不得编造 ID、key 或 code。
+- 使用角色、分类或已有模型前必须查询后端，不得编造 ID、key 或 code。
 - 排他网关的非默认出边必须包含结构化 condition（`field`、`operator`、`value`）；最多一条出边可设置 `is_default=true`。
 - 并行网关出边不得设置条件；分支和汇聚应成对且连线完整。
 - 校验反馈要求修复时，只修复反馈指出的字段，其他操作保持不变。
 
-缺少表单、角色、条件字段或分支含义时返回追问，不得猜测。
+缺少角色、条件字段或分支含义时返回追问，不得猜测；表单缺失按上面的 `start_form_name` 处理。

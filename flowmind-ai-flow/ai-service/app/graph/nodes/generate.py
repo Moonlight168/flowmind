@@ -14,6 +14,7 @@ from app.design.generation import run_react_agent
 from app.design.history import compress_history
 from app.design.intent import discriminate_intent
 from app.design.operations import apply_design_operations
+from app.domain.design_models import PENDING_FORM_KEY
 from app.graph.nodes.base import node_handler
 from app.graph.state import AppState
 from app.infra.logger import logger
@@ -187,11 +188,32 @@ def _materialize_result(
         mode,
         len(operations),
     )
-    return {
+    payload = {
         **materialized,
         "operations": operations,
         "operation_count": len(operations),
     }
+    # 依赖实体缺失时模型给出的建议名，透传给前端在应用变更时创建
+    for key in ("start_form_name", "category_name"):
+        value = result.get(key)
+        if isinstance(value, str) and value.strip():
+            payload[key] = value.strip()
+
+    # 需要新建开始表单时先写占位 key，让 review 生成的 bpmn_xml 带上 formKey；
+    # 前端创建表单后按占位替换成真实 key（AI 服务对业务后端只读，不在这里建）
+    if design_type == "flow_design" and mode == "design" and payload.get("start_form_name"):
+        start_node = next(
+            (
+                node
+                for node in payload.get("nodes") or []
+                if str(node.get("type") or "").upper() == "START_EVENT"
+            ),
+            None,
+        )
+        if start_node is not None and not start_node.get("form_key"):
+            start_node["form_key"] = PENDING_FORM_KEY
+
+    return payload
 
 
 def _operation_retry_feedback(exc: ValueError) -> dict[str, str]:

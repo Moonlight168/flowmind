@@ -22,6 +22,7 @@ from app.design.validators import (
     FormFieldValidator,
     NodeValidator,
     ValidationError,
+    ValidationResult,
     ValidatorContext,
     ValidatorPipeline,
     VForm3Validator,
@@ -55,8 +56,11 @@ def review_node(state: AppState) -> AppState:
     pipeline = _build_pipeline(design_type, context.mode)
     result = pipeline.run(design_output, context)
 
-    # 权威数据缺失/不匹配类问题重试也不会变（没有分类/表单、分类不存在），
-    # 直接追问用户，而不是让校验失败重试到死循环。
+    # 依赖实体（表单/分类）不存在、但模型给了建议名 → 由前端在「应用变更」时创建，
+    # 本轮不再判失败（AI 服务对业务后端只读，不能自己建）
+    _clear_pending_entity_errors(result, design_output, context)
+
+    # 兜底：模型没给建议名时仍按追问处理，避免校验失败重试到死循环。
     ask = _design_clarification(result.errors, context)
     if ask:
         state["intent"] = "clarification"
@@ -241,6 +245,27 @@ def _extract_gateway_id(error_message: str) -> str | None:
 
 #: "分类不可用"的校验规则（flow basic 选用分类）
 _CATEGORY_ASK_RULES = {"CAT_C003", "CAT_C005"}
+#: "开始表单不可用"的校验规则（flow design）
+_FORM_ASK_RULES = {"NODE_N005", "NODE_N010"}
+
+
+def _clear_pending_entity_errors(
+    result: ValidationResult, design_output: dict, context: ValidatorContext
+) -> None:
+    """模型给出了缺失实体的建议名时，把对应校验错误降级。
+
+    表单/分类的实际创建由前端在「应用变更」时经网关完成（AI 服务对后端只读）。
+    """
+    if context.design_type != "flow_design":
+        return
+    if context.mode == "design" and str(design_output.get("start_form_name") or "").strip():
+        rules = _FORM_ASK_RULES
+    elif context.mode == "basic" and str(design_output.get("category_name") or "").strip():
+        rules = _CATEGORY_ASK_RULES
+    else:
+        return
+    result.errors = [e for e in result.errors if e.rule_id not in rules]
+    result.is_valid = not result.errors
 
 
 def _design_clarification(

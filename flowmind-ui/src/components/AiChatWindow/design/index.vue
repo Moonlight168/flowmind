@@ -83,6 +83,12 @@
         共 {{ pendingPreview.operation_count || pendingPreview.operations?.length || 0 }} 项变更，
         已通过语法和业务校验
       </div>
+      <div v-if="pendingPreview.pending_entities?.start_form_name" class="change-preview__pending">
+        将创建占位表单「{{ pendingPreview.pending_entities.start_form_name }}」，字段需你稍后完善
+      </div>
+      <div v-if="pendingPreview.pending_entities?.category_name" class="change-preview__pending">
+        将创建流程分类「{{ pendingPreview.pending_entities.category_name }}」
+      </div>
       <ul v-if="pendingPreview.operations?.length" class="change-preview__operations">
         <li v-for="(operation, index) in pendingPreview.operations" :key="index">
           {{ operationLabel(operation) }}
@@ -145,6 +151,8 @@ import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { activeAiWindow } from '@/utils/aiWindow'
+import { addForm, listForm } from '@/api/workflow/form'
+import { addCategory, listCategory } from '@/api/workflow/category'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -608,6 +616,65 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value || {}))
 }
 
+// 待创建的开始表单占位 key（与后端 design_models.PENDING_FORM_KEY 保持一致）
+const PENDING_FORM_KEY = 'key_ai_pending_form'
+
+// 占位表单骨架：保证表单设计器能正常打开
+const EMPTY_FORM_CONTENT = JSON.stringify({ widgetList: [], formConfig: {} })
+
+/** 按名称取表单，不存在则创建空占位（幂等，避免重复创建） */
+async function ensurePlaceholderForm(formName) {
+  const res = await listForm({ formName })
+  const rows = res?.rows || res?.data || []
+  const existing = rows.find((item) => item.formName === formName)
+  if (existing) return existing
+  const created = await addForm({
+    formName,
+    content: EMPTY_FORM_CONTENT,
+    remark: 'AI 流程设计自动创建的占位表单，待完善字段'
+  })
+  return created?.data || created
+}
+
+/** 按名称取分类，不存在则创建（幂等） */
+async function ensureCategory(categoryName, code) {
+  const res = await listCategory({ categoryName })
+  const rows = res?.rows || res?.data || []
+  const existing = rows.find((item) => item.categoryName === categoryName)
+  if (existing) return existing
+  const created = await addCategory({
+    categoryName,
+    code,
+    remark: 'AI 流程设计自动创建'
+  })
+  return created?.data || created
+}
+
+/** 应用变更前先把缺失的依赖实体建出来，并把引用写回 form_data。
+ *  后端对业务库只读，实体创建统一在这里（用户点「应用变更」）完成。 */
+async function materializePendingEntities(formData, pending) {
+  const result = cloneData(formData)
+  if (pending?.start_form_name) {
+    const form = await ensurePlaceholderForm(pending.start_form_name)
+    if (form?.formId) {
+      const realKey = `key_${form.formId}`
+      const start = (result.nodes || []).find(
+        (node) => String(node.type || '').toUpperCase() === 'START_EVENT'
+      )
+      if (start) start.form_key = realKey
+      // bpmn_xml 才是设计器的输入，占位 key 必须一并替换
+      if (typeof result.bpmn_xml === 'string' && result.bpmn_xml.includes(PENDING_FORM_KEY)) {
+        result.bpmn_xml = result.bpmn_xml.split(PENDING_FORM_KEY).join(realKey)
+      }
+    }
+  }
+  if (pending?.category_name) {
+    const category = await ensureCategory(pending.category_name, result.code)
+    if (category?.code) result.code = category.code
+  }
+  return result
+}
+
 async function applyPreview() {
   if (!pendingPreview.value) return
   // 生成期间画布若被手动修改过，应用会整份覆盖这些改动——先提醒用户
@@ -640,11 +707,24 @@ async function applyPreview() {
       return
     }
   }
-  const formData = pendingPreview.value.form_data
+  // 缺失的表单/分类在这里创建（后端只读），失败则中止本次应用、保留预览让用户重试
+  let formData = pendingPreview.value.form_data
+  const pending = pendingPreview.value.pending_entities
+  if (pending) {
+    try {
+      formData = await materializePendingEntities(formData, pending)
+      if (pending.start_form_name) {
+        ElMessage.warning(`已创建占位表单「${pending.start_form_name}」，请到「表单设计」完善字段`)
+      }
+    } catch (e) {
+      console.error('创建依赖实体失败:', e)
+      ElMessage.error('创建表单/分类失败，请稍后重试')
+      return
+    }
+  }
   currentFormData.value = cloneData(formData)
   emit('fill', formData)
   saveVersion(formData)
-  // 版本覆盖：裁剪后端 checkpoint 到新版本的消息长度，丢弃旧分支对话
   // 版本覆盖：裁剪后端 checkpoint 到本轮的分支长度（丢弃回退掉的旧分支）
   if (lastBackendCount.value != null) {
     rollbackDesignState(props.designType, {
@@ -826,6 +906,7 @@ defineExpose({
 
 .change-preview__title { font-weight: 600; color: #303133; }
 .change-preview__summary { margin-top: 4px; font-size: 12px; color: #606266; }
+.change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
 .change-preview__fields { margin: 8px 0; font-size: 12px; }
 .change-preview__fields div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
