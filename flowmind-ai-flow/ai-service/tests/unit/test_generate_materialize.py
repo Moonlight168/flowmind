@@ -69,3 +69,32 @@ def test_basic_mode_does_not_touch_form_key():
     payload = _materialize_result({}, result, "flow_design", {}, "basic")
 
     assert payload.get("nodes") is None
+
+
+# ---------- 新建表单的表单名 ----------
+
+
+def test_form_name_from_model_is_kept_when_baseline_has_none():
+    result = {
+        "operations": [
+            {"op": "replace_form", "widgetList": [], "formConfig": {}}
+        ],
+        "form_name": "请假申请单",
+    }
+
+    payload = _materialize_result({}, result, "form_design", {}, "design")
+
+    assert payload["form_name"] == "请假申请单"
+
+
+def test_model_form_name_does_not_override_existing_name():
+    result = {
+        "operations": [{"op": "replace_form", "widgetList": [], "formConfig": {}}],
+        "form_name": "模型编的名字",
+    }
+
+    payload = _materialize_result(
+        {}, result, "form_design", {"form_name": "已有表单"}, "design"
+    )
+
+    assert payload["form_name"] == "已有表单"

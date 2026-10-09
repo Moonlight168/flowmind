@@ -126,9 +126,15 @@ def _format_validated_artifact(state: AppState, result: dict) -> dict:
     return {**current, "nodes": nodes, "edges": edges, "bpmn_xml": bpmn_xml}
 
 
+def _display_name(value: object) -> str:
+    """名称缺失时给占位文案：dict.get 的默认值对空串不生效，会渲染成【】。"""
+    text = str(value or "").strip()
+    return text or "未命名"
+
+
 def _success_message(design_type: str, form_data: dict) -> str:
     if design_type == "category_design":
-        return f"已生成分类【{form_data.get('category_name', '')}】的变更预览"
+        return f"已生成分类【{_display_name(form_data.get('category_name'))}】的变更预览"
     if design_type == "form_design":
-        return f"已生成表单【{form_data.get('form_name', '表单')}】的变更预览"
+        return f"已生成表单【{_display_name(form_data.get('form_name'))}】的变更预览"
     return "已生成流程变更预览"

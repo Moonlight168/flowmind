@@ -54,3 +54,41 @@ def test_ready_response_exposes_operations_and_validation(monkeypatch):
     assert result["status"] == "ready"
     assert result["operation_count"] == 1
     assert result["operations"][0]["op"] == "replace_graph"
+
+
+def test_form_success_message_falls_back_when_name_is_blank():
+    """form_name 为空串时 dict.get 的默认值不生效，曾渲染成【】。"""
+    state = {
+        "design_type": "form_design",
+        "intent": "success",
+        "design_output": {
+            "widgetList": [{"type": "input"}],
+            "form_name": "",
+            "operations": [{"op": "add_widget", "widget": {}}],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+
+    message = finalize_node(state)["design_output"]["message"]
+
+    assert "【未命名】" in message
+    assert "【】" not in message
+
+
+def test_form_success_message_uses_generated_name():
+    state = {
+        "design_type": "form_design",
+        "intent": "success",
+        "design_output": {
+            "widgetList": [{"type": "input"}],
+            "form_name": "请假申请单",
+            "operations": [{"op": "add_widget", "widget": {}}],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+
+    message = finalize_node(state)["design_output"]["message"]
+
+    assert "【请假申请单】" in message

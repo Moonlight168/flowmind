@@ -19,11 +19,7 @@
 {"operations":[{"op":"add_node","node":{"type":"USER_TASK","id":"finance_approve","name":"财务审批","candidate_groups":["ROLE2"]},"after_id":"manager_approve"}]}
 ```
 
-没有可用表单时，顶层追加 `start_form_name`：
-
-```json
-{"operations":[{"op":"replace_graph","nodes":[...],"edges":[...]}],"start_form_name":"请假申请单"}
-```
+没有可用表单时，在顶层额外给出 `start_form_name`（不要编造 `form_key`）。
 
 ## BPMN 和业务约束
 

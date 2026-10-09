@@ -172,6 +172,8 @@ FormOperation = Annotated[
 
 class FormDesign(StrictModel):
     operations: list[FormOperation] = Field(min_length=1)
+    #: 新建/未命名表单时建议的表单名；已有名字的表单不必重复给出
+    form_name: str | None = None
 
 
 class CategoryChanges(StrictModel):

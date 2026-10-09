@@ -70,13 +70,11 @@
           :global-dsv="{}"
         >
         </v-form-designer>
-        <!-- 塞进 vform3 自带工具栏（PC/Pad/H5 那行）的右侧容器，跟随其布局自动对齐 -->
-        <Teleport v-if="actionsTarget" :to="actionsTarget">
-          <div class="ai-designer-actions">
-            <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
-            <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
-          </div>
-        </Teleport>
+        <!-- 与 vform3 工具栏（PC/Pad/H5）同一行，位置由脚本按该行实际几何算 -->
+        <div class="ai-designer-actions" :style="actionsStyle">
+          <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
+          <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
+        </div>
         <div v-if="aiDesigning" class="ai-design-mask">
           <div class="ai-design-mask-spinner"></div>
           <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
@@ -380,24 +378,39 @@ const onAiProgress = (msg) => {
   aiDesignProgress.value = msg;
 };
 
-/** vform3 工具栏右侧容器的 DOM 引用：把 AI 设计/保存 传送到那里，
- *  跟随它自带的 flex 布局与 PC/Pad/H5 同行，不用手算像素 */
-const actionsTarget = ref(null);
-const locateDesignerActions = () => {
+/** 把 AI 设计/保存 对齐到 vform3 工具栏那一行的最右侧。
+ *
+ *  vform3 的 `.toolbar-container` 里两个子元素都是 float，右侧那组会换行，
+ *  导致容器比肉眼所见的一行要高 —— 按它垂直居中会把按钮压到行以下（实测症状）。
+ *  所以：垂直位置与行高取 `.left-toolbar`（PC/Pad/H5 所在的那一行），
+ *  水平右边界取 `.toolbar-container` 的右边缘。 */
+const actionsStyle = ref({});
+const positionDesignerActions = () => {
   const wrap = document.getElementById('form-designer');
-  actionsTarget.value = wrap?.querySelector('.right-toolbar-con') || null;
+  const row = wrap?.querySelector('.left-toolbar');
+  const container = wrap?.querySelector('.toolbar-container');
+  if (!wrap || !row || !container) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  actionsStyle.value = {
+    top: `${rowRect.top - wrapRect.top}px`,
+    height: `${rowRect.height}px`,
+    right: `${Math.max(0, wrapRect.right - containerRect.right + 12)}px`
+  };
 };
 
 /** 表单设计器打开后 */
 const handleDesignerOpened = () => {
   // Dialog 完全打开后的回调，确保 DOM 已渲染
-  nextTick(locateDesignerActions);
+  nextTick(positionDesignerActions);
+  window.addEventListener('resize', positionDesignerActions);
 };
 
 /** 表单设计器关闭后 */
 const handleDesignerClosed = () => {
   // 清理状态
-  actionsTarget.value = null;
+  window.removeEventListener('resize', positionDesignerActions);
   aiDesignDialogRef.value?.clearMessages();
 };
 
@@ -490,19 +503,15 @@ getList();
   color: #303133;
 }
 
-/* vform3 的右侧工具栏容器默认 text-align:left + 固定 600px（被 460px 的父级裁掉），
-   这里改成占满并用 flex 右对齐，让传送进来的按钮贴在该行最右端 */
-.ai-designer-wrap :deep(.right-toolbar-con) {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
+/* vform3 工具栏行内部是 float 布局，不要改它的排版（会把它自己裁掉的按钮露出来）。
+   按钮单独用绝对定位对齐到该行的右侧，top/height 由脚本按行实际位置算 */
 .ai-designer-actions {
+  position: absolute;
   display: flex;
   align-items: center;
   gap: 8px;
+  z-index: 10;
+  line-height: 1;
 }
 
 .ai-design-mask {

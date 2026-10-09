@@ -199,6 +199,15 @@ def _materialize_result(
         if isinstance(value, str) and value.strip():
             payload[key] = value.strip()
 
+    # 新建表单时模型建议的表单名；已有名字的表单不覆盖
+    llm_form_name = result.get("form_name")
+    if (
+        isinstance(llm_form_name, str)
+        and llm_form_name.strip()
+        and not str(payload.get("form_name") or "").strip()
+    ):
+        payload["form_name"] = llm_form_name.strip()
+
     # 需要新建开始表单时先写占位 key，让 review 生成的 bpmn_xml 带上 formKey；
     # 前端创建表单后按占位替换成真实 key（AI 服务对业务后端只读，不在这里建）
     if design_type == "flow_design" and mode == "design" and payload.get("start_form_name"):

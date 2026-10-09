@@ -104,3 +104,24 @@ def test_all_runtime_prompts_are_explicitly_versioned() -> None:
     }
 
     assert markdown_files == registered
+
+
+def test_baseline_keeps_empty_name_fields_for_the_model() -> None:
+    """名称为空串时必须出现在「当前表单」里，否则模型无从判断"还没有名字"。"""
+    prompt = build_prompt(
+        "form_design",
+        {"current_form_data": {"formName": "", "remark": "留空备注", "content": "{}"}},
+    )
+
+    assert '"formName": ""' in prompt
+    assert "content" not in prompt  # 大字段仍要省略
+
+
+def test_baseline_still_drops_other_empty_values() -> None:
+    prompt = build_prompt(
+        "form_design",
+        {"current_form_data": {"formName": "已有名字", "remark": "", "unused": ""}},
+    )
+
+    assert '"formName": "已有名字"' in prompt
+    assert "unused" not in prompt

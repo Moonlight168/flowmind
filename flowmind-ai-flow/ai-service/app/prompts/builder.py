@@ -46,10 +46,13 @@ def _format_flow_basic_info(current_form_data: dict) -> str:
     if not current_form_data:
         return "（空白设计）"
     omitted = {"bpmnXml", "bpmn_xml", "content"}
+    # 名称类字段即使为空也要保留：模型需要据此判断"还没有名字"并生成一个
+    keep_when_empty = {"formName", "form_name", "modelName", "flow_name", "category", "code"}
     baseline = {
         key: value
         for key, value in current_form_data.items()
-        if key not in omitted and value not in (None, "")
+        if key not in omitted
+        and (value not in (None, "") or key in keep_when_empty)
     }
     return json.dumps(baseline, ensure_ascii=False, indent=2)
 
