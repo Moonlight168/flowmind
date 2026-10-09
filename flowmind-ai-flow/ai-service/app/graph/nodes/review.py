@@ -279,22 +279,23 @@ def _design_clarification(
 
     # 流程设计没有表单：开始节点强制要 form_key，重试不可能通过
     if "NODE_N010" in rule_ids:
-        return "当前系统还没有表单，请先创建表单，再回来生成流程"
+        return "当前系统还没有表单。\n\n请先创建表单，再回来生成流程。"
 
     # 流程基本信息选用分类：没有分类 / 模型给的分类不存在
     if context.design_type == "flow_design" and context.mode == "basic":
         if rule_ids & _CATEGORY_ASK_RULES:
             available = context.available_categories
             if not available:
-                return "当前系统还没有流程分类，请先在「流程分类」中创建分类，再回来生成流程"
-            names = "、".join(
-                str(category.get("categoryName") or category.get("code"))
+                return "当前系统还没有流程分类。\n\n请先在「流程分类」中创建分类，再回来生成流程。"
+            names = "\n".join(
+                f"- {category.get('categoryName') or category.get('code')}"
                 for category in available[:10]
                 if category.get("categoryName") or category.get("code")
             )
             return (
-                f"没有找到匹配的流程分类。现有分类：{names}。"
-                "请确认要归到哪个分类，或先在「流程分类」中创建"
+                "没有找到匹配的流程分类。\n\n"
+                f"现有分类：\n{names}\n\n"
+                "请确认要归到哪个分类，或先在「流程分类」中创建。"
             )
 
     return None

@@ -624,19 +624,26 @@ const EMPTY_FORM_CONTENT = JSON.stringify({ widgetList: [], formConfig: {} })
 
 /** 按名称取表单，不存在则创建空占位（幂等，避免重复创建） */
 async function ensurePlaceholderForm(formName) {
-  const res = await listForm({ formName })
-  const rows = res?.rows || res?.data || []
-  const existing = rows.find((item) => item.formName === formName)
+  const findByName = async () => {
+    const res = await listForm({ formName })
+    const rows = res?.rows || res?.data || []
+    return rows.find((item) => item.formName === formName)
+  }
+  const existing = await findByName()
   if (existing) return existing
-  const created = await addForm({
+  await addForm({
     formName,
     content: EMPTY_FORM_CONTENT,
     remark: 'AI 流程设计自动创建的占位表单，待完善字段'
   })
-  return created?.data || created
+  // 新增接口只回 {code,msg}，不回实体，必须回查拿 formId
+  const created = await findByName()
+  if (!created?.formId) throw new Error(`占位表单「${formName}」创建后未能查到`)
+  return created
 }
 
-/** 按名称取分类，不存在则创建（幂等） */
+/** 按名称取分类，不存在则创建（幂等）。
+ *  新增接口不回实体，所以直接沿用提交时的 code —— 不能读响应的 code（那是状态码 200）。 */
 async function ensureCategory(categoryName, code) {
   const res = await listCategory({ categoryName })
   const rows = res?.rows || res?.data || []
@@ -647,7 +654,10 @@ async function ensureCategory(categoryName, code) {
     code,
     remark: 'AI 流程设计自动创建'
   })
-  return created?.data || created
+  if (created?.code !== 200) {
+    throw new Error(created?.msg || `分类「${categoryName}」创建失败`)
+  }
+  return { categoryName, code }
 }
 
 /** 应用变更前先把缺失的依赖实体建出来，并把引用写回 form_data。
