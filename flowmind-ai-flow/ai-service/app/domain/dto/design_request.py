@@ -23,10 +23,6 @@ class DesignRequestDTO(BaseModel):
         max_length=100,
         description="会话标识，用于区分同一用户的多个设计任务；不传则按用户+类型生成默认会话",
     )
-    allow_full_replace: bool = Field(
-        default=False,
-        description="用户已明确选择并确认允许替换全部现有设计",
-    )
     history_count: int | None = Field(
         default=None,
         ge=0,

@@ -41,8 +41,6 @@ class BaselineValidator:
     def _validate_flow(
         self, output: dict, context: ValidatorContext
     ) -> ValidationResult:
-        if context.allow_full_replace and _has_operation(output, "replace_graph"):
-            return ValidationResult.ok()
         baseline_nodes = context.current_form_data.get("nodes") or []
         if not baseline_nodes:
             return ValidationResult.ok()
@@ -109,8 +107,6 @@ class BaselineValidator:
     def _validate_form(
         self, output: dict, context: ValidatorContext
     ) -> ValidationResult:
-        if context.allow_full_replace and _has_operation(output, "replace_form"):
-            return ValidationResult.ok()
         baseline_widgets = context.current_form_data.get("widgetList") or []
         if not baseline_widgets:
             return ValidationResult.ok()
@@ -128,13 +124,6 @@ class BaselineValidator:
                 ]
             )
         return ValidationResult.ok()
-
-
-def _has_operation(output: dict, operation_name: str) -> bool:
-    return any(
-        operation.get("op") == operation_name
-        for operation in output.get("operations") or []
-    )
 
 
 def _is_valid_edge_split(edge: tuple, output: dict) -> bool:

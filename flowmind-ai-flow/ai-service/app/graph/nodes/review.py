@@ -167,7 +167,6 @@ def _build_context(state: AppState) -> ValidatorContext:
         categories_lookup_complete=design_type == "category_design"
         or (design_type == "flow_design" and mode == "basic"),
         roles_lookup_complete=design_type == "flow_design" and mode == "design",
-        allow_full_replace=bool(state.get("allow_full_replace")),
         auth_token=auth_token,
         user_input=user_input,
     )

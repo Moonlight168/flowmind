@@ -89,7 +89,6 @@ def _run_design_stream(
                 trace_id=trace_id,
                 current_form_data=payload.current_form_data,
                 mode=payload.mode,
-                allow_full_replace=payload.allow_full_replace,
                 history_count=payload.history_count,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"

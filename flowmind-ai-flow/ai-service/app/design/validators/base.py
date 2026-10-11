@@ -58,7 +58,6 @@ class ValidatorContext:
     forms_lookup_complete: bool = False
     categories_lookup_complete: bool = False
     roles_lookup_complete: bool = False
-    allow_full_replace: bool = False
     existing_models: list[dict] = field(default_factory=list)
     auth_token: str | None = None
     thread_id: str | None = None

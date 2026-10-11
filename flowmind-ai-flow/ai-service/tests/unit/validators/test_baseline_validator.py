@@ -102,37 +102,33 @@ def test_add_node_may_split_the_original_outgoing_edge():
     assert not BaselineValidator().validate(output, ctx).is_valid
 
 
-def test_confirmed_full_replacements_skip_baseline_retention_checks():
+def test_full_replace_on_existing_baseline_is_not_exempt():
+    """已有设计上的全量替换不再有授权豁免，基线保留校验照常拦截。"""
     flow_context = ValidatorContext(
         design_type="flow_design",
         current_form_data={"nodes": [{"id": "old"}]},
-        allow_full_replace=True,
     )
     form_context = ValidatorContext(
         design_type="form_design",
         current_form_data={"widgetList": [{"options": {"name": "old"}}]},
-        allow_full_replace=True,
     )
 
-    assert (
-        BaselineValidator()
-        .validate(
-            {"nodes": [{"id": "new"}], "operations": [{"op": "replace_graph"}]},
-            flow_context,
-        )
-        .is_valid
+    flow_result = BaselineValidator().validate(
+        {"nodes": [{"id": "new"}], "operations": [{"op": "replace_graph"}]},
+        flow_context,
     )
-    assert (
-        BaselineValidator()
-        .validate(
-            {
-                "widgetList": [{"options": {"name": "new"}}],
-                "operations": [{"op": "replace_form"}],
-            },
-            form_context,
-        )
-        .is_valid
+    assert not flow_result.is_valid
+    assert any(e.rule_id == "BASE_B001" for e in flow_result.errors)
+
+    form_result = BaselineValidator().validate(
+        {
+            "widgetList": [{"options": {"name": "new"}}],
+            "operations": [{"op": "replace_form"}],
+        },
+        form_context,
     )
+    assert not form_result.is_valid
+    assert any(e.rule_id == "BASE_B003" for e in form_result.errors)
 
 
 def test_form_widget_silent_delete_blocked():

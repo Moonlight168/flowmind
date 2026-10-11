@@ -51,11 +51,9 @@ class BPMNXMLValidator:
             original_xml = context.current_form_data.get(
                 "bpmn_xml"
             ) or context.current_form_data.get("bpmnXml")
-            is_full_replace = any(
-                operation.get("op") == "replace_graph"
-                for operation in output.get("operations", [])
-            )
-            if original_xml and not is_full_replace:
+            # 全量替换仅空白首建可用，此时 original_xml 必为空；
+            # 能走到这里且存在原始 XML 的一定是增量修改，保留原流程元数据
+            if original_xml:
                 bpmn_xml = preserve_bpmn_metadata(original_xml, bpmn_xml)
             result = validate_bpmn_xml(bpmn_xml)
         except (ValueError, TypeError, KeyError, AttributeError, etree.XMLSyntaxError) as e:

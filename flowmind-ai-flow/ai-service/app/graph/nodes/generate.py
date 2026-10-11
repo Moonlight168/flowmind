@@ -90,13 +90,6 @@ def generate_node(state: AppState) -> AppState:
 
     # 前置压缩：消息过多时裁剪/摘要，再喂给 LLM
     conversation_history = compress_history(conversation_history)
-    if state.get("allow_full_replace"):
-        for message in reversed(conversation_history):
-            if message.get("role") == "user":
-                message["content"] = (
-                    "[用户已在界面明确确认全部重新生成]\n" + message["content"]
-                )
-                break
 
     result = _generate_design_result(
         state, design_type, current_form_data, conversation_history, mode
@@ -175,8 +168,8 @@ def _materialize_result(
     if _contains_forbidden_replace(state, operations):
         return {
             "intent": "error",
-            "message": "检测到全量替换操作，但本次请求未获得用户明确授权",
-            "error_type": "full_replace_not_confirmed",
+            "message": "当前设计已有内容，不支持全部重新生成，请说明具体要调整的节点或字段",
+            "error_type": "full_replace_not_supported",
             "retryable": False,
         }
     materialized = apply_design_operations(
@@ -236,9 +229,7 @@ def _operation_retry_feedback(exc: ValueError) -> dict[str, str]:
 
 
 def _contains_forbidden_replace(state: AppState, operations: list[dict]) -> bool:
-    """已有设计只有在用户显式确认后才允许全量替换。"""
-    if state.get("allow_full_replace"):
-        return False
+    """已有设计只允许增量修改，全量替换操作仅空白首建可用。"""
     baseline = state.get("current_form_data") or {}
     has_design = bool(
         baseline.get("nodes") or baseline.get("widgetList") or baseline.get("content")

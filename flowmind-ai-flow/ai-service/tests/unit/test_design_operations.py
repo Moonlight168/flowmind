@@ -193,13 +193,25 @@ def test_unknown_operation_is_rejected_without_mutating_baseline() -> None:
     assert baseline == {"nodes": [], "edges": []}
 
 
-def test_full_replace_requires_explicit_permission_for_existing_design() -> None:
-    state = {"current_form_data": {"nodes": [{"id": "start"}]}}
-    operations = [{"op": "replace_graph", "nodes": [], "edges": []}]
+def test_full_replace_rejected_for_existing_design() -> None:
+    """已有设计时全量替换一律禁止；空白首建仍允许。"""
+    flow_operations = [{"op": "replace_graph", "nodes": [], "edges": []}]
 
-    assert _contains_forbidden_replace(state, operations)
-    state["allow_full_replace"] = True
-    assert not _contains_forbidden_replace(state, operations)
+    assert _contains_forbidden_replace(
+        {"current_form_data": {"nodes": [{"id": "start"}]}}, flow_operations
+    )
+    assert not _contains_forbidden_replace(
+        {"current_form_data": {"nodes": [], "edges": []}}, flow_operations
+    )
+
+    form_operations = [{"op": "replace_form", "widgetList": [], "formConfig": {}}]
+    assert _contains_forbidden_replace(
+        {"current_form_data": {"widgetList": [{"options": {"name": "reason"}}]}},
+        form_operations,
+    )
+    assert not _contains_forbidden_replace(
+        {"current_form_data": {"widgetList": []}}, form_operations
+    )
 
 
 def test_add_node_preserves_replaced_edge_id_on_the_continuation() -> None:
@@ -312,7 +324,6 @@ def test_invalid_operation_target_is_repaired_once(monkeypatch) -> None:
             "nodes": [{"id": "task", "type": "USER_TASK", "name": "审批"}],
             "edges": [],
         },
-        "allow_full_replace": False,
         "review_retry_count": 0,
     }
 

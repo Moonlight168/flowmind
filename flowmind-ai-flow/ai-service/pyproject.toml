@@ -8,6 +8,15 @@ homepage = "http://flowmind.com"
 repository = "https://github.com/flowmind/flowmind-ai-flow"
 package-mode = false
 
+# 安装源固定为清华镜像。
+# 容器构建环境访问 PyPI 官方 CDN（files.pythonhosted.org）会读超时，导致镜像构建失败；
+# 而 Poetry 2.x 下 `poetry config repositories.*` 只影响发布、不影响安装，
+# 安装源只能在此声明。priority = "primary" 表示取代 PyPI 作为唯一解析源。
+[[tool.poetry.source]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+priority = "primary"
+
 [tool.poetry.dependencies]
 python = "^3.12,<3.14"
 fastapi = "^0.115.0"
