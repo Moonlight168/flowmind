@@ -15,17 +15,17 @@
 
 ```bash
 # 默认：源文件 evals/golden_dataset.jsonl → Langfuse 数据集 flowmind-design-golden-v1
-poetry run python scripts/upload_golden_to_langfuse.py
+poetry run python -m scripts.upload_golden_to_langfuse
 # 如需换数据集名/源文件，显式传参
-poetry run python scripts/upload_golden_to_langfuse.py --dataset-path evals/golden_dataset.jsonl --dataset-name flowmind-design-golden-v1
+poetry run python -m scripts.upload_golden_to_langfuse --dataset-path evals/golden_dataset.jsonl --dataset-name flowmind-design-golden-v1
 ```
 
 2. 从 Langfuse 拉取用例跑实验并上报评分
 
 ```bash
-poetry run python scripts/run_golden_eval.py
-poetry run python scripts/run_golden_eval.py --case-id flow-linear-leave
-poetry run python scripts/run_golden_eval.py --run-name my-run --max-concurrency 2
+poetry run python -m scripts.run_golden_eval
+poetry run python -m scripts.run_golden_eval --case-id flow-linear-leave
+poetry run python -m scripts.run_golden_eval --run-name my-run --max-concurrency 2
 ```
 
 执行完整链路是：先上传（步骤 1），再跑评估（步骤 2）。评估只从 Langfuse 拉取，不会触发上传。
