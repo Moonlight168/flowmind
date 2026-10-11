@@ -48,11 +48,11 @@
       <el-button
         link
         type="info"
-        title="新建对话"
+        title="清空对话"
         :disabled="loading"
         @click="clearMessages"
       >
-        <el-icon><Plus /></el-icon>
+        <el-icon><Delete /></el-icon>
       </el-button>
     </template>
 
@@ -143,7 +143,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { designStream, clearDesignState, rollbackDesignState } from '@/api/workflow/design'
-import { ChatDotRound, Plus, Back, Right, Promotion } from '@element-plus/icons-vue'
+import { ChatDotRound, Delete, Back, Right, Promotion } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
