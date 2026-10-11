@@ -46,7 +46,7 @@ def _backend_rows(url: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         return rows
     if url.endswith("/flowable/form/list"):
         return FORMS
-    if url.endswith("/system/role/list"):
+    if url.endswith("/system/role/optionselect"):
         return ROLES
     if url.endswith("/flowable/model/list"):
         return FLOW_MODELS
