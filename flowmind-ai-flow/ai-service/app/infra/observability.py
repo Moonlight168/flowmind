@@ -2,24 +2,41 @@
 FlowMind 智能流程设计服务 - Langfuse 可观测性
 
 统一维护工作流根观测和 LangChain 回调，保证 Workflow、Agent、LLM 与工具调用
-位于同一条 Langfuse 链路中。未配置 Langfuse 密钥时自动禁用，不影响业务执行。
+位于同一条 Langfuse 链路中。未配置 Langfuse 密钥或 SDK 缺失时自动禁用，
+降级为无观测的 no-op，不阻塞应用启动与业务执行。
 """
+
+from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from functools import cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.callbacks import BaseCallbackManager
-from langfuse import Langfuse, propagate_attributes
-from langfuse.langchain import CallbackHandler
 
 from app.config.settings import settings
 from app.core.auth_context import get_current_user
 from app.infra.logger import logger
 from app.prompts.loader import get_prompt_metadata
+
+if TYPE_CHECKING:
+    from langfuse import Langfuse
+    from langfuse.langchain import CallbackHandler
+
+try:
+    from langfuse import Langfuse, propagate_attributes
+    from langfuse.langchain import CallbackHandler
+
+    _LANGFUSE_SDK_AVAILABLE = True
+except ImportError:
+    # 监控组件属于可选依赖：镜像缺包/环境漂移时只降级观测，不能让整个服务起不来
+    _LANGFUSE_SDK_AVAILABLE = False
+    Langfuse = None
+    propagate_attributes = None
+    CallbackHandler = None
 
 OBSERVABILITY_ERRORS = (ValueError, RuntimeError, TypeError, OSError)
 _langchain_handler: ContextVar[CallbackHandler | None] = ContextVar(
@@ -28,9 +45,26 @@ _langchain_handler: ContextVar[CallbackHandler | None] = ContextVar(
 
 
 def observability_enabled() -> bool:
-    """仅在密钥完整且未显式关闭追踪时启用 Langfuse。"""
+    """仅在 SDK 可用、密钥完整且未显式关闭追踪时启用 Langfuse。"""
+    if not _LANGFUSE_SDK_AVAILABLE:
+        return False
     config = settings.observability
     return bool(config.public_key and config.secret_key and config.tracing_enabled)
+
+
+def _warn_if_sdk_missing_but_configured() -> None:
+    """配置了追踪密钥但运行环境缺 SDK 时给出一次明确告警，便于发现镜像漂移。"""
+    if _LANGFUSE_SDK_AVAILABLE:
+        return
+    config = settings.observability
+    if config.public_key and config.secret_key and config.tracing_enabled:
+        logger.warning(
+            "[langfuse] 已配置追踪密钥但运行环境缺少 langfuse 依赖，"
+            "链路追踪已降级禁用，业务功能不受影响；请检查镜像是否按最新依赖构建"
+        )
+
+
+_warn_if_sdk_missing_but_configured()
 
 
 @cache

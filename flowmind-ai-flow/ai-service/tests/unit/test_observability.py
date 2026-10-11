@@ -138,6 +138,39 @@ def test_disabled_flag_overrides_credentials(monkeypatch):
     assert observability.observability_enabled() is False
 
 
+def test_missing_sdk_disables_observability_even_with_credentials(monkeypatch):
+    """运行环境缺少 langfuse SDK 时强制降级：观测接口全部 no-op，业务不中断。"""
+    _enable_observability(monkeypatch)
+    monkeypatch.setattr(observability, "_LANGFUSE_SDK_AVAILABLE", False)
+    monkeypatch.setattr(
+        observability,
+        "get_client",
+        lambda: (_ for _ in ()).throw(AssertionError("SDK 缺失时不应创建客户端")),
+    )
+
+    original = {"configurable": {"thread_id": "thread-1"}}
+    with observability.observe_workflow(
+        "test",
+        input={"message": "hello"},
+        session_id="thread-1",
+        trace_id="trace-1",
+    ) as observation:
+        assert observation is None
+        assert observability.langchain_config(original) == original
+
+    observability.shutdown_observability()
+
+    with observability.observe_model_attempt(
+        task_name="t",
+        provider="p",
+        attempt_index=0,
+        fallback_enabled=False,
+        structured_required=True,
+        streaming=False,
+    ) as attempt:
+        assert attempt is None
+
+
 def test_shutdown_flushes_enabled_client(monkeypatch):
     """启用观测时，服务退出必须刷新 Langfuse 后台队列。"""
     _enable_observability(monkeypatch)
