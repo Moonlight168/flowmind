@@ -16,8 +16,8 @@ def _write_registry(tmp_path, versions: dict, monkeypatch) -> None:
         json.dumps({"prompts": {"agents/chat.md": versions}}), encoding="utf-8"
     )
     monkeypatch.setattr(loader, "PROMPT_VERSIONS_FILE", registry)
-    monkeypatch.setattr(loader.settings.prompt, "rollout_enabled", True)
-    monkeypatch.setattr(loader.settings.prompt, "version_overrides", {})
+    monkeypatch.setattr(loader.settings.prompt_config, "rollout_enabled", True)
+    monkeypatch.setattr(loader.settings.prompt_config, "version_overrides", {})
     loader.clear_prompt_cache()
 
 
@@ -72,7 +72,7 @@ def test_prompt_version_override_supports_immediate_rollback(
         monkeypatch,
     )
     monkeypatch.setattr(
-        loader.settings.prompt, "version_overrides", {"agents/chat.md": "v1"}
+        loader.settings.prompt_config, "version_overrides", {"agents/chat.md": "v1"}
     )
 
     with loader.prompt_release("thread-42"):
@@ -153,7 +153,7 @@ def test_disabled_rollout_always_uses_stable_version(tmp_path, monkeypatch) -> N
         },
         monkeypatch,
     )
-    monkeypatch.setattr(loader.settings.prompt, "rollout_enabled", False)
+    monkeypatch.setattr(loader.settings.prompt_config, "rollout_enabled", False)
 
     with loader.prompt_release("thread-42"):
         content = loader.load_prompt("agents/chat.md")

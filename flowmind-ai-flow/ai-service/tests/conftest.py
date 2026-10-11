@@ -12,7 +12,6 @@ import os
 import uuid
 from pathlib import Path
 
-import jwt
 import pytest
 import redis
 from dotenv import load_dotenv
@@ -24,7 +23,6 @@ load_dotenv(_env_path)
 
 # 系统/集成测试固定使用独立 Redis DB，避免误清理本地开发数据。
 os.environ["REDIS_DB"] = os.getenv("TEST_REDIS_DB", "15")
-os.environ["JWT_SECRET"] = "flowmind-system-test-only-" + ("x" * 48)
 # 单元测试可能运行在无 Redis 的环境：允许 checkpoint 降级为内存存储
 os.environ.setdefault("APP_ALLOW_MEMORY_FALLBACK", "true")
 
@@ -55,15 +53,8 @@ def client() -> TestClient:
 
 @pytest.fixture(scope="session")
 def auth_headers() -> dict[str, str]:
-    """生成仅供本地接口测试使用的有效 JWT。"""
-    from app.config.settings import settings
-
-    token = jwt.encode(
-        {"user_id": 1, "username": "system-test", "user_key": "system-test"},
-        settings.jwt_secret,
-        algorithm="HS512",
-    )
-    return {"Authorization": f"Bearer {token}"}
+    """模拟 RuoYi Gateway 注入的身份请求头（AI 服务只信任网关，不自行验签）。"""
+    return {"user_id": "1", "username": "system-test", "user_key": "system-test"}
 
 
 @pytest.fixture

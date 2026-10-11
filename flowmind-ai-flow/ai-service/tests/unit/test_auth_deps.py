@@ -3,7 +3,6 @@ from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.api.deps import require_auth
-from app.config.settings import settings
 
 
 def _request(headers: dict[str, str]) -> Request:
@@ -21,10 +20,13 @@ def _request(headers: dict[str, str]) -> Request:
 
 
 @pytest.mark.asyncio
-async def test_require_auth_trusts_gateway_identity_without_jwt_secret(monkeypatch):
-    monkeypatch.setattr(settings, "jwt_secret", "")
+async def test_require_auth_trusts_gateway_identity():
     request = _request(
-        {"user_id": "42", "username": "%E6%B5%8B%E8%AF%95+%E7%94%A8%E6%88%B7", "user_key": "session-1"}
+        {
+            "user_id": "42",
+            "username": "%E6%B5%8B%E8%AF%95+%E7%94%A8%E6%88%B7",
+            "user_key": "session-1",
+        }
     )
     credentials = HTTPAuthorizationCredentials(
         scheme="Bearer", credentials="gateway-validated-token"
@@ -38,10 +40,6 @@ async def test_require_auth_trusts_gateway_identity_without_jwt_secret(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_require_auth_rejects_missing_gateway_identity_without_jwt_secret(
-    monkeypatch,
-):
-    monkeypatch.setattr(settings, "jwt_secret", "")
-
+async def test_require_auth_rejects_missing_gateway_identity():
     with pytest.raises(HTTPException, match="Missing gateway identity headers"):
         await require_auth(_request({}), None)

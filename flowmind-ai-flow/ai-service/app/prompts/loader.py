@@ -88,7 +88,7 @@ def resolve_prompt_version(
     forced = _forced_selection(relative_path, versions, stable_version)
     if forced is not None:
         return forced
-    if not settings.prompt.rollout_enabled or not release_key:
+    if not settings.prompt_config.rollout_enabled or not release_key:
         return _selection(relative_path, versions, stable_version, stable_version)
 
     weighted = _weighted_versions(versions)
@@ -140,7 +140,7 @@ def _prompt_config(relative_path: str) -> dict[str, Any]:
 def _forced_selection(
     relative_path: str, versions: dict[str, Any], stable_version: str
 ) -> PromptSelection | None:
-    override = settings.prompt.version_overrides.get(relative_path)
+    override = settings.prompt_config.version_overrides.get(relative_path)
     if override is None:
         return None
     if override in versions:

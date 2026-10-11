@@ -264,13 +264,14 @@ class Settings(BaseSettings):
     backend: BackendSettings = Field(default_factory=BackendSettings)
     nacos: NacosSettings = Field(default_factory=NacosSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
-    prompt: PromptSettings = Field(default_factory=PromptSettings)
+    # 字段名不能叫 prompt：pydantic 会去读同名环境变量 PROMPT（终端提示符，常见于 shell/CI），
+    # 该值不是 JSON 会导致 Settings 构造失败、服务无法启动。
+    prompt_config: PromptSettings = Field(default_factory=PromptSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     log: LogSettings = Field(default_factory=LogSettings)
     compress: CompressConfig = Field(default_factory=CompressConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
-    jwt_secret: str = Field(default="")
     models: list[dict[str, Any]] = Field(
         default_factory=lambda: [dict(model) for model in DEFAULT_MODELS]
     )

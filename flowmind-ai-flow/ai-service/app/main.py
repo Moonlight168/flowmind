@@ -31,12 +31,6 @@ async def lifespan(app: FastAPI):
         reasons = ",".join(readiness["not_ready_reasons"])
         logger.error(f"结构化模型降级未就绪: {reasons}")
 
-    if not settings.jwt_secret:
-        logger.warning(
-            "未配置 JWT_SECRET：AI 服务自身不校验签名（按约定由网关统一鉴权），"
-            "请确保服务端口不对外直接暴露"
-        )
-
     # 注册到 Nacos（失败时会抛出异常）
     if not register_to_nacos():
         logger.error("Nacos 注册失败，服务启动中止")

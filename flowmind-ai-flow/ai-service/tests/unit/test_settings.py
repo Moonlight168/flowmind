@@ -31,12 +31,10 @@ def test_root_settings_parse_models_and_credentials(monkeypatch) -> None:
         "MODELS",
         '[{"name":"primary","model":"model-a","base_url":"http://model/v1"}]',
     )
-    monkeypatch.setenv("JWT_SECRET", "jwt-from-env")
     monkeypatch.setenv("FLOWMIND_AUTH_TOKEN", "eval-token")
 
     configured = Settings()
 
-    assert configured.jwt_secret == "jwt-from-env"
     assert configured.evaluation.auth_token == "eval-token"
     assert configured.get_model_providers()["primary"]["model_name"] == "model-a"
 
