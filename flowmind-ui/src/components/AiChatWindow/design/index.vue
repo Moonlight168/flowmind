@@ -118,9 +118,6 @@
     </div>
 
     <div class="dialog-footer">
-      <el-checkbox v-if="mode === 'design' && designType !== 'category'" v-model="allowFullReplace" :disabled="loading">
-        全部重新生成
-      </el-checkbox>
       <el-input
         v-model="inputText"
         placeholder="请描述您的需求"
@@ -248,7 +245,6 @@ const progressText = ref('')
 const pendingPreview = ref(null)
 const pendingChoices = ref([])
 const previewBaseline = ref(null)
-const allowFullReplace = ref(false)
 const messagesContainer = ref(null)
 const requestController = ref(null)
 // 统一维护当前表单数据：AI 更新和外部修改都同步到这里
@@ -427,7 +423,6 @@ function cancelCurrentRequest() {
   if (!controller) return
   requestController.value = null
   controller.abort()
-  allowFullReplace.value = false
   loading.value = false
   progressText.value = ''
   emit('designing', false)
@@ -451,17 +446,6 @@ async function handleSend() {
   if (!inputText.value.trim() || loading.value) return
 
   const userInput = inputText.value.trim()
-  if (allowFullReplace.value) {
-    try {
-      await ElMessageBox.confirm(
-        '全部重新生成会丢弃当前设计，确认继续吗？',
-        '二次确认',
-        { type: 'warning', confirmButtonText: '确认重新生成', cancelButtonText: '取消' }
-      )
-    } catch {
-      return
-    }
-  }
   inputText.value = ''
   pendingChoices.value = []
 
@@ -491,7 +475,6 @@ async function handleSend() {
       current_form_data: currentFormData.value,
       mode: props.mode,
       thread_id: flowKey.value,
-      allow_full_replace: allowFullReplace.value,
       history_count: forkBackendCount
     }, (event) => {
       if (requestController.value !== controller) return
@@ -542,7 +525,6 @@ async function handleSend() {
   } finally {
     if (requestController.value === controller) {
       requestController.value = null
-      allowFullReplace.value = false
       loading.value = false
       progressText.value = ''
       emit('designing', false)
