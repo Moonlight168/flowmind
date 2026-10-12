@@ -40,6 +40,7 @@ class DesignRequestDTO(BaseModel):
         ge=0,
         description="回退场景：只取前 N 条对话历史（版本指针）；不传则用完整历史",
     )
+    allow_full_replace: bool = False
 
 
 class RollbackRequestDTO(BaseModel):

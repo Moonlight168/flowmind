@@ -312,6 +312,56 @@ def test_invalid_operation_target_is_repaired_once(monkeypatch) -> None:
     assert result["design_output"]["nodes"][0]["name"] == "新名称"
 
 
+def test_empty_flow_requires_complete_replace_graph(monkeypatch) -> None:
+    calls = []
+
+    def run_agent(**kwargs):
+        calls.append(kwargs["messages"])
+        return {
+            "operations": [{
+                "op": "replace_graph",
+                "nodes": [
+                    {"id": "start", "type": "START_EVENT", "name": "开始"},
+                    {"id": "finance_approve", "type": "USER_TASK", "name": "财务审批"},
+                    {"id": "end", "type": "END_EVENT", "name": "结束"},
+                ],
+                "edges": [
+                    {"source": "start", "target": "finance_approve"},
+                    {"source": "finance_approve", "target": "end"},
+                ],
+            }]
+        }
+
+    monkeypatch.setattr(generate_module, "run_react_agent", run_agent)
+    monkeypatch.setattr(
+        generate_module,
+        "discriminate_intent",
+        lambda *args, **kwargs: Intent(kind="design"),
+    )
+    state = {
+        "messages": [HumanMessage(content="补充审批节点")],
+        "design_type": "flow_design",
+        "mode": "design",
+        "current_form_data": {"nodes": [], "edges": []},
+        "review_retry_count": 0,
+    }
+
+    result = generate_module.generate_node(state)
+
+    assert len(calls) == 1
+    assert result["intent"] == "success"
+    output = result["design_output"]
+    assert [node["type"] for node in output["nodes"]] == [
+        "START_EVENT",
+        "USER_TASK",
+        "END_EVENT",
+    ]
+    assert output["edges"] == [
+        {"source": "start", "target": "finance_approve"},
+        {"source": "finance_approve", "target": "end"},
+    ]
+
+
 def test_generate_node_propagates_clarification_choices(monkeypatch):
     monkeypatch.setattr(
         generate_module,

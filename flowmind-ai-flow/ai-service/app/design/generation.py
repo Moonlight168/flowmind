@@ -30,6 +30,7 @@ def run_react_agent(
     current_form_data: dict[str, Any] | None = None,
     task_name: str | None = None,
     mode: str = "design",
+    allow_full_replace: bool = False,
 ) -> dict[str, Any]:
     """运行设计 Agent：ReAct 检索 + 结构化输出，失败重试后返回 error。
 
@@ -57,6 +58,14 @@ def run_react_agent(
     prompt_text = build_prompt(
         task, variables={"current_form_data": current_form_data or {}}
     )
+    if design_type == "flow_design" and mode == "design":
+        baseline = current_form_data or {}
+        if allow_full_replace or (not baseline.get("nodes") and not baseline.get("edges")):
+            prompt_text += (
+                "\n\n## 当前输出模式\n"
+                "必须使用唯一一个 `replace_graph` 操作输出完整 nodes 和 edges；"
+                "不得使用 `after_id`，不得引用历史节点 ID。"
+            )
     full_messages = [{"role": "system", "content": prompt_text}, *messages]
 
     # 选 schema + 工具集：basic 模式用 BasicDesign + 仅分类工具

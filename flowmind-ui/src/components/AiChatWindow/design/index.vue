@@ -78,7 +78,13 @@
     </div>
 
     <div v-if="pendingPreview" class="change-preview">
-      <div class="change-preview__title">变更预览</div>
+      <div class="change-preview__title">
+        <span>变更预览</span>
+        <el-button link size="small" @click="previewCollapsed = !previewCollapsed">
+          {{ previewCollapsed ? '展开' : '收起' }}
+        </el-button>
+      </div>
+      <template v-if="!previewCollapsed">
       <div
         v-for="(notice, index) in pendingNotices"
         :key="index"
@@ -108,6 +114,7 @@
         <el-button @click="discardPreview">放弃</el-button>
         <el-button type="primary" @click="applyPreview">应用变更</el-button>
       </div>
+      </template>
     </div>
 
     <div v-if="pendingChoices.length" class="clarification-choices">
@@ -253,6 +260,7 @@ const messagesContainer = ref(null)
 const requestController = ref(null)
 // 统一维护当前表单数据：AI 更新和外部修改都同步到这里
 const currentFormData = ref({})
+const previewCollapsed = ref(false)
 
 // 监听外部 formData 变化，同步到 currentFormData
 watch(() => props.formData, (newVal) => {
@@ -643,6 +651,7 @@ async function handleSend() {
         } else if (data.status === 'ready' && data.form_data != null) {
           previewBaseline.value = cloneData(currentFormData.value)
           pendingPreview.value = data
+          previewCollapsed.value = false
           emit('preview', data.form_data)
           markPendingEntities()
         }
@@ -921,6 +930,7 @@ async function applyPreview() {
   }
   pendingPreview.value = null
   previewBaseline.value = null
+  previewCollapsed.value = false
 }
 
 function discardPreview() {
@@ -928,6 +938,7 @@ function discardPreview() {
   if (previewBaseline.value) currentFormData.value = cloneData(previewBaseline.value)
   pendingPreview.value = null
   previewBaseline.value = null
+  previewCollapsed.value = false
   emit('discard')
 }
 
@@ -1118,7 +1129,13 @@ defineExpose({
   background: #f0f9eb;
 }
 
-.change-preview__title { font-weight: 600; color: #303133; }
+.change-preview__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #303133;
+}
 .change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
 /* 每个动作一块，左侧色条区分新增/修改/删除/替换 */
@@ -1137,11 +1154,13 @@ defineExpose({
   display: block;
   padding-left: 8px;
   color: #606266;
+  overflow-wrap: anywhere;
 }
 .change-preview__operations li.is-add { border-left-color: #67c23a; }
 .change-preview__operations li.is-update { border-left-color: #e6a23c; }
 .change-preview__operations li.is-remove { border-left-color: #f56c6c; }
 .change-preview__operations li.is-move { border-left-color: #c0c4cc; }
+.change-preview__operations li.is-replace { border-left-color: #409eff; }
 .change-preview__fields { margin: 8px 0; font-size: 12px; }
 .change-preview__fields div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
 .change-preview__fields dt { color: #606266; }

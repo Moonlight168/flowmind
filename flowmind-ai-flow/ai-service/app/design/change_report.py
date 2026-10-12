@@ -120,7 +120,7 @@ def _replace_report(
         else f"生成 {new_count} {unit}"
     )
     fields = "、".join(name for name in names if name)
-    if not fields or new_count > 8:
+    if not fields:
         return summary, []
     return summary, [{"action": "replace", "label": summary, "detail": fields}]
 

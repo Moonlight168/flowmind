@@ -90,6 +90,7 @@ def _run_design_stream(
                 current_form_data=payload.current_form_data,
                 mode=payload.mode,
                 history_count=payload.history_count,
+                allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:

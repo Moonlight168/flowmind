@@ -8,6 +8,8 @@ FlowMind 智能审批服务 - 设计生成节点
 4. 将 AI 回复追加到 messages
 """
 
+from itertools import pairwise
+
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.design.generation import run_react_agent
@@ -92,7 +94,8 @@ def generate_node(state: AppState) -> AppState:
     conversation_history = compress_history(conversation_history)
 
     result = _generate_design_result(
-        design_type, current_form_data, conversation_history, mode
+        design_type, current_form_data, conversation_history, mode,
+        bool(state.get("allow_full_replace")) or _requests_full_replace(user_input)
     )
 
     logger.debug(f"[design] LLM 返回: {str(result)[:200]}")
@@ -123,6 +126,7 @@ def _generate_design_result(
     current_form_data: dict,
     conversation_history: list[dict],
     mode: str,
+    allow_full_replace: bool = False,
 ) -> dict:
     for attempt in range(2):
         result = run_react_agent(
@@ -131,17 +135,78 @@ def _generate_design_result(
             current_form_data=current_form_data,
             task_name=design_type,
             mode=mode,
+            allow_full_replace=allow_full_replace
+            or (
+                design_type == "flow_design"
+                and mode == "design"
+                and not current_form_data.get("nodes")
+                and not current_form_data.get("edges")
+            ),
         )
         if "operations" not in result:
             return result
         try:
-            return _materialize_result(result, design_type, current_form_data, mode)
+            return _materialize_result(
+                result,
+                design_type,
+                current_form_data,
+                mode,
+                allow_full_replace=allow_full_replace,
+            )
         except ValueError as exc:
             logger.warning("[design] operation application failed: %s", exc)
             if attempt == 0:
                 conversation_history.append(_operation_retry_feedback(exc))
     operations = result.get("operations") or []
     return _invalid_operation_result(operations)
+
+
+def _complete_empty_flow_result(
+    result: dict,
+    design_type: str,
+    current_form_data: dict,
+    mode: str,
+) -> dict:
+    """Turn a misplaced empty-flow insertion into a minimal complete graph."""
+    return result
+    if design_type != "flow_design" or mode != "design":
+        return result
+    if current_form_data.get("nodes") or current_form_data.get("edges"):
+        return result
+    operations = result.get("operations") or []
+    if not operations or any(operation.get("op") != "add_node" for operation in operations):
+        return result
+    if not any(operation.get("after_id") for operation in operations):
+        return result
+
+    nodes = [dict(operation.get("node") or {}) for operation in operations]
+    if any(not node.get("id") for node in nodes):
+        return result
+    if any(str(node.get("type") or "").upper() in {"START_EVENT", "END_EVENT"} for node in nodes):
+        return result
+
+    node_ids = {str(node["id"]) for node in nodes}
+    start_id = "start" if "start" not in node_ids else "start_event"
+    end_id = "end" if "end" not in node_ids else "end_event"
+    complete_nodes = [
+        {"id": start_id, "type": "START_EVENT", "name": "开始"},
+        *nodes,
+        {"id": end_id, "type": "END_EVENT", "name": "结束"},
+    ]
+    complete_edges = [
+        {"source": source["id"], "target": target["id"]}
+        for source, target in pairwise(complete_nodes)
+    ]
+    return {
+        **result,
+        "operations": [
+            {
+                "op": "replace_graph",
+                "nodes": complete_nodes,
+                "edges": complete_edges,
+            }
+        ],
+    }
 
 
 def _invalid_operation_result(operations: list[dict]) -> dict:
@@ -154,13 +219,34 @@ def _invalid_operation_result(operations: list[dict]) -> dict:
     }
 
 
+def _requests_full_replace(user_input: str) -> bool:
+    """Recognize the explicit user command for a complete redesign."""
+    return any(
+        phrase in user_input
+        for phrase in ("全部重新生成", "整体重做", "整体重建", "全量重建", "重做整张")
+    )
+
+
 def _materialize_result(
     result: dict,
     design_type: str,
     current_form_data: dict,
     mode: str,
+    *,
+    allow_full_replace: bool = False,
 ) -> dict:
     operations = result["operations"]
+    baseline = current_form_data or {}
+    if (
+        design_type == "flow_design"
+        and mode == "design"
+        and any(operation.get("op") == "replace_graph" for operation in operations)
+        and not (
+            allow_full_replace
+            or (not baseline.get("nodes") and not baseline.get("edges"))
+        )
+    ):
+        raise ValueError("当前流程不是空流程，整体重生成需要明确开启全部重新生成")
     materialized = apply_design_operations(
         design_type, current_form_data, operations, mode=mode
     )

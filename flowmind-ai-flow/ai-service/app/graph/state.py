@@ -35,6 +35,7 @@ class AppState(TypedDict, total=False):
     design_output: dict | None
     intent: str | None  # 标识 clarification/success
     history_count: int | None  # 回退场景：只取前 N 条历史（版本指针）
+    allow_full_replace: bool
 
     # review 专用
     review_retry_count: int | None  # 审查重试计数

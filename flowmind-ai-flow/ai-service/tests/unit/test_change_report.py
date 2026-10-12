@@ -55,8 +55,8 @@ def test_form_replace_on_existing_form_reports_scale_change():
     assert _lines(details) == ["整体替换表单（2 → 3 个字段）：甲、乙、丙"]
 
 
-def test_many_fields_omit_the_name_list():
-    """字段很多时不铺开列名字，避免把面板撑爆。"""
+def test_many_fields_keep_the_name_list_for_preview():
+    """整体替换也必须有可展开的字段明细，不能只显示摘要。"""
     result = {"widgetList": [_widget(f"f{i}", f"字段{i}") for i in range(10)]}
 
     summary, details = build_change_report(
@@ -64,7 +64,9 @@ def test_many_fields_omit_the_name_list():
     )
 
     assert summary == "生成 10 个字段"
-    assert details == []
+    assert _lines(details) == [
+        "生成 10 个字段：" + "、".join(f"字段{i}" for i in range(10))
+    ]
 
 
 # ---------- 表单：增量（按动作分组，一行一组）----------

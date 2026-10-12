@@ -195,6 +195,7 @@ def _prepare_design_call(
     current_form_data: dict | None,
     mode: str,
     history_count: int | None,
+    allow_full_replace: bool,
     kwargs: dict,
 ) -> tuple[dict, str, AppState]:
     """准备 config 与 initial_state（invoke 与 stream 共用）"""
@@ -212,6 +213,7 @@ def _prepare_design_call(
         "design_type": design_type,
         "mode": mode,
         "history_count": history_count,
+        "allow_full_replace": allow_full_replace,
         "intent": "clarification",
         "review_retry_count": 0,
         "review_error_history": [],
@@ -227,6 +229,7 @@ def invoke_design_workflow(
     current_form_data: dict | None = None,
     mode: str = "design",
     history_count: int | None = None,
+    allow_full_replace: bool = False,
     **kwargs,
 ) -> dict:
     """设计 Workflow 调用入口（同步，返回最终 design_output）"""
@@ -238,6 +241,7 @@ def invoke_design_workflow(
         current_form_data,
         mode,
         history_count,
+        allow_full_replace,
         kwargs,
     )
 
@@ -292,6 +296,7 @@ def stream_design_workflow(
     current_form_data: dict | None = None,
     mode: str = "design",
     history_count: int | None = None,
+    allow_full_replace: bool = False,
     **kwargs,
 ) -> Iterator[dict[str, Any]]:
     """流式设计 Workflow：逐个 yield 进度事件，最后 yield done 事件（含完整 design_output）"""
@@ -303,6 +308,7 @@ def stream_design_workflow(
         current_form_data,
         mode,
         history_count,
+        allow_full_replace,
         kwargs,
     )
 
