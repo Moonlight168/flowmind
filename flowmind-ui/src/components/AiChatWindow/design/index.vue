@@ -50,7 +50,7 @@
         type="info"
         title="清空对话"
         :disabled="loading"
-        @click="clearMessages"
+        @click="confirmClearChat"
       >
         <el-icon><Delete /></el-icon>
       </el-button>
@@ -79,11 +79,12 @@
 
     <div v-if="pendingPreview" class="change-preview">
       <div class="change-preview__title">变更预览</div>
-      <div v-if="pendingPreview.pending_entities?.start_form_name" class="change-preview__pending">
-        将创建占位表单「{{ pendingPreview.pending_entities.start_form_name }}」，字段需你稍后完善
-      </div>
-      <div v-if="pendingPreview.pending_entities?.category_name" class="change-preview__pending">
-        将创建流程分类「{{ pendingPreview.pending_entities.category_name }}」
+      <div
+        v-for="(notice, index) in pendingNotices"
+        :key="index"
+        class="change-preview__pending"
+      >
+        {{ notice }}
       </div>
       <!-- 表单 / 流程模型：后端按动作分组好的明细，每个动作一行 -->
       <ul v-if="pendingPreview.change_details?.length" class="change-preview__operations">
@@ -266,14 +267,34 @@ const localSessionId = ref(
   props.formData?.code || 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 )
 
-// 会话标识：优先用 formData 业务标识，否则 sessionId，否则临时 id。
+// 业务标识：优先用 formData 业务标识，否则 sessionId，否则临时 id。
 // 必须转成字符串 —— 后端 id 是 Long，JSON 里是数字，而接口契约的 thread_id 是 str，
 // 直接传数字会被判 422。
-const flowKey = computed(() => {
+const rawFlowKey = computed(() => {
   const fd = props.formData || {}
   const raw = fd.modelId || fd.modelKey || fd.formId || props.sessionId || localSessionId.value
   return String(raw)
 })
+
+// 会话代号：清空对话 = 开一段全新会话，后端 thread、聊天记录与版本栈一起换新。
+// 代号必须持久化，否则关掉标签页重开又回到刚清掉的那段会话。
+const generation = ref(0)
+const generationKey = computed(() => {
+  return `ai_design_gen_${props.designType}_${props.mode}_${rawFlowKey.value}`
+})
+
+// 会话标识 = 业务标识 + 代号。代号 0 不加后缀，升级前已有的会话不会因为加后缀而丢失。
+const flowKey = computed(() => {
+  return generation.value > 0 ? `${rawFlowKey.value}#${generation.value}` : rawFlowKey.value
+})
+
+/** 读回当前对象的会话代号（没清空过就是 0）。
+ *  存的是纯数字字符串，pruneStore 判定不了 savedAt 就会保留它 —— 这是有意的：
+ *  代号被清掉就等于清空失效，旧会话会复活。 */
+function readGeneration() {
+  const saved = Number(localStorage.getItem(generationKey.value))
+  return Number.isInteger(saved) && saved > 0 ? saved : 0
+}
 
 // 存储命名空间：必须区分 mode，否则基本信息（basic）与流程模型（design）窗口
 // 会共用同一份会话消息与版本历史，互相污染
@@ -509,6 +530,8 @@ async function restoreSession() {
 }
 
 onMounted(() => {
+  // 代号决定 storageKey/versionKey，必须在恢复会话之前读回来
+  generation.value = readGeneration()
   // localStorage 没有过期机制，启动时清掉久未使用的会话与版本
   pruneStore()
   restoreSession()
@@ -621,6 +644,7 @@ async function handleSend() {
           previewBaseline.value = cloneData(currentFormData.value)
           pendingPreview.value = data
           emit('preview', data.form_data)
+          markPendingEntities()
         }
         if (data.message && data.kind !== 'rollback') {
           messages.value.push({ role: 'assistant', content: data.message })
@@ -661,6 +685,28 @@ function scrollToBottom() {
 }
 
 onBeforeUnmount(cancelCurrentRequest)
+
+/** 依赖实体提示行：区分「将创建」与「使用已有」，更新场景不再被说成新建 */
+const pendingNotices = computed(() => {
+  const pending = pendingPreview.value?.pending_entities
+  if (!pending) return []
+  const notices = []
+  if (pending.form_checked) {
+    notices.push(
+      pending.form_exists
+        ? `将使用已有表单「${pending.start_form_name}」`
+        : `将创建占位表单「${pending.start_form_name}」，字段需你稍后完善`
+    )
+  }
+  if (pending.category_checked) {
+    notices.push(
+      pending.category_exists
+        ? `将归入已有流程分类「${pending.category_name}」`
+        : `将一并创建流程分类「${pending.category_name}」`
+    )
+  }
+  return notices
+})
 
 /** 分类 / 流程基本信息的字段 diff：字段少，两列对照比一行式更清楚 */
 const previewChanges = computed(() => {
@@ -712,14 +758,23 @@ const PENDING_FORM_KEY = 'key_ai_pending_form'
 // 占位表单骨架：保证表单设计器能正常打开
 const EMPTY_FORM_CONTENT = JSON.stringify({ widgetList: [], formConfig: {} })
 
+/** 按名称查表单（后端只读接口），查不到返回 null */
+async function findFormByName(formName) {
+  const res = await listForm({ formName })
+  const rows = res?.rows || res?.data || []
+  return rows.find((item) => item.formName === formName) || null
+}
+
+/** 按名称查分类，查不到返回 null */
+async function findCategoryByName(categoryName) {
+  const res = await listCategory({ categoryName })
+  const rows = res?.rows || res?.data || []
+  return rows.find((item) => item.categoryName === categoryName) || null
+}
+
 /** 按名称取表单，不存在则创建空占位（幂等，避免重复创建） */
 async function ensurePlaceholderForm(formName) {
-  const findByName = async () => {
-    const res = await listForm({ formName })
-    const rows = res?.rows || res?.data || []
-    return rows.find((item) => item.formName === formName)
-  }
-  const existing = await findByName()
+  const existing = await findFormByName(formName)
   if (existing) return existing
   await addForm({
     formName,
@@ -727,7 +782,7 @@ async function ensurePlaceholderForm(formName) {
     remark: 'AI 流程设计自动创建的占位表单，待完善字段'
   })
   // 新增接口只回 {code,msg}，不回实体，必须回查拿 formId
-  const created = await findByName()
+  const created = await findFormByName(formName)
   if (!created?.formId) throw new Error(`占位表单「${formName}」创建后未能查到`)
   return created
 }
@@ -735,9 +790,7 @@ async function ensurePlaceholderForm(formName) {
 /** 按名称取分类，不存在则创建（幂等）。
  *  新增接口不回实体，所以直接沿用提交时的 code —— 不能读响应的 code（那是状态码 200）。 */
 async function ensureCategory(categoryName, code) {
-  const res = await listCategory({ categoryName })
-  const rows = res?.rows || res?.data || []
-  const existing = rows.find((item) => item.categoryName === categoryName)
+  const existing = await findCategoryByName(categoryName)
   if (existing) return existing
   const created = await addCategory({
     categoryName,
@@ -748,6 +801,39 @@ async function ensureCategory(categoryName, code) {
     throw new Error(created?.msg || `分类「${categoryName}」创建失败`)
   }
   return { categoryName, code }
+}
+
+/** 预览里「依赖实体」那两行要说的是接下来**会发生什么**。
+ *  ensurePlaceholderForm / ensureCategory 都是先查后建，同名实体已存在时不会创建 ——
+ *  文案必须说「使用已有」，否则更新场景会被读成新建。查询标记没回来前不显示，
+ *  免得先闪一句「将创建」再改口。
+ *  必须写回 pendingPreview 上的对象（响应式代理），直接改 SSE 事件对象不会触发刷新。 */
+async function markPendingEntities() {
+  const preview = pendingPreview.value
+  const pending = preview?.pending_entities
+  if (!pending) return
+  if (pending.start_form_name) {
+    let existing = null
+    try {
+      existing = await findFormByName(pending.start_form_name)
+    } catch (e) {
+      console.warn('查询表单失败:', e)
+    }
+    if (pendingPreview.value !== preview) return
+    pending.form_exists = Boolean(existing)
+    pending.form_checked = true
+  }
+  if (pending.category_name) {
+    let existing = null
+    try {
+      existing = await findCategoryByName(pending.category_name)
+    } catch (e) {
+      console.warn('查询流程分类失败:', e)
+    }
+    if (pendingPreview.value !== preview) return
+    pending.category_exists = Boolean(existing)
+    pending.category_checked = true
+  }
 }
 
 /** 应用变更前先把缺失的依赖实体建出来，并把引用写回 form_data。
@@ -846,24 +932,52 @@ function discardPreview() {
 }
 
 
-function clearMessages() {
+/** 开一段全新会话：后端 checkpoint、聊天记录、版本栈一起换新，
+ *  当前设计原样保留，作为新会话的 V0。
+ *  保存落定（宿主调用）与用户点「清空对话」都是"本轮会话结束"，共用这里。 */
+async function startNewSession() {
   cancelCurrentRequest()
   discardPreview()
   messages.value = []
   displayLimit.value = null
   lastBackendCount.value = null
   pendingChoices.value = []
-  syncVersionCount()
-  // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
-  // 只清空 AI 生成的数据
-  currentFormData.value = { ...props.formData }
+  // 旧会话的前端记录按旧 key 清掉，不让它白占 localStorage 30 天
   localStorage.removeItem(storageKey.value)
   localStorage.removeItem(versionKey.value)
-  ensureGreeting()
-  // 同步清除后端 Redis 中的对话历史
+  // 后端 Redis 里的对话历史同样作废
   clearDesignState(props.designType, flowKey.value, props.mode).catch((error) => {
     console.warn('清除后端对话历史失败:', error)
   })
+  // 换代号：storageKey / versionKey / thread_id 一起指向新会话
+  generation.value += 1
+  localStorage.setItem(generationKey.value, String(generation.value))
+  syncVersionCount()
+  // 顺序同 restoreSession：欢迎语先进 messages，V0 的 messageCount 才是 1
+  ensureGreeting()
+  // 新会话的 V0 = 用户手上的当前设计（画布不动，只是重新记一个起点）
+  await ensureBaselineVersion()
+  saveSession()
+  scrollToBottom()
+}
+
+/** 宿主在保存成功后调用：设计已落定，本轮 AI 会话结束 */
+function clearMessages() {
+  return startNewSession()
+}
+
+/** 标题栏「清空对话」：会重置版本栈，先让用户确认 */
+async function confirmClearChat() {
+  try {
+    await ElMessageBox.confirm(
+      '将开始一段全新的对话：聊天记录与版本历史都会重置，当前设计保留为新会话的 V0。',
+      '清空对话',
+      { type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消' }
+    )
+  } catch (e) {
+    return
+  }
+  await startNewSession()
 }
 
 defineExpose({
