@@ -93,6 +93,8 @@ flowmind-ai-flow/
 | `/design/category` | POST | AI 设计流程分类（SSE 流式） |
 | `/design/flow`     | POST | AI 设计流程（SSE 流式）     |
 | `/design/form`     | POST | AI 设计表单（SSE 流式）     |
+| `/design/state/{type}` | DELETE | 删除设计会话（含后端 checkpoint） |
+| `/design/state/{type}/rollback` | POST | 把会话历史裁剪到指定条数（版本覆盖时丢弃旧分支） |
 | `/chat`            | POST | 对话接口（一次性返回）      |
 | `/chat/stream`     | POST | 对话接口（SSE 逐 token 流式） |
 | `/chat/history`    | GET  | 对话历史                    |
@@ -114,7 +116,10 @@ flowmind-ai-flow/
     "bpmn_xml": "<?xml version='1.0'...?>",
     "description": "..."
   },
-  "message": "已生成流程变更预览",
+  "message": "流程「请假审批流程」：新增 1 个节点",
+  "change_details": [
+    {"action": "add", "text": "新增 1 个节点：财务审批"}
+  ],
   "operations": [{"op": "add_node", "node": {"id": "manager_approve"}}],
   "operation_count": 1,
   "validation": {"passed": true, "errors": []},
@@ -122,7 +127,9 @@ flowmind-ai-flow/
 }
 ```
 
-`ready` 只表示候选结果已通过语法和业务校验，前端仍需用户点击“应用变更”；`needs_input` 和 `error` 均不携带可覆盖当前设计的草稿。替换已有完整设计时还会进行二次确认。
+`message` 与 `change_details` 由 `app/design/change_report.py` 统一生成，前端直接渲染：`message` 是给人看的一句话摘要（实体 + 名称 + 变更量），`change_details` 按动作分组、供预览面板逐行展示（`action` 取值 `add` / `update` / `remove` / `move` / `replace`，用于着色）。分类设计与流程基本信息只改几个文本字段，仍由前端渲染字段对照，不下发 `change_details`。
+
+`ready` 只表示候选结果已通过语法和业务校验，前端仍需用户点击“应用变更”。整体替换（`replace_form` / `replace_graph`）与增量修改一样走预览确认，没有单独的授权标志；覆盖风险由预览、放弃、版本回退三层兜住。`needs_input` 和 `error` 均不携带可覆盖当前设计的草稿。
 
 ## 黄金数据集评估
 
