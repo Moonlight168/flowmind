@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from starlette.background import BackgroundTasks
 
 from app.api import webhook
@@ -96,3 +97,22 @@ async def test_trigger_experiment_falls_back_to_default_dataset(
     assert response.status_code == 202
     await tasks()
     assert captured["dataset_name"] == runner.DEFAULT_DATASET_NAME
+
+
+def test_webhook_route_accepts_json_body_over_http(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """回归：走真实路由时不能把 Request/BackgroundTasks 当成必填 query 参数。
+
+    接口挂在 @log_api_endpoint() 下，装饰器靠 @wraps 让 inspect.signature 取回原
+    函数的注解；本模块又开了 `from __future__ import annotations`，注解是字符串，
+    而 FastAPI 是拿装饰器所在模块的命名空间去解析的 —— 解析不出这两个类型就退化成
+    必填 query 参数，任何真实请求都只会拿到 422。上面的用例直接调 __wrapped__，
+    绕过了路由，所以漏掉了这个问题。
+    """
+    captured = _capture_runner(monkeypatch)
+
+    response = client.post("/webhooks/experiment", json={"dataset": {"name": "ds-http"}})
+
+    assert response.status_code == 202
+    assert captured["dataset_name"] == "ds-http"

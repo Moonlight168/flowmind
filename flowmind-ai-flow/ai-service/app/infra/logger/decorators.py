@@ -4,7 +4,9 @@ FlowMind 智能流程设计服务 - 日志装饰器
 使用 structlog 实现自动追踪。
 """
 
+import inspect
 import time
+import typing
 from functools import wraps
 
 from structlog.contextvars import bind_contextvars, clear_contextvars
@@ -64,6 +66,24 @@ def log_api_endpoint(skip_paths: list[str] | None = None):
                 raise
             finally:
                 clear_contextvars()
+
+        # FastAPI 用 `wrapper.__globals__` 解析参数注解，而 @wraps 会让
+        # inspect.signature 取回**原函数**的注解。被装饰的模块若写了
+        # `from __future__ import annotations`，注解就是字符串，在装饰器所在模块的
+        # 命名空间里解析不出来 —— FastAPI 会把 Request / BackgroundTasks / 请求 DTO
+        # 当成必填 query 参数，接口从此只返回 422，而且单测直接调 __wrapped__ 时
+        # 完全看不出来。这里按原函数自己的命名空间把注解解析好再交给 FastAPI。
+        try:
+            hints = typing.get_type_hints(func)
+            original = inspect.signature(func)
+            wrapper.__signature__ = original.replace(
+                parameters=[
+                    param.replace(annotation=hints.get(name, param.annotation))
+                    for name, param in original.parameters.items()
+                ]
+            )
+        except Exception:  # noqa: BLE001 - 解析不了就维持原样，交给 FastAPI 自己报错
+            pass
 
         return wrapper
 
