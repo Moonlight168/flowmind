@@ -118,7 +118,7 @@ flowmind-ai-flow/
   },
   "message": "流程「请假审批流程」：新增 1 个节点",
   "change_details": [
-    {"action": "add", "text": "新增 1 个节点：财务审批"}
+    {"action": "add", "label": "新增 1 个节点", "detail": "财务审批"}
   ],
   "operations": [{"op": "add_node", "node": {"id": "manager_approve"}}],
   "operation_count": 1,
@@ -127,7 +127,7 @@ flowmind-ai-flow/
 }
 ```
 
-`message` 与 `change_details` 由 `app/design/change_report.py` 统一生成，前端直接渲染：`message` 是给人看的一句话摘要（实体 + 名称 + 变更量），`change_details` 按动作分组、供预览面板逐行展示（`action` 取值 `add` / `update` / `remove` / `move` / `replace`，用于着色）。分类设计与流程基本信息只改几个文本字段，仍由前端渲染字段对照，不下发 `change_details`。
+`message` 与 `change_details` 由 `app/design/change_report.py` 统一生成，前端直接渲染：`message` 是给人看的一句话摘要（实体 + 名称 + 变更量）；`change_details` 按动作分组，每项拆成 `label`（动作标题，如“新增 6 个字段”）与 `detail`（字段/节点列表），前端分行展示——挤在一行时，长列表折行后很难扫读。`action` 取值 `add` / `update` / `remove` / `move` / `replace`，用于着色。分类设计与流程基本信息只改几个文本字段，仍由前端渲染字段对照，不下发 `change_details`。
 
 `ready` 只表示候选结果已通过语法和业务校验，前端仍需用户点击“应用变更”。整体替换（`replace_form` / `replace_graph`）与增量修改一样走预览确认，没有单独的授权标志；覆盖风险由预览、放弃、版本回退三层兜住。`needs_input` 和 `error` 均不携带可覆盖当前设计的草稿。
 

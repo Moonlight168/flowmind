@@ -93,7 +93,7 @@ def test_success_message_uses_generated_name_and_summarises_changes():
 
     assert result["message"] == "表单「请假申请单」：新增 1 个字段"
     assert result["change_details"] == [
-        {"action": "add", "text": "新增 1 个字段：申请人"}
+        {"action": "add", "label": "新增 1 个字段", "detail": "申请人"}
     ]
 
 

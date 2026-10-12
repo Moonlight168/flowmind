@@ -63,7 +63,12 @@ def build_change_report(
     baseline: dict[str, Any],
     result: dict[str, Any],
 ) -> tuple[str, list[dict[str, str]]]:
-    """返回 (摘要, 明细行)。明细每项是 {action, text}，action 供前端着色。"""
+    """返回 (摘要, 明细行)。
+
+    明细每项是 `{action, label, detail}`：`action` 供前端着色，`label` 是动作标题
+    （如“新增 6 个字段”），`detail` 是要列出的字段/节点。拆成两段是为了让前端
+    分行渲染 —— 动作和明细挤在同一行时，长列表折行后很难扫读。
+    """
     kind = "form" if design_type == "form_design" else "flow"
     ops = [op for op in operations if isinstance(op, dict)]
     counts = Counter(str(op.get("op") or "") for op in ops)
@@ -84,11 +89,11 @@ def build_change_report(
         label = template.format(n=len(group))
         # 修改项的正文里已用顿号分隔属性，项与项之间改用分号
         separator = "；" if action == "update" else "、"
-        items = separator.join(
+        detail = separator.join(
             _item_text(op, kind, old_widgets, old_nodes) for op in group
         )
         summary_parts.append(label)
-        details.append({"action": action, "text": f"{label}：{items}"})
+        details.append({"action": action, "label": label, "detail": detail})
     return "、".join(summary_parts) or "更新设计", details
 
 
@@ -117,7 +122,7 @@ def _replace_report(
     fields = "、".join(name for name in names if name)
     if not fields or new_count > 8:
         return summary, []
-    return summary, [{"action": "replace", "text": f"{summary}：{fields}"}]
+    return summary, [{"action": "replace", "label": summary, "detail": fields}]
 
 
 def _item_text(

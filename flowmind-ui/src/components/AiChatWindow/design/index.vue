@@ -26,7 +26,7 @@
         teleported
         popper-class="version-select-popper"
         :placeholder="''"
-        :disabled="loading || pendingPreview || versionCount < 2"
+        :disabled="loading || pendingPreview || versionCount < 1"
         @change="jumpToVersion"
       >
         <el-option
@@ -92,7 +92,8 @@
           :key="index"
           :class="`is-${item.action}`"
         >
-          {{ item.text }}
+          <span class="change-preview__op-label">{{ item.label }}</span>
+          <span class="change-preview__op-detail">{{ item.detail }}</span>
         </li>
       </ul>
       <!-- 分类 / 流程基本信息：字段少，沿用两列 diff -->
@@ -389,12 +390,6 @@ function saveVersion(formData) {
   syncVersionCount()
 }
 
-/** 是否在编辑已有对象（有业务标识即视为更新）。新建对象不生成 v0。 */
-function isExistingDesign() {
-  const fd = props.formData || {}
-  return Boolean(fd.formId || fd.modelId || fd.categoryId)
-}
-
 function parseJsonObject(value) {
   if (typeof value !== 'string' || !value.trim()) return null
   try {
@@ -427,11 +422,11 @@ function toVersionData(baseline) {
   return data
 }
 
-/** 「更新」场景：把会话开始时的原始设计存为 v0，保证任何覆盖都能回退。
- *  新建对象不生成 v0 —— 它的第一个版本就是 v1。
+/** 会话开始时把当前设计存为 v0，保证任何覆盖都能回退。
+ *  新建对象同样建 v0，内容就是空白初始状态——规则统一，不区分新建还是编辑。
  *  必须在任何变更预览渲染之前调用，否则读到的将是预览后的内容。 */
 async function ensureBaselineVersion() {
-  if (versionCount.value > 0 || !isExistingDesign()) return
+  if (versionCount.value > 0) return
   if (typeof props.getCurrentBaseline === 'function') {
     try {
       const fresh = await props.getCurrentBaseline()
@@ -1007,12 +1002,22 @@ defineExpose({
 .change-preview__title { font-weight: 600; color: #303133; }
 .change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
-/* 每个动作一行，左侧色条区分新增/修改/删除/替换 */
+/* 每个动作一块，左侧色条区分新增/修改/删除/替换 */
 .change-preview__operations li {
-  padding: 3px 0 3px 8px;
+  padding: 4px 0 4px 8px;
   border-left: 2px solid transparent;
   color: #303133;
   line-height: 1.6;
+}
+/* 动作标题与明细分行：挤在一行时，长列表折行后很难扫读 */
+.change-preview__op-label {
+  display: block;
+  font-weight: 500;
+}
+.change-preview__op-detail {
+  display: block;
+  padding-left: 8px;
+  color: #606266;
 }
 .change-preview__operations li.is-add { border-left-color: #67c23a; }
 .change-preview__operations li.is-update { border-left-color: #e6a23c; }

@@ -22,8 +22,9 @@ def _form_baseline(*widgets: dict) -> dict:
     return {"content": json.dumps({"widgetList": list(widgets)})}
 
 
-def _texts(details: list[dict]) -> list[str]:
-    return [item["text"] for item in details]
+def _lines(details: list[dict]) -> list[str]:
+    """把 {label, detail} 还原成一行，便于按可读文本断言。"""
+    return [f"{item['label']}：{item['detail']}" for item in details]
 
 
 # ---------- 表单：整体替换 ----------
@@ -39,7 +40,7 @@ def test_form_replace_on_new_form_reports_generated_fields():
     )
 
     assert summary == "生成 2 个字段"
-    assert details == [{"action": "replace", "text": "生成 2 个字段：申请人、请假类型"}]
+    assert details == [{"action": "replace", "label": "生成 2 个字段", "detail": "申请人、请假类型"}]
 
 
 def test_form_replace_on_existing_form_reports_scale_change():
@@ -51,7 +52,7 @@ def test_form_replace_on_existing_form_reports_scale_change():
     )
 
     assert summary == "整体替换表单（2 → 3 个字段）"
-    assert _texts(details) == ["整体替换表单（2 → 3 个字段）：甲、乙、丙"]
+    assert _lines(details) == ["整体替换表单（2 → 3 个字段）：甲、乙、丙"]
 
 
 def test_many_fields_omit_the_name_list():
@@ -87,8 +88,12 @@ def test_form_groups_each_action_into_one_line():
 
     assert summary == "新增 2 个字段、修改 1 个字段"
     assert details == [
-        {"action": "add", "text": "新增 2 个字段：附件、审批人"},
-        {"action": "update", "text": "修改 1 个字段：请假事由 · 占位符 请输入请假事由 → 请详细说明"},
+        {"action": "add", "label": "新增 2 个字段", "detail": "附件、审批人"},
+        {
+            "action": "update",
+            "label": "修改 1 个字段",
+            "detail": "请假事由 · 占位符 请输入请假事由 → 请详细说明",
+        },
     ]
 
 
@@ -110,7 +115,7 @@ def test_update_reads_old_value_from_nested_baseline():
 
     _, details = build_change_report("form_design", operations, baseline, {})
 
-    assert _texts(details) == ["修改 1 个字段：请假类型 · 默认值 未设置 → personal、必填 否 → 是"]
+    assert _lines(details) == ["修改 1 个字段：请假类型 · 默认值 未设置 → personal、必填 否 → 是"]
 
 
 def test_remove_and_move_use_baseline_label_and_group_separately():
@@ -124,8 +129,8 @@ def test_remove_and_move_use_baseline_label_and_group_separately():
 
     assert summary == "删除 1 个字段、调整 1 个字段位置"
     assert details == [
-        {"action": "remove", "text": "删除 1 个字段：旧字段"},
-        {"action": "move", "text": "调整 1 个字段位置：请假事由"},
+        {"action": "remove", "label": "删除 1 个字段", "detail": "旧字段"},
+        {"action": "move", "label": "调整 1 个字段位置", "detail": "请假事由"},
     ]
 
 
@@ -134,7 +139,7 @@ def test_widget_missing_from_baseline_falls_back_to_field_name():
         "form_design", [{"op": "remove_widget", "widget_name": "ghost"}], {}, {}
     )
 
-    assert _texts(details) == ["删除 1 个字段：ghost"]
+    assert _lines(details) == ["删除 1 个字段：ghost"]
 
 
 # ---------- 流程模型 ----------
@@ -155,7 +160,7 @@ def test_flow_replace_reports_scale_change():
     )
 
     assert summary == "整体替换流程图（2 → 3 个节点）"
-    assert _texts(details) == ["整体替换流程图（2 → 3 个节点）：开始、主管审批、结束"]
+    assert _lines(details) == ["整体替换流程图（2 → 3 个节点）：开始、主管审批、结束"]
 
 
 def test_flow_groups_nodes_and_edges_separately():
@@ -170,9 +175,13 @@ def test_flow_groups_nodes_and_edges_separately():
 
     assert summary == "新增 1 个节点、修改 1 个节点、新增 1 条连线"
     assert details == [
-        {"action": "add", "text": "新增 1 个节点：财务审批"},
-        {"action": "update", "text": "修改 1 个节点：主管审批 · 名称 主管审批 → 主管复核"},
-        {"action": "add", "text": "新增 1 条连线：a → b"},
+        {"action": "add", "label": "新增 1 个节点", "detail": "财务审批"},
+        {
+            "action": "update",
+            "label": "修改 1 个节点",
+            "detail": "主管审批 · 名称 主管审批 → 主管复核",
+        },
+        {"action": "add", "label": "新增 1 条连线", "detail": "a → b"},
     ]
 
 
@@ -184,4 +193,4 @@ def test_flow_edge_prefers_name():
         {},
     )
 
-    assert _texts(details) == ["删除 1 条连线：驳回"]
+    assert _lines(details) == ["删除 1 条连线：驳回"]
