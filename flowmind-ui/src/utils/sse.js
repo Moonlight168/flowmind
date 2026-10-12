@@ -2,23 +2,40 @@ import { getToken } from '@/utils/auth'
 import { promptRelogin } from '@/utils/relogin'
 
 /**
- * HTTP 层失败：读取响应体错误信息；401 走与 request.js 一致的重新登录引导。
+ * 取后端返回的**面向用户**文案。
+ *
+ * RuoYi 网关用 message/msg；FastAPI 校验错误放在 detail —— 后者只有字段级英文说明
+ * （如 “thread_id Input should be a valid string”），对用户无意义，不当作展示文案。
+ */
+function userFacingMessage(body) {
+  if (!body || typeof body !== 'object') return ''
+  if (body.message) return String(body.message)
+  if (body.msg) return String(body.msg)
+  if (typeof body.detail === 'string') return body.detail
+  return ''
+}
+
+/**
+ * HTTP 层失败：用户只看到可读文案，技术细节留给控制台；401 走与 request.js 一致的重新登录引导。
  */
 async function raiseHttpError(response) {
-  let message = `请求失败: ${response.status}`
+  let body = null
   try {
-    const body = await response.json()
-    if (body?.message || body?.msg) {
-      message = body.message || body.msg
-    }
+    body = await response.json()
   } catch (e) {
-    // 响应体不是 JSON（如网关返回的纯文本错误），保留状态码信息
+    // 响应体不是 JSON（如网关返回的纯文本错误）
   }
+  console.error(`SSE 请求失败: HTTP ${response.status}`, body ?? response.statusText)
+
   if (response.status === 401) {
     promptRelogin()
     throw new Error('登录状态已过期，请重新登录')
   }
-  throw new Error(message)
+  const message = userFacingMessage(body)
+  if (message) throw new Error(message)
+  throw new Error(
+    response.status >= 500 ? '服务暂时不可用，请稍后重试' : '请求参数有误，请稍后重试'
+  )
 }
 
 /**
@@ -26,15 +43,24 @@ async function raiseHttpError(response) {
  */
 export async function postSse(path, data, onEvent, options = {}) {
   const token = getToken()
-  const response = await fetch(`${import.meta.env.VITE_APP_BASE_API}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: 'Bearer ' + token } : {})
-    },
-    body: JSON.stringify(data),
-    signal: options.signal
-  })
+  let response
+  try {
+    response = await fetch(`${import.meta.env.VITE_APP_BASE_API}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify(data),
+      signal: options.signal
+    })
+  } catch (error) {
+    // 主动取消要原样抛出，由调用方按 AbortError 处理
+    if (error?.name === 'AbortError') throw error
+    // fetch 失败时抛的是原生英文文案（如 "Failed to fetch"），不能直接给用户看
+    console.error('SSE 连接失败:', error)
+    throw new Error('无法连接到服务，请检查网络后重试')
+  }
 
   if (!response.ok) {
     await raiseHttpError(response)

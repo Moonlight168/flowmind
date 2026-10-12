@@ -32,7 +32,7 @@
         <el-option
           v-for="(v, i) in versionOptions"
           :key="i"
-          :label="`v${i} · ${v.time || '—'}`"
+          :label="`V${i} · ${v.time || '—'}`"
           :value="i"
         />
       </el-select>
@@ -266,10 +266,13 @@ const localSessionId = ref(
   props.formData?.code || 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
 )
 
-// 流程标识：优先用 formData 业务标识，否则 sessionId，否则临时 id，否则 'new'
+// 会话标识：优先用 formData 业务标识，否则 sessionId，否则临时 id。
+// 必须转成字符串 —— 后端 id 是 Long，JSON 里是数字，而接口契约的 thread_id 是 str，
+// 直接传数字会被判 422。
 const flowKey = computed(() => {
   const fd = props.formData || {}
-  return fd.modelId || fd.modelKey || fd.formId || props.sessionId || localSessionId.value
+  const raw = fd.modelId || fd.modelKey || fd.formId || props.sessionId || localSessionId.value
+  return String(raw)
 })
 
 // 存储命名空间：必须区分 mode，否则基本信息（basic）与流程模型（design）窗口
@@ -458,7 +461,7 @@ function jumpToVersion(index) {
       : null
   saveSession()
   emit('fill', currentFormData.value)
-  ElMessage.info(`已跳转到 v${index}`)
+  ElMessage.info(`已跳转到 V${index}`)
 }
 
 function handleRollback(target) {
@@ -634,7 +637,9 @@ async function handleSend() {
       return
     }
     console.error('AI 设计失败:', error)
-    messages.value.push({ role: 'assistant', content: '抱歉，服务暂时不可用，请稍后重试。', local: true })
+    // error.message 已在 sse.js 里收敛成面向用户的文案，不再显示状态码
+    const reason = error instanceof Error && error.message ? error.message : '服务暂时不可用，请稍后重试'
+    messages.value.push({ role: 'assistant', content: `抱歉，${reason}`, local: true })
     scrollToBottom()
   } finally {
     if (requestController.value === controller) {
@@ -794,7 +799,7 @@ async function applyPreview() {
     const dropped = versions.length - 1 - currentVersionIndex.value
     try {
       await ElMessageBox.confirm(
-        `将从 v${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
+        `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
         '提示',
         { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' }
       )
