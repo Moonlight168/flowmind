@@ -186,6 +186,8 @@ const submitForm = () => {
     if (valid) {
       form.value.categoryId ? await updateCategory(form.value) : await addCategory(form.value);
       proxy?.$modal.msgSuccess("操作成功");
+      // 设计已落定，本轮 AI 会话结束：清前端记录与后端 checkpoint
+      aiDesignDialogRef.value?.clearMessages();
       dialog.visible = false;
       getList();
     }
@@ -222,11 +224,10 @@ const handleAiFill = (formData) => {
   }
 }
 
-// 监听主对话框关闭，关闭并清空 AI 聊天和后端 checkpoint
+// 监听主对话框关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => dialog.visible, (val) => {
   if (!val) {
     aiDesignVisible.value = false;
-    aiDesignDialogRef.value?.clearMessages()
   }
 })
 

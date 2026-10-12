@@ -1,6 +1,7 @@
 """Convert validated design state into the public response contract."""
 
 from app.design.bpmn_generator import generate_bpmn_xml
+from app.design.change_report import build_change_report
 from app.design.validators import build_category
 from app.design.vform3_transformer import transform_to_vform3
 from app.graph.nodes.base import node_handler
@@ -28,15 +29,31 @@ def finalize_node(state: AppState) -> AppState:
             )
         else:
             form_data = _format_validated_artifact(state, design_output)
+            operations = design_output.get("operations", [])
+            design_type = state.get("design_type", "")
+            mode = state.get("mode", "design")
+            summary = ""
+            details: list[dict[str, str]] = []
+            # 分类与流程基本信息只改几个文本字段，前端沿用原有的字段 diff 呈现；
+            # 表单与流程模型用后端的变更摘要 + 明细分组
+            if (design_type, mode) in _SUMMARY_ENTITIES:
+                summary, details = build_change_report(
+                    design_type,
+                    operations,
+                    state.get("current_form_data") or {},
+                    form_data,
+                )
             final_output = {
                 "status": "ready",
                 "intent": "success",
                 "form_data": form_data,
-                "message": _success_message(state.get("design_type", ""), form_data),
-                "operations": design_output.get("operations", []),
+                "message": _success_message(design_type, mode, form_data, summary),
+                "operations": operations,
                 "operation_count": design_output.get("operation_count", 0),
                 "validation": review,
             }
+            if summary:
+                final_output["change_details"] = details
             # 需要前端在「应用变更」时一并创建的依赖实体（表单占位 / 分类）
             pending = {
                 key: design_output[key]
@@ -132,9 +149,25 @@ def _display_name(value: object) -> str:
     return text or "未命名"
 
 
-def _success_message(design_type: str, form_data: dict) -> str:
+#: 需要"变更摘要"的设计场景 → (实体名, 名称字段候选)
+#: 分类与流程基本信息只改几个文本字段，沿用原有的简单文案
+_SUMMARY_ENTITIES: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
+    ("form_design", "design"): ("表单", ("form_name", "formName")),
+    ("flow_design", "design"): ("流程", ("flow_name", "modelName")),
+}
+
+
+def _success_message(design_type: str, mode: str, form_data: dict, summary: str) -> str:
     if design_type == "category_design":
         return f"已生成分类【{_display_name(form_data.get('category_name'))}】的变更预览"
-    if design_type == "form_design":
-        return f"已生成表单【{_display_name(form_data.get('form_name'))}】的变更预览"
-    return "已生成流程变更预览"
+    if design_type == "flow_design" and mode == "basic":
+        return "已生成流程变更预览"
+    entity, name_keys = _SUMMARY_ENTITIES.get(
+        (design_type, mode), ("表单", ("form_name", "formName"))
+    )
+    name = next(
+        (str(form_data.get(key)).strip() for key in name_keys if form_data.get(key)),
+        "",
+    )
+    prefix = f"{entity}「{name}」" if name else entity
+    return f"{prefix}：{summary}" if summary else f"{prefix}已更新"

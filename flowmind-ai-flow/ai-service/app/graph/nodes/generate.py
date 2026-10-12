@@ -92,7 +92,7 @@ def generate_node(state: AppState) -> AppState:
     conversation_history = compress_history(conversation_history)
 
     result = _generate_design_result(
-        state, design_type, current_form_data, conversation_history, mode
+        design_type, current_form_data, conversation_history, mode
     )
 
     logger.debug(f"[design] LLM 返回: {str(result)[:200]}")
@@ -119,7 +119,6 @@ def generate_node(state: AppState) -> AppState:
 
 
 def _generate_design_result(
-    state: AppState,
     design_type: str,
     current_form_data: dict,
     conversation_history: list[dict],
@@ -136,9 +135,7 @@ def _generate_design_result(
         if "operations" not in result:
             return result
         try:
-            return _materialize_result(
-                state, result, design_type, current_form_data, mode
-            )
+            return _materialize_result(result, design_type, current_form_data, mode)
         except ValueError as exc:
             logger.warning("[design] operation application failed: %s", exc)
             if attempt == 0:
@@ -158,20 +155,12 @@ def _invalid_operation_result(operations: list[dict]) -> dict:
 
 
 def _materialize_result(
-    state: AppState,
     result: dict,
     design_type: str,
     current_form_data: dict,
     mode: str,
 ) -> dict:
     operations = result["operations"]
-    if _contains_forbidden_replace(state, operations):
-        return {
-            "intent": "error",
-            "message": "当前设计已有内容，不支持全部重新生成，请说明具体要调整的节点或字段",
-            "error_type": "full_replace_not_supported",
-            "retryable": False,
-        }
     materialized = apply_design_operations(
         design_type, current_form_data, operations, mode=mode
     )
@@ -226,16 +215,6 @@ def _operation_retry_feedback(exc: ValueError) -> dict[str, str]:
             "不要扩大用户要求的修改范围。"
         ),
     }
-
-
-def _contains_forbidden_replace(state: AppState, operations: list[dict]) -> bool:
-    """已有设计只允许增量修改，全量替换操作仅空白首建可用。"""
-    baseline = state.get("current_form_data") or {}
-    has_design = bool(
-        baseline.get("nodes") or baseline.get("widgetList") or baseline.get("content")
-    )
-    replace_ops = {"replace_graph", "replace_form"}
-    return has_design and any(item.get("op") in replace_ops for item in operations)
 
 
 def _baseline_summary(current_form_data: dict, design_type: str) -> str:

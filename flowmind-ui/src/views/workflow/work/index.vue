@@ -130,7 +130,6 @@ const handleProcessView = async (row) => {
   reloadIndex.value++;
   // 发送请求，获取xml
   const res = await getBpmnXml(row.definitionId);
-  console.log(res.data);
   processXml.value = res.data;
   processDialog.visible = true;
 }

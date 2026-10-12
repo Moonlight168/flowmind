@@ -433,6 +433,8 @@ const submitForm = async () => {
       // 普通模式：直接保存模型
       form.value.modelId ? await updateModel(form.value) : await addModel(form.value);
       proxy.$modal.msgSuccess("操作成功");
+      // 基本信息已落定，本轮 AI 会话结束
+      aiDesignBasicDialogRef.value?.clearMessages();
       dialog.visible = false;
       getList();
     }
@@ -479,11 +481,12 @@ const onSaveDesigner = async (str) => {
 }
 const confirmSave = async (body, newVersion) => {
   designerLoading.value = true;
-  console.log(body,"body");
   try {
     await saveModel(Object.assign(body, { newVersion: newVersion }));
     getList();
     proxy.$modal.msgSuccess("保存成功");
+    // 流程设计已落定，本轮 AI 会话结束
+    aiDesignDialogRef.value?.clearMessages();
     designerLoading.value = false;
     designer.visible = false;
   } catch (error) {
@@ -596,19 +599,17 @@ const onAiProgress = (msg) => {
   aiDesignProgress.value = msg;
 };
 
-// 监听基础信息对话框关闭，关闭并清空 AI 聊天和后端 checkpoint
+// 监听基础信息对话框关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => dialog.visible, (val) => {
   if (!val) {
     aiDesignBasicVisible.value = false;
-    aiDesignBasicDialogRef.value?.clearMessages();
   }
 });
 
-// 监听设计器关闭，关闭并清空 AI 聊天和后端 checkpoint
+// 监听设计器关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignVisible.value = false;
-    aiDesignDialogRef.value?.clearMessages();
     aiDesigning.value = false;
     aiDesignProgress.value = '';
   }
@@ -620,10 +621,7 @@ onMounted(async () => {
 
   // 恢复 AI 会话历史（如有）
   if (aiSession.hasActiveSession) {
-    const chatHistory = await aiSession.restoreSession()
-    if (chatHistory) {
-      console.log('AI 会话已恢复，历史消息数:', chatHistory.length)
-    }
+    await aiSession.restoreSession()
   }
 });
 </script>

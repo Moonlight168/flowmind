@@ -125,7 +125,7 @@
 import { listForm, addForm, updateForm, getForm, delForm } from "@/api/workflow/form";
 import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
-import { watch } from 'vue';
+import { watch, onUnmounted } from 'vue';
 
 const { proxy } = getCurrentInstance();
 
@@ -291,6 +291,8 @@ const submitForm = () => {
   nextTick(async () => {
     form.value.formId ? await updateForm(form.value) : await addForm(form.value);
     proxy?.$modal.msgSuccess("操作成功");
+    // 设计已落定，本轮 AI 会话结束：清前端记录与后端 checkpoint
+    aiDesignDialogRef.value?.clearMessages();
     dialog.visible = false;
     designer.visible = false;
     getList();
@@ -409,16 +411,18 @@ const handleDesignerOpened = () => {
 
 /** 表单设计器关闭后 */
 const handleDesignerClosed = () => {
-  // 清理状态
   window.removeEventListener('resize', positionDesignerActions);
-  aiDesignDialogRef.value?.clearMessages();
 };
 
-// 监听设计器关闭，关闭并清空 AI 聊天和后端 checkpoint
+// 页面卸载时兜底移除监听（设计器未走关闭流程时也要清）
+onUnmounted(() => {
+  window.removeEventListener('resize', positionDesignerActions);
+});
+
+// 监听设计器关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => designer.visible, (val) => {
   if (!val) {
     aiDesignVisible.value = false;
-    aiDesignDialogRef.value?.clearMessages();
     aiDesigning.value = false;
     aiDesignProgress.value = '';
   }

@@ -79,21 +79,23 @@
 
     <div v-if="pendingPreview" class="change-preview">
       <div class="change-preview__title">变更预览</div>
-      <div class="change-preview__summary">
-        共 {{ pendingPreview.operation_count || pendingPreview.operations?.length || 0 }} 项变更，
-        已通过语法和业务校验
-      </div>
       <div v-if="pendingPreview.pending_entities?.start_form_name" class="change-preview__pending">
         将创建占位表单「{{ pendingPreview.pending_entities.start_form_name }}」，字段需你稍后完善
       </div>
       <div v-if="pendingPreview.pending_entities?.category_name" class="change-preview__pending">
         将创建流程分类「{{ pendingPreview.pending_entities.category_name }}」
       </div>
-      <ul v-if="pendingPreview.operations?.length" class="change-preview__operations">
-        <li v-for="(operation, index) in pendingPreview.operations" :key="index">
-          {{ operationLabel(operation) }}
+      <!-- 表单 / 流程模型：后端按动作分组好的明细，每个动作一行 -->
+      <ul v-if="pendingPreview.change_details?.length" class="change-preview__operations">
+        <li
+          v-for="(item, index) in pendingPreview.change_details"
+          :key="index"
+          :class="`is-${item.action}`"
+        >
+          {{ item.text }}
         </li>
       </ul>
+      <!-- 分类 / 流程基本信息：字段少，沿用两列 diff -->
       <dl v-if="previewChanges.length" class="change-preview__fields">
         <div v-for="field in previewChanges" :key="field.key">
           <dt>{{ field.label }}</dt>
@@ -336,6 +338,62 @@ function saveVersion(formData) {
   syncVersionCount()
 }
 
+/** 是否在编辑已有对象（有业务标识即视为更新）。新建对象不生成 v0。 */
+function isExistingDesign() {
+  const fd = props.formData || {}
+  return Boolean(fd.formId || fd.modelId || fd.categoryId)
+}
+
+function parseJsonObject(value) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    return JSON.parse(value)
+  } catch (e) {
+    console.error('解析设计内容失败:', e)
+    return null
+  }
+}
+
+/** 把宿主传来的基线归一化成版本快照的形状（与后端 form_data 一致），
+ *  否则回退时无法回填到设计器。 */
+function toVersionData(baseline) {
+  const data = cloneData(baseline || {})
+  if (props.designType === 'category') {
+    if (!data.category_name) data.category_name = data.categoryName || ''
+    return data
+  }
+  if (props.designType === 'flow') {
+    // 宿主给的是 modelName，回填时读的是 flow_name
+    if (!data.flow_name) data.flow_name = data.modelName || ''
+    return data
+  }
+  // 表单：宿主给的是 content(JSON 字符串)，需展开成 widgetList/formConfig
+  const parsed = parseJsonObject(data.content) || {}
+  if (!Array.isArray(data.widgetList)) data.widgetList = parsed.widgetList || []
+  if (!data.formConfig) data.formConfig = parsed.formConfig || {}
+  if (!data.form_name) data.form_name = data.formName || ''
+  delete data.content
+  return data
+}
+
+/** 「更新」场景：把会话开始时的原始设计存为 v0，保证任何覆盖都能回退。
+ *  新建对象不生成 v0 —— 它的第一个版本就是 v1。
+ *  必须在任何变更预览渲染之前调用，否则读到的将是预览后的内容。 */
+async function ensureBaselineVersion() {
+  if (versionCount.value > 0 || !isExistingDesign()) return
+  if (typeof props.getCurrentBaseline === 'function') {
+    try {
+      const fresh = await props.getCurrentBaseline()
+      if (fresh && Object.keys(fresh).length > 0) {
+        currentFormData.value = { ...currentFormData.value, ...fresh }
+      }
+    } catch (e) {
+      console.error('获取设计基线失败:', e)
+    }
+  }
+  saveVersion(toVersionData(currentFormData.value))
+}
+
 const canRollback = computed(() => currentVersionIndex.value > 0)
 const canRedo = computed(() =>
   currentVersionIndex.value != null && currentVersionIndex.value < versionCount.value - 1
@@ -382,7 +440,7 @@ function saveSession() {
   }))
 }
 
-function restoreSession() {
+async function restoreSession() {
   // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
   currentFormData.value = cloneData(props.formData)
   syncVersionCount()
@@ -397,6 +455,7 @@ function restoreSession() {
   }
   ensureGreeting()
   scrollToBottom()
+  await ensureBaselineVersion()
 }
 
 onMounted(restoreSession)
@@ -448,6 +507,10 @@ async function handleSend() {
   const userInput = inputText.value.trim()
   inputText.value = ''
   pendingChoices.value = []
+
+  // v0 必须在追加本轮输入之前生成，否则快照会带上本轮消息。
+  // 正常已在会话恢复时建好，这里只兜住异步竞态。
+  await ensureBaselineVersion()
 
   // 停在旧版本时继续生成 = 分叉：截断当前显示范围之后的历史，再追加本轮输入
   let forkBackendCount = null
@@ -543,18 +606,7 @@ function scrollToBottom() {
 
 onBeforeUnmount(cancelCurrentRequest)
 
-function operationLabel(operation) {
-  const labels = {
-    replace_graph: '生成流程结构', add_node: '新增流程节点', update_node: '修改流程节点',
-    remove_node: '删除流程节点', add_edge: '新增流程连线', update_edge: '修改流程连线',
-    remove_edge: '删除流程连线', replace_form: '生成表单结构', add_widget: '新增表单字段',
-    update_widget: '修改表单字段', remove_widget: '删除表单字段', move_widget: '移动表单字段',
-    update_category: '修改分类信息', update_flow_metadata: '修改流程基本信息'
-  }
-  const target = operation.node_id || operation.widget_name || operation.node?.name || operation.widget?.options?.label
-  return `${labels[operation.op] || operation.op}${target ? `：${target}` : ''}`
-}
-
+/** 分类 / 流程基本信息的字段 diff：字段少，两列对照比一行式更清楚 */
 const previewChanges = computed(() => {
   if (!pendingPreview.value) return []
   const fields = props.designType === 'category'
@@ -897,9 +949,19 @@ defineExpose({
 }
 
 .change-preview__title { font-weight: 600; color: #303133; }
-.change-preview__summary { margin-top: 4px; font-size: 12px; color: #606266; }
 .change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
+/* 每个动作一行，左侧色条区分新增/修改/删除/替换 */
+.change-preview__operations li {
+  padding: 3px 0 3px 8px;
+  border-left: 2px solid transparent;
+  color: #303133;
+  line-height: 1.6;
+}
+.change-preview__operations li.is-add { border-left-color: #67c23a; }
+.change-preview__operations li.is-update { border-left-color: #e6a23c; }
+.change-preview__operations li.is-remove { border-left-color: #f56c6c; }
+.change-preview__operations li.is-move { border-left-color: #c0c4cc; }
 .change-preview__fields { margin: 8px 0; font-size: 12px; }
 .change-preview__fields div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
 .change-preview__fields dt { color: #606266; }

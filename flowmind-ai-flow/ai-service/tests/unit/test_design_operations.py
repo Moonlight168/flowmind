@@ -8,7 +8,6 @@ from langchain_core.messages import HumanMessage
 import app.graph.nodes.generate as generate_module
 from app.design.intent import Intent
 from app.design.operations import apply_design_operations, normalize_design_baseline
-from app.graph.nodes.generate import _contains_forbidden_replace
 
 
 def test_flow_update_does_not_mutate_or_drop_unmentioned_nodes() -> None:
@@ -191,27 +190,6 @@ def test_unknown_operation_is_rejected_without_mutating_baseline() -> None:
         apply_design_operations("flow_design", baseline, [{"op": "guess"}])
 
     assert baseline == {"nodes": [], "edges": []}
-
-
-def test_full_replace_rejected_for_existing_design() -> None:
-    """已有设计时全量替换一律禁止；空白首建仍允许。"""
-    flow_operations = [{"op": "replace_graph", "nodes": [], "edges": []}]
-
-    assert _contains_forbidden_replace(
-        {"current_form_data": {"nodes": [{"id": "start"}]}}, flow_operations
-    )
-    assert not _contains_forbidden_replace(
-        {"current_form_data": {"nodes": [], "edges": []}}, flow_operations
-    )
-
-    form_operations = [{"op": "replace_form", "widgetList": [], "formConfig": {}}]
-    assert _contains_forbidden_replace(
-        {"current_form_data": {"widgetList": [{"options": {"name": "reason"}}]}},
-        form_operations,
-    )
-    assert not _contains_forbidden_replace(
-        {"current_form_data": {"widgetList": []}}, form_operations
-    )
 
 
 def test_add_node_preserves_replaced_edge_id_on_the_continuation() -> None:

@@ -9,6 +9,7 @@
     :form-data="formData"
     :mode="mode"
     :session-id="sessionId"
+    :get-current-baseline="getCurrentBaseline"
     @update:model-value="emit('update:modelValue', $event)"
     @fill="emit('fill', $event)"
     @preview="emit('preview', $event)"
@@ -30,7 +31,10 @@ const props = defineProps({
   designType: { type: String, default: null },
   formData: { type: Object, default: () => ({}) },
   mode: { type: String, default: 'design' },
-  sessionId: { type: String, default: null }
+  sessionId: { type: String, default: null },
+  // 宿主提供：返回设计器当前最新数据。必须显式声明并往下传 ——
+  // 之前靠属性透传落到子组件，模板多一个根节点就会静默失效
+  getCurrentBaseline: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'fill', 'preview', 'discard', 'progress', 'designing'])

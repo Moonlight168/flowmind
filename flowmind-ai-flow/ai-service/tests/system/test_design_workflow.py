@@ -26,7 +26,6 @@ from app.graph.design_graph import (
 )
 from app.infra.checkpoint.redis import RedisCheckpoint
 
-
 # 与 conftest.auth_headers 注入的网关身份保持一致，用于复算会话隔离键
 GATEWAY_USER = TokenUser(user_id=1, username="system-test", user_key="system-test")
 

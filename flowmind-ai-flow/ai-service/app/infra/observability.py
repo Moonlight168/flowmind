@@ -9,7 +9,6 @@ FlowMind 智能流程设计服务 - Langfuse 可观测性
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from functools import cache
@@ -23,6 +22,8 @@ from app.infra.logger import logger
 from app.prompts.loader import get_prompt_metadata
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from langfuse import Langfuse
     from langfuse.langchain import CallbackHandler
 

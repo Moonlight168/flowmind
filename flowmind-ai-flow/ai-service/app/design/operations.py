@@ -242,7 +242,7 @@ def _add_form_widget(result: dict[str, Any], operation: dict[str, Any]) -> None:
     name = _widget_name(widget)
     if not name:
         raise ValueError("新增表单字段缺少 options.name")
-    if _find_widget(widgets, name):
+    if find_widget(widgets, name):
         raise ValueError(f"表单字段已存在: {name}")
     index = _widget_insert_index(widgets, operation.get("after_name"))
     widgets.insert(index, widget)
@@ -289,7 +289,7 @@ def _widget_name(widget: dict[str, Any]) -> str:
     return str((widget.get("options") or {}).get("name") or "")
 
 
-def _find_widget(
+def find_widget(
     widgets: list[dict[str, Any]], name: str | None
 ) -> dict[str, Any] | None:
     location = _find_widget_location(widgets, name)
