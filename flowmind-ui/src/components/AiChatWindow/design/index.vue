@@ -32,7 +32,7 @@
         <el-option
           v-for="(v, i) in versionOptions"
           :key="i"
-          :label="`v${i + 1} · ${v.time || '—'}`"
+          :label="`v${i} · ${v.time || '—'}`"
           :value="i"
         />
       </el-select>
@@ -458,7 +458,7 @@ function jumpToVersion(index) {
       : null
   saveSession()
   emit('fill', currentFormData.value)
-  ElMessage.info(`已跳转到版本 ${index + 1}`)
+  ElMessage.info(`已跳转到 v${index}`)
 }
 
 function handleRollback(target) {
@@ -794,7 +794,7 @@ async function applyPreview() {
     const dropped = versions.length - 1 - currentVersionIndex.value
     try {
       await ElMessageBox.confirm(
-        `将从版本 ${currentVersionIndex.value + 1} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
+        `将从 v${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
         '提示',
         { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' }
       )
