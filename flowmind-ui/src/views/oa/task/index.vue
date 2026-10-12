@@ -71,18 +71,23 @@ const navigateToTab = (tabKey) => {
   router.push(`/oa/task/${tabKey}`)
 }
 
+// 后端计数字段 → tab key。已办事项固定不显示徽标，故不在此列
+const TAB_COUNT_FIELDS = {
+  own: 'ownCount',
+  todo: 'todoCount',
+  claim: 'claimCount',
+  copy: 'copyCount'
+}
+
 // 获取各tab数量
 const getTabsCount = async () => {
   const res = await getTaskCounts()
-  if (res.code === 200) {
-    // 确保tabs数组与后端返回字段正确对应
-    tabs.value[0].count = res.data.ownCount    // 我的流程
-    tabs.value[1].count = res.data.todoCount   // 待办事项
-    tabs.value[2].count = res.data.claimCount  // 待签收
-    //tabs.value[3].count = res.data.finishedCount // 已办事项 不显示
-    tabs.value[3].count = 0
-    tabs.value[4].count = res.data.copyCount   // 抄送
-  }
+  if (res.code !== 200) return
+  // 按 key 赋值而不是数组下标：调整 tabs 顺序时不会静默错位
+  tabs.value.forEach((tab) => {
+    const field = TAB_COUNT_FIELDS[tab.key]
+    tab.count = field ? res.data[field] || 0 : 0
+  })
 }
 
 // 初始化时，如果当前路由不是任何tab，则导航到待办事项

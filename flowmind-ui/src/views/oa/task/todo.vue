@@ -62,51 +62,28 @@
 
 <script setup name="Todo" lang="js">
 import { listTodoProcess } from '@/api/workflow/work/process';
+import { useTaskList } from './useTaskList';
 
-import { listAllCategory } from "@/api/workflow/category";
 const router = useRouter();
-const { proxy } = getCurrentInstance() ;
 
-const todoList = ref([]);
-const loading = ref(true);
-const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const dateRange = ref(['','']);
-const categoryOptions = ref([]);
-const queryFormRef = ref();
-
-const queryParams = ref({
-  pageNum: 1,
-  pageSize: 10,
-  processName: '',
-  category: ''
+const {
+  rows: todoList,
+  loading,
+  showSearch,
+  total,
+  dateRange,
+  queryFormRef,
+  categoryOptions,
+  queryParams,
+  getList,
+  handleQuery,
+  resetQuery,
+  categoryFormat
+} = useTaskList({
+  fetcher: listTodoProcess,
+  defaultQuery: { processName: '', category: '' }
 });
-/** 查询流程分类列表 */
-const getCategoryList = async () => {
-  const res = await listAllCategory();
-  categoryOptions.value = res.data;
-}
-/** 查询待办列表 */
-const getList = async () => {
-  loading.value = true;
-  const res = await listTodoProcess(proxy.addDateRange(queryParams.value, dateRange.value));
-  todoList.value = res.rows;
-  total.value = res.total;
-  loading.value = false;
-}
-/** 搜索按钮操作 */
-const handleQuery = () => {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-/** 重置按钮操作 */
-const resetQuery = () => {
-  queryFormRef.value.resetFields();
-  handleQuery();
-}
+
 /** 跳转到处理页面 */
 const handleProcess = (row) => {
   router.push({
@@ -117,16 +94,4 @@ const handleProcess = (row) => {
     }
   })
 }
-
-const categoryFormat = (row) => {
-  var category = categoryOptions.value.find(function(k) {
-        return k.code === row.category;
-    });
-    return category && category.categoryName ? category.categoryName : '';
-}
-
-onMounted(() => {
-  getCategoryList();
-  getList();
-});
 </script>

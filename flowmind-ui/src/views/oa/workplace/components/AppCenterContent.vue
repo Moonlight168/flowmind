@@ -29,7 +29,6 @@
 </template>
 
 <script setup>
-import { Timer } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
 defineProps({
