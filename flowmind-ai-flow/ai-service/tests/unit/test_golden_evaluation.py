@@ -12,7 +12,7 @@ import pytest
 
 from app.core.auth_context import get_auth_token
 from app.core.exceptions import FlowDesignException
-from app.evaluation import golden_dataset
+from app.evaluation import golden_dataset, runner
 from app.evaluation.golden_dataset import (
     GoldenCase,
     build_workflow_task,
@@ -299,7 +299,32 @@ def test_cli_selects_one_case() -> None:
     assert args.max_concurrency == 1
 
 
-def test_cli_run_pulls_dataset_filters_case_and_flushes(
+def test_cli_main_delegates_to_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(dataset_name: str, **kwargs: object) -> None:
+        captured["dataset_name"] = dataset_name
+        captured.update(kwargs)
+
+    monkeypatch.setattr(run_golden_eval, "run_dataset_experiment", fake_run)
+    monkeypatch.setattr(
+        run_golden_eval,
+        "parse_args",
+        lambda: SimpleNamespace(
+            dataset_name="ds", case_id="c1", run_name="r1", max_concurrency=2
+        ),
+    )
+
+    assert run_golden_eval.main() == 0
+    assert captured == {
+        "dataset_name": "ds",
+        "case_id": "c1",
+        "run_name": "r1",
+        "max_concurrency": 2,
+    }
+
+
+def test_runner_pulls_dataset_filters_case_and_flushes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -323,19 +348,25 @@ def test_cli_run_pulls_dataset_filters_case_and_flushes(
         ),
     ]
 
+    monkeypatch.setattr(runner.settings.evaluation, "auth_token", "token-for-test")
+    monkeypatch.setattr(runner, "observability_enabled", lambda: True)
     monkeypatch.setattr(
-        run_golden_eval.settings.evaluation, "auth_token", "token-for-test"
-    )
-    monkeypatch.setattr(run_golden_eval, "observability_enabled", lambda: True)
-    monkeypatch.setattr(
-        run_golden_eval,
+        runner,
         "get_client",
         lambda: _FakeLangfuseClient(captured, result, items),
     )
     args = parse_args(["--case-id", "flow-linear", "--run-name", "test-run"])
 
-    assert run_golden_eval.run(args) is result
-    assert captured["dataset"]["name"] == run_golden_eval.DEFAULT_DATASET_NAME
+    assert (
+        runner.run_dataset_experiment(
+            args.dataset_name,
+            case_id=args.case_id,
+            run_name=args.run_name,
+            max_concurrency=args.max_concurrency,
+        )
+        is result
+    )
+    assert captured["dataset"]["name"] == runner.DEFAULT_DATASET_NAME
     experiment = captured["experiment"]
     assert len(experiment["data"]) == 1
     assert experiment["data"][0].metadata["case_id"] == "flow-linear"
@@ -344,18 +375,15 @@ def test_cli_run_pulls_dataset_filters_case_and_flushes(
     assert captured["flushed"] is True
 
 
-def test_cli_run_errors_when_dataset_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_errors_when_dataset_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
     result = SimpleNamespace(dataset_run_url="", format=lambda **kwargs: "")
 
+    monkeypatch.setattr(runner.settings.evaluation, "auth_token", "token-for-test")
+    monkeypatch.setattr(runner, "observability_enabled", lambda: True)
     monkeypatch.setattr(
-        run_golden_eval.settings.evaluation, "auth_token", "token-for-test"
+        runner, "get_client", lambda: _FakeLangfuseClient(captured, result, [])
     )
-    monkeypatch.setattr(run_golden_eval, "observability_enabled", lambda: True)
-    monkeypatch.setattr(
-        run_golden_eval, "get_client", lambda: _FakeLangfuseClient(captured, result, [])
-    )
-    args = parse_args([])
 
     with pytest.raises(RuntimeError, match="upload_golden_to_langfuse"):
-        run_golden_eval.run(args)
+        runner.run_dataset_experiment(runner.DEFAULT_DATASET_NAME)

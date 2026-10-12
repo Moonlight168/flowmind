@@ -113,6 +113,10 @@ services:
       REDIS_PORT: 6379
       REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:?LANGFUSE_REDIS_AUTH is required}
       TELEMETRY_ENABLED: "false"
+      # 启用 code evaluator：web 用于展示模板，worker 用于实际派发执行。
+      # insecure-local 在 worker 进程内执行，仅支持 TypeScript/JavaScript，仅适用于完全可信的评估器代码。
+      LANGFUSE_CODE_EVAL_DISPATCHER: insecure-local
+      QUEUE_CONSUMER_CODE_EVAL_EXECUTION_QUEUE_IS_ENABLED: "true"
     networks:
       - flowmind-network
 

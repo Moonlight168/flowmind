@@ -136,26 +136,34 @@ def get_registry() -> NacosRegistry:
 
 
 def register_to_nacos() -> bool:
-    """按统一配置注册服务到 Nacos。"""
+    """按统一配置注册服务到 Nacos。
+
+    容器重启时依赖可能尚未就绪（启动竞态），因此在最长等待时间内反复重试，
+    而不是立即判定启动失败。
+    """
     if not settings.nacos.enabled:
         logger.info("Nacos 注册已通过配置关闭")
         return True
     registry = get_registry()
-    max_retries = settings.nacos.max_retries
     retry_interval = settings.nacos.retry_interval
+    deadline = time.monotonic() + settings.app.startup_dependency_wait_seconds
+    attempt = 0
 
-    for attempt in range(1, max_retries + 1):
-        success = registry.register()
-        if success:
+    while True:
+        attempt += 1
+        if registry.register():
             return True
 
-        if attempt < max_retries:
-            logger.warning(
-                f"Nacos 注册失败，{retry_interval}秒后重试 ({attempt}/{max_retries})..."
-            )
-            time.sleep(retry_interval)
+        remaining = deadline - time.monotonic()
+        if retry_interval <= 0 or remaining <= 0:
+            break
+        wait_seconds = min(retry_interval, remaining)
+        logger.warning(
+            f"Nacos 注册失败，{wait_seconds:.0f}秒后重试（第{attempt}次）..."
+        )
+        time.sleep(wait_seconds)
 
-    logger.error(f"Nacos 注册失败，已重试{max_retries}次，服务将无法被发现")
+    logger.error("Nacos 注册失败，已达等待上限，服务将无法被发现")
     return False
 
 

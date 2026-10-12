@@ -331,10 +331,15 @@ services:
       # Langfuse 链路监控（覆盖 .env 中的 localhost:13001）
       # Langfuse 为独立可选栈，未启动时 SDK 仅告警降级，不阻塞业务。
       - LANGFUSE_BASE_URL=http://flowmind-langfuse-web:3000
+      # 黄金集评测用的测试账号 Bearer Token（来源：docker/flowmind/.env，仅环境注入，勿提交真实值）
+      # 留空时评测脚本会显式报错；不影响服务正常启动。
+      - FLOWMIND_AUTH_TOKEN=${FLOWMIND_AUTH_TOKEN:-}
     # 不发布端口：AI 服务按约定只经网关（9001 /flowmind-ai/**）访问，
     # 避免绕过网关鉴权直连。容器网络内由服务名互访。
     depends_on:
       flowmind-redis:
+        condition: service_healthy
+      flowmind-nacos:
         condition: service_healthy
     networks:
       - flowmind-network
@@ -363,6 +368,8 @@ services:
       - ../cloud/nginx/logs:/var/log/nginx
     depends_on:
       - flowmind-gateway
+      # /webhooks/ 反代到 AI 服务，nginx 启动时需能解析该主机名
+      - flowmind-ai-service
     networks:
       - flowmind-network
     healthcheck:

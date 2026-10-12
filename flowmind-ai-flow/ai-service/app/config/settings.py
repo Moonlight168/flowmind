@@ -99,6 +99,11 @@ class AppSettings(BaseSettings):
         default=False,
         description="Redis checkpoint 不可用时是否允许降级为内存存储（仅限本地调试）",
     )
+    startup_dependency_wait_seconds: int = Field(
+        default=180,
+        ge=0,
+        description="启动时等待 Redis/Nacos 等依赖就绪的最长秒数，超时才放弃",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -162,7 +167,6 @@ class NacosSettings(BaseSettings):
     server_addr: str = Field(default="localhost:8848")
     register_ip: str | None = Field(default=None)
     register_port: int = Field(default=0, ge=0, le=65535)
-    max_retries: int = Field(default=5, ge=1)
     retry_interval: float = Field(default=5.0, ge=0)
 
     model_config = SettingsConfigDict(

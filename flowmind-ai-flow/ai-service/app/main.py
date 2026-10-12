@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, design, health
+from app.api import chat, design, health, webhook
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.infra.logger import generate_request_id, logger, set_request_id, setup_logging
@@ -94,6 +94,8 @@ async def log_context_middleware(request: Request, call_next):
 app.include_router(chat.router, prefix="", tags=["对话"])
 app.include_router(design.router, prefix="", tags=["设计"])
 app.include_router(health.router, tags=["health"])
+# 实验 webhook 供 Langfuse 容器网络内直接调用，不经过网关鉴权
+app.include_router(webhook.router, prefix="")
 
 
 @app.get("/")
