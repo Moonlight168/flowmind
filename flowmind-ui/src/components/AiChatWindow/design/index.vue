@@ -279,7 +279,7 @@ const storageKey = computed(() => {
 
 // 版本历史：每次"应用变更"存一个版本；导航（回退/前进/下拉）只移动当前指针，不删除版本
 const VERSION_LIMIT = 20
-// sessionStorage 不是响应式：版本数必须镜像到 ref，否则按钮状态会永久缓存
+// localStorage 不是响应式：版本数必须镜像到 ref，否则按钮状态会永久缓存
 const versionCount = ref(0)
 // 当前所在版本索引；null 表示还没有任何版本
 const currentVersionIndex = ref(null)
@@ -287,8 +287,51 @@ const versionKey = computed(() => {
   return `ai_design_versions_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
+// 会话与版本要活过「关闭标签页」—— sessionStorage 会被浏览器随标签页清掉，只能用 localStorage。
+// 代价是 localStorage 没有过期机制，下面自己按 savedAt 清理。
+const STORE_PREFIX = 'ai_design_'
+const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+function storeWrite(key, value) {
+  try {
+    localStorage.setItem(key, value)
+  } catch (e) {
+    // 配额满：清掉过期条目再试一次，仍失败就放弃持久化（不影响本轮编辑）
+    pruneStore()
+    try {
+      localStorage.setItem(key, value)
+    } catch (retryError) {
+      console.warn('本地存储写入失败，本次会话不会被持久化:', retryError)
+    }
+  }
+}
+
+function shouldPrune(key) {
+  const raw = localStorage.getItem(key)
+  if (raw === null) return true
+  let saved
+  try {
+    saved = JSON.parse(raw)
+  } catch (e) {
+    return true // 内容已损坏，清掉
+  }
+  const at = Array.isArray(saved) ? saved[saved.length - 1]?.savedAt : saved?.savedAt
+  // 没有时间戳说明是旧格式，保守起见保留
+  return typeof at === 'number' && Date.now() - at > STORE_MAX_AGE_MS
+}
+
+/** 清理超过 30 天没动过的会话与版本 */
+function pruneStore() {
+  for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith(STORE_PREFIX) && shouldPrune(key)) {
+      localStorage.removeItem(key)
+    }
+  }
+}
+
 function getVersions() {
-  const saved = sessionStorage.getItem(versionKey.value)
+  const saved = localStorage.getItem(versionKey.value)
   let list = []
   try {
     list = saved ? JSON.parse(saved) : []
@@ -303,7 +346,7 @@ function getVersions() {
   )
 }
 
-// 下拉框选项（依赖 versionCount 触发重算，sessionStorage 本身非响应式）
+// 下拉框选项（依赖 versionCount 触发重算，localStorage 本身非响应式）
 const versionOptions = computed(() => {
   versionCount.value
   return getVersions()
@@ -325,15 +368,23 @@ function saveVersion(formData) {
   if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
     versions.splice(currentVersionIndex.value + 1)
   }
+  const baseline = versions[0] // v0 = 会话开始时的原始设计，不参与淘汰
   versions.push({
     data: cloneData(formData),
     time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
     messageCount: messages.value.length,
     // 后端 checkpoint 的逻辑条数，作为回退/分叉时的历史指针
-    backendCount: lastBackendCount.value
+    backendCount: lastBackendCount.value,
+    // 供 pruneStore 判断这份历史有多久没动过
+    savedAt: Date.now()
   })
-  if (versions.length > VERSION_LIMIT) versions.splice(0, versions.length - VERSION_LIMIT)
-  sessionStorage.setItem(versionKey.value, JSON.stringify(versions))
+  // 滑窗：钉住 v0，其余只保留最近 N-1 个。
+  // 否则用满上限后 v0 会被挤掉，「回到最初」永久失效。
+  if (versions.length > VERSION_LIMIT) {
+    const recent = versions.slice(-(VERSION_LIMIT - 1))
+    versions.splice(0, versions.length, baseline, ...recent)
+  }
+  storeWrite(versionKey.value, JSON.stringify(versions))
   currentVersionIndex.value = versions.length - 1
   syncVersionCount()
 }
@@ -434,9 +485,10 @@ function handleRedo() {
 }
 
 function saveSession() {
-  sessionStorage.setItem(storageKey.value, JSON.stringify({
+  storeWrite(storageKey.value, JSON.stringify({
     messages: messages.value,
-    currentFormData: currentFormData.value
+    currentFormData: currentFormData.value,
+    savedAt: Date.now()
   }))
 }
 
@@ -444,7 +496,7 @@ async function restoreSession() {
   // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
   currentFormData.value = cloneData(props.formData)
   syncVersionCount()
-  const saved = sessionStorage.getItem(storageKey.value)
+  const saved = localStorage.getItem(storageKey.value)
   if (saved) {
     try {
       const state = JSON.parse(saved)
@@ -458,7 +510,11 @@ async function restoreSession() {
   await ensureBaselineVersion()
 }
 
-onMounted(restoreSession)
+onMounted(() => {
+  // localStorage 没有过期机制，启动时清掉久未使用的会话与版本
+  pruneStore()
+  restoreSession()
+})
 
 // 全局助手打开时关闭设计窗口
 watch(activeAiWindow, (kind) => {
@@ -801,8 +857,8 @@ function clearMessages() {
   // 保留 props.formData 中的基本信息（modelId, modelName, modelKey 等）
   // 只清空 AI 生成的数据
   currentFormData.value = { ...props.formData }
-  sessionStorage.removeItem(storageKey.value)
-  sessionStorage.removeItem(versionKey.value)
+  localStorage.removeItem(storageKey.value)
+  localStorage.removeItem(versionKey.value)
   ensureGreeting()
   // 同步清除后端 Redis 中的对话历史
   clearDesignState(props.designType, flowKey.value, props.mode).catch((error) => {
