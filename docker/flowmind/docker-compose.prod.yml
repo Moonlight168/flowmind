@@ -322,6 +322,9 @@ services:
       - REDIS_HOST=flowmind-redis
       - REDIS_PORT=6379
       # 服务配置
+      # 注意：SERVICE_PORT 只是历史遗留，服务本身不读它（AppSettings 用 APP_PORT）。
+      # 实际端口由下面 command/Dockerfile 的 uvicorn --port 决定，Nacos 注册端口取
+      # settings.app.port，也就是 APP_PORT。
       - SERVICE_PORT=8000
       # 后端业务 API 经网关访问（覆盖 .env 默认的 localhost:9001）
       - BACKEND_BASE_URL=http://flowmind-gateway:9001

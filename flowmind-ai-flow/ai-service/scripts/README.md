@@ -54,9 +54,16 @@ poetry run python -m scripts.run_golden_eval --run-name my-run --max-concurrency
 
 1. 进入 `Datasets` → `flowmind-design-golden-v1` → `Start Experiment`。
 2. 选 `Custom Experiment`，点 `⚡` 打开 webhook 配置。
-3. 填写 URL：`http://flowmind-nginx/webhooks/experiment`（经 nginx 标准 80 端口转发，容器网络内服务名）。
+3. 填写 URL。Langfuse 只放行 `host.docker.internal` 的 80/443（见
+   `infra/langfuse/.env.example` 的白名单说明），所以接收端必须落在 80 端口：
+   - 开发环境：`http://host.docker.internal/webhooks/experiment`
+     AI 服务在 `docker/flowmind/docker-compose.yml` 里直接监听 80 并发布到 `127.0.0.1:80`，不需要 nginx。
+   - 生产环境：`http://flowmind-nginx/webhooks/experiment`（经 nginx 转发到 AI 服务的 8000）
+
    Default config 可留空，或填 `{"run_name": "ui-trigger", "max_concurrency": 2}`。
-4. 点 `Run` 触发，AI 服务异步执行并把评分写回为新的 Dataset Run。
+4. 触发后 AI 服务只回 202 并在后台跑；后台任务需要测试账号的 `FLOWMIND_AUTH_TOKEN`，
+   缺了会在日志里报「缺少 FLOWMIND_AUTH_TOKEN, 无法验证完整后端调用链」。
+5. 点 `Run` 触发，AI 服务异步执行并把评分写回为新的 Dataset Run。
 
 ## 参数
 

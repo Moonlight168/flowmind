@@ -208,13 +208,17 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 | Auth 认证            | 9002                     | —                                   |
 | System 系统          | 9003                     | —                                   |
 | Flowable 流程        | 9007                     | —                                   |
-| AI 服务              | 8000                     | http://localhost:8000               |
+| AI 服务              | 8000（开发环境另发布 127.0.0.1:80） | http://localhost:8000               |
 | Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
 | MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
 | Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
 | Langfuse             | 13001（容器内 3000）    | http://localhost:13001              |
 
 > 可选模块端口：Gen 9004、Job 9005、File 9006。完整开发环境使用 `docker-compose.yml`，独立 Langfuse 使用 `docker-compose.langfuse.yml`，完整生产环境使用 `docker-compose.prod.yml`。
+>
+> 开发环境的 AI 服务直接监听 80 并发布到 `127.0.0.1:80`，供 Langfuse 的 Remote Experiment webhook
+> 经 `http://host.docker.internal/webhooks/experiment` 回调，不必再为一个反代端口去起 Nginx；
+> 生产环境不发布该端口，仍只经网关访问。
 
 ## 项目仓库
 

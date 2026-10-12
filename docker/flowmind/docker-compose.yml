@@ -1,6 +1,9 @@
 # FlowMind AI 开发环境：只保留 AI 服务链路必需的基础设施与后端，其余微服务不启动
 # 启动：docker compose up -d --remove-orphans
 # --remove-orphans 会在从生产栈切回开发栈时清理占用 18088 的旧 Nginx 容器。
+#
+# 开发环境不起 Nginx：AI 服务直接监听 80 并发布到 127.0.0.1:80，Langfuse 的实验
+# webhook 用 http://host.docker.internal/webhooks/experiment 即可直达，不需要反代一跳。
 
 services:
   # 只复用生产文件中 AI 服务必需的基础设施与后端定义，不把生产 Nginx 引入开发模型。
@@ -70,6 +73,18 @@ services:
       ENV_TYPE: dev
       LOG_LEVEL: DEBUG
       WATCHFILES_FORCE_POLLING: "true"
+      # 监听 80：Langfuse 的 Remote Experiment 只放行 host.docker.internal 的
+      # 80/443（见 infra/langfuse/.env.example），把 AI 服务直接起在 80 并发布到
+      # 宿主机，webhook 填 http://host.docker.internal/webhooks/experiment 即可，
+      # 不必再为了一个反代端口去起 Nginx。
+      # APP_PORT 同时是 Nacos 注册端口（app/infra/nacos.py），必须跟着一起改，
+      # 否则网关按 8000 找不到实例，整个 AI 链路会 503。
+      APP_PORT: "80"
+    # 仅开发环境发布：生产沿用"AI 服务只经网关访问"的约定，不落宿主机端口。
+    # 绑回环，容器侧经 host.docker.internal 仍可达，同时不暴露到局域网。
+    # 该端点不鉴权（网络边界即信任边界），故不要改成 0.0.0.0 发布。
+    ports:
+      - "127.0.0.1:80:80"
     volumes:
       - ../../flowmind-ai-flow/ai-service/app:/app/app
     command:
@@ -82,11 +97,14 @@ services:
       - --host
       - 0.0.0.0
       - --port
-      - "8000"
+      - "80"
       - --reload
       - --reload-dir
       - /app/app
       - --no-access-log
+    # 生产文件里的探测地址写死 8000，这里必须跟着端口改，否则容器一直 unhealthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health/ready"]
 
 volumes:
   flowmind_ui_node_modules:
