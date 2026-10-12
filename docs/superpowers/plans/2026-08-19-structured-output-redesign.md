@@ -4,6 +4,7 @@
 > 日期：2026-08-19
 > 关联：`2026-08-17-validation-and-compression-design.md`（已落地的校验层 + 压缩）
 > 后续决策：2026-09-01 起，确定性全量预取被 ReAct 按需检索取代；本方案「Commit 7 删 ReAct」亦被 `4540062` 回退——设计主路径改为 **ReAct 按需检索 + 最终结构化输出（`response_format` 收尾）**，结构化 schema（Pydantic/`response_format`）、校验、增量修改和版本管理决策继续有效。详见 `2026-09-01-react-retrieval-and-runtime-hardening.md`。
+> 后续决策：2026-10-12 起，版本历史由 sessionStorage 改为 **localStorage**（关闭标签页不再丢失）；版本数达上限淘汰时**钉住 v0 基线**，保证「回到最初」始终可用。会话与版本改为保存成功时才清空。
 
 ## 0. 目标与核心决策
 
@@ -18,7 +19,7 @@
 | JSON 解析 | 只用 Pydantic（`extra="forbid"`），删 json-repair |
 | 失败处理 | Pydantic 失败 → 重试(≤3) → error；业务规则失败 → 重试 → 半成品 |
 | 增量修改 | prompt 传完整基线 + 基线节点保留校验（依赖 LLM 完整返回，接受局限） |
-| 版本管理 | 前端管（sessionStorage），按对话轮次；AI 只识别回退意图返回指令 |
+| 版本管理 | 前端管（原 sessionStorage，2026-10-12 改为 localStorage），按对话轮次；AI 只识别回退意图返回指令 |
 | 意图 | 前端按钮固定 design_type；判别只做 design/clarification/rollback/reset |
 
 ## 1. 核心链路
@@ -141,7 +142,7 @@ obj = llm.with_structured_output(spec.schema).invoke(prompt)
 
 ### 版本历史
 - 基线的**时间序列**，用于回退
-- 谁管：前端 sessionStorage，最近 20 个
+- 谁管：前端 localStorage，最近 20 个（⚠️ 见文首后续决策：原为 sessionStorage，2026-10-12 改）
 - 粒度：**对话轮次**（每轮结束存一个版本）
 
 ### 关系与分叉
