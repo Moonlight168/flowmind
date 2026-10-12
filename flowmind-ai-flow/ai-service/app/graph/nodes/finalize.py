@@ -54,12 +54,19 @@ def finalize_node(state: AppState) -> AppState:
             }
             if summary:
                 final_output["change_details"] = details
-            # 需要前端在「应用变更」时一并创建的依赖实体（表单占位 / 分类）
-            pending = {
-                key: design_output[key]
-                for key in ("start_form_name", "category_name")
-                if design_output.get(key)
-            }
+            # 需要前端在「应用变更」时一并创建的依赖实体（表单占位 / 分类）。
+            # 只有流程设计才有这种依赖：分类窗口的 category_name 是被设计的实体本身，
+            # 照搬过去会让每次分类编辑（含更新）都显示「将创建流程分类」，
+            # 前端还会在应用时抢先建库，用户保存时再建一次就重复了。
+            pending = (
+                {
+                    key: design_output[key]
+                    for key in ("start_form_name", "category_name")
+                    if design_output.get(key)
+                }
+                if design_type == "flow_design"
+                else {}
+            )
             if pending:
                 final_output["pending_entities"] = pending
     else:

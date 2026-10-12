@@ -135,3 +135,46 @@ def test_flow_basic_keeps_the_plain_preview_message():
 
     assert result["message"] == "已生成流程变更预览"
     assert "change_details" not in result
+
+
+def test_category_design_does_not_report_pending_category():
+    """分类窗口的 category_name 是被设计的实体本身，不是依赖实体。
+
+    照搬成 pending_entities 会让预览在任何一次分类编辑（含更新）上都显示
+    「将创建流程分类」，前端还会在「应用变更」时抢先建库，用户再保存就重复创建。
+    """
+    state = {
+        "design_type": "category_design",
+        "mode": "design",
+        "intent": "success",
+        "design_output": {
+            "category_name": "请假审批",
+            "code": "leave_approval",
+            "operations": [{"op": "update_category", "changes": {"remark": "员工请假"}}],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+    result = finalize_node(state)["design_output"]
+
+    assert result["status"] == "ready"
+    assert "pending_entities" not in result
+
+
+def test_flow_design_still_reports_pending_category():
+    state = {
+        "design_type": "flow_design",
+        "mode": "basic",
+        "intent": "success",
+        "design_output": {
+            "flow_name": "请假审批",
+            "code": "leave_approval",
+            "category_name": "请假审批",
+            "operations": [{"op": "update_flow_metadata", "changes": {"code": "leave_approval"}}],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+    result = finalize_node(state)["design_output"]
+
+    assert result["pending_entities"] == {"category_name": "请假审批"}
