@@ -53,6 +53,7 @@ def review_node(state: AppState) -> AppState:
         return state
 
     context = _build_context(state)
+    state["available_forms"] = context.available_forms
     pipeline = _build_pipeline(design_type, context.mode)
     result = pipeline.run(design_output, context)
 

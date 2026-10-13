@@ -7,6 +7,8 @@
     :height="600"
     :min-width="380"
     :min-height="460"
+    :z-index="3000"
+    :raise-on-interact="false"
     @update:model-value="visible = $event"
   >
     <template #actions>
@@ -48,7 +50,7 @@
       <el-button
         link
         type="info"
-        title="清空对话"
+        :title="`放弃本次${designLabel}`"
         :disabled="loading"
         @click="confirmClearChat"
       >
@@ -203,6 +205,16 @@ const title = computed(() => {
     category: '流程分类',
     form: '表单设计'
   }[props.designType] || 'AI 设计'
+})
+
+const designLabel = computed(() => {
+  if (props.designType === 'flow') {
+    return props.mode === 'basic' ? '流程基本信息设计' : '流程模型设计'
+  }
+  return {
+    category: '流程分类设计',
+    form: '表单设计'
+  }[props.designType] || '设计'
 })
 
 // 首次进入（无历史消息）时展示的固定欢迎语
@@ -876,11 +888,21 @@ function normalizeBpmnXml(xml) {
   try {
     const document = new DOMParser().parseFromString(xml, 'application/xml')
     if (document.querySelector('parsererror')) return xml.trim()
+    const layoutNodes = new Set([
+      'BPMNDiagram',
+      'BPMNPlane',
+      'BPMNShape',
+      'BPMNEdge',
+      'Bounds',
+      'waypoint'
+    ])
     document.querySelectorAll('*').forEach((node) => {
-      if (node.localName === 'BPMNDiagram') node.remove()
+      if (layoutNodes.has(node.localName)) node.remove()
     })
+    // XML 声明和序列化空白不代表流程业务内容。
     return new XMLSerializer().serializeToString(document.documentElement)
       .replace(/>\s+</g, '><')
+      .replace(/<\?xml[^>]*\?>/g, '')
       .trim()
   } catch {
     return xml.trim()
@@ -900,7 +922,7 @@ async function applyPreview() {
         await ElMessageBox.confirm(
           '画布在 AI 生成期间被手动修改过，应用变更将覆盖这些改动，继续吗？',
           '注意',
-          { type: 'warning', confirmButtonText: '继续应用', cancelButtonText: '取消' }
+          { type: 'warning', confirmButtonText: '继续应用', cancelButtonText: '取消', zIndex: 10000 }
         )
       }
     } catch (e) {
@@ -916,7 +938,7 @@ async function applyPreview() {
       await ElMessageBox.confirm(
         `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
         '提示',
-        { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消' }
+        { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消', zIndex: 10000 }
       )
     } catch {
       return
@@ -1001,9 +1023,9 @@ function clearMessages() {
 async function confirmClearChat() {
   try {
     await ElMessageBox.confirm(
-      '将开始一段全新的对话：聊天记录与版本历史都会重置，当前设计保留为新会话的 V0。',
-      '清空对话',
-      { type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消' }
+      `将放弃本次${designLabel.value}：聊天记录与版本历史都会重置，当前设计不会被保存。`,
+      `放弃本次${designLabel.value}`,
+      { type: 'warning', confirmButtonText: '确认放弃', cancelButtonText: '继续编辑', zIndex: 10000 }
     )
   } catch (e) {
     return
@@ -1194,5 +1216,13 @@ defineExpose({
 /* 版本下拉框弹出层 teleport 到 body，需高于浮窗 z-index（3100+） */
 .version-select-popper {
   z-index: 3300 !important;
+}
+
+/* 确认弹窗必须高于 AI 设计窗，否则会被浮窗覆盖。 */
+.el-overlay.el-message-box {
+  z-index: 10000 !important;
+}
+.el-overlay.el-message-box .el-message-box {
+  z-index: 10001 !important;
 }
 </style>

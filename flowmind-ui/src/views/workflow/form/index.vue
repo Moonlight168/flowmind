@@ -53,6 +53,7 @@
     <el-dialog
       v-model="designer.visible"
       fullscreen
+      :before-close="beforeCloseDesigner"
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
@@ -156,6 +157,7 @@ const aiPreviewData = ref(null);
 const aiDesignDialogRef = ref();
 const aiDesigning = ref(false);
 const aiDesignProgress = ref('');
+const skipDesignerCloseConfirm = ref(false);
 const userStore = useUserStore();
 const render = reactive({
   visible: false,
@@ -294,6 +296,7 @@ const submitForm = () => {
     // 设计已落定，本轮 AI 会话结束：清前端记录与后端 checkpoint
     aiDesignDialogRef.value?.clearMessages();
     dialog.visible = false;
+    skipDesignerCloseConfirm.value = true;
     designer.visible = false;
     getList();
   })
@@ -412,6 +415,29 @@ const handleDesignerOpened = () => {
 /** 表单设计器关闭后 */
 const handleDesignerClosed = () => {
   window.removeEventListener('resize', positionDesignerActions);
+};
+
+const beforeCloseDesigner = (done) => {
+  if (skipDesignerCloseConfirm.value) {
+    skipDesignerCloseConfirm.value = false;
+    done();
+    return;
+  }
+  const closeAndClearSession = async () => {
+    await aiDesignDialogRef.value?.clearMessages?.();
+    done();
+  };
+  const current = vfDesignerRef.value?.getFormJson?.();
+  const baseline = form.value.content
+    ? JSON.parse(form.value.content)
+    : { widgetList: [], formConfig: {} };
+  if (JSON.stringify(current || {}) === JSON.stringify(baseline || {})) {
+    closeAndClearSession();
+    return;
+  }
+  proxy?.$modal.confirm('当前表单存在未保存的设计，确定关闭吗？', '提示')
+    .then(() => closeAndClearSession())
+    .catch(() => {});
 };
 
 // 页面卸载时兜底移除监听（设计器未走关闭流程时也要清）

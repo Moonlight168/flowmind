@@ -56,7 +56,10 @@ const props = defineProps({
   // 默认出现位置：视口右下角（右边距 / 底边距）
   right: { type: Number, default: 24 },
   bottom: { type: Number, default: 20 },
-  closable: { type: Boolean, default: true }
+  closable: { type: Boolean, default: true },
+  // 允许调用方调整浮窗层级，以便在设计器弹窗与确认弹窗之间分层。
+  zIndex: { type: Number, default: null },
+  raiseOnInteract: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -70,7 +73,7 @@ const windowStyle = computed(() => ({
   top: pos.y + 'px',
   width: size.w + 'px',
   height: size.h + 'px',
-  zIndex: zIndex.value
+  zIndex: props.zIndex ?? zIndex.value
 }))
 
 function close() {
@@ -78,6 +81,7 @@ function close() {
 }
 
 function bringToFront() {
+  if (!props.raiseOnInteract) return
   zIndex.value = ++zCounter
 }
 

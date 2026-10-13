@@ -42,6 +42,7 @@ def finalize_node(state: AppState) -> AppState:
                     operations,
                     state.get("current_form_data") or {},
                     form_data,
+                    state.get("available_forms") or [],
                 )
             final_output = {
                 "status": "ready",

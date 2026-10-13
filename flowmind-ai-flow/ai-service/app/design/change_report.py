@@ -62,6 +62,7 @@ def build_change_report(
     operations: list[dict[str, Any]],
     baseline: dict[str, Any],
     result: dict[str, Any],
+    available_forms: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     """返回 (摘要, 明细行)。
 
@@ -90,7 +91,7 @@ def build_change_report(
         # 修改项的正文里已用顿号分隔属性，项与项之间改用分号
         separator = "；" if action == "update" else "、"
         detail = separator.join(
-            _item_text(op, kind, old_widgets, old_nodes) for op in group
+            _item_text(op, kind, old_widgets, old_nodes, available_forms or []) for op in group
         )
         summary_parts.append(label)
         details.append({"action": action, "label": label, "detail": detail})
@@ -130,6 +131,7 @@ def _item_text(
     kind: str,
     old_widgets: list[dict[str, Any]],
     old_nodes: list[dict[str, Any]],
+    available_forms: list[dict[str, Any]],
 ) -> str:
     op = str(operation.get("op") or "")
     if kind == "form":
@@ -146,7 +148,7 @@ def _item_text(
     if op == "remove_node":
         return _node_label(old_nodes, operation.get("node_id"))
     if op == "update_node":
-        return _update_node_item(operation, old_nodes)
+        return _update_node_item(operation, old_nodes, available_forms)
     if op in {"add_edge", "update_edge", "remove_edge"}:
         return _edge_label(operation.get("edge") or operation)
     return ""
@@ -176,19 +178,44 @@ def _update_widget_item(
 
 
 def _update_node_item(
-    operation: dict[str, Any], old_nodes: list[dict[str, Any]]
+    operation: dict[str, Any],
+    old_nodes: list[dict[str, Any]],
+    available_forms: list[dict[str, Any]],
 ) -> str:
     node_id = operation.get("node_id")
     old_node = _find_node(old_nodes, node_id) or {}
     parts = []
     for attr, value in (operation.get("changes") or {}).items():
         old_value = old_node.get(attr)
+        if attr == "form_key":
+            old_value = _form_display(old_value, available_forms)
+            value = _form_display(value, available_forms)
         if old_value != value:
             parts.append(
                 f"{_NODE_ATTRS.get(attr, attr)} {_format(old_value)} → {_format(value)}"
             )
     label = str(old_node.get("name") or node_id or "?")
     return f"{label} · {'、'.join(parts)}" if parts else label
+
+
+def _form_display(form_key: object, available_forms: list[dict[str, Any]]) -> str:
+    if not form_key:
+        return "未绑定"
+    normalized = str(form_key).strip().removeprefix("key_")
+    for form in available_forms:
+        identifiers = (
+            form.get("formId"),
+            form.get("id"),
+            form.get("formKey"),
+            form.get("form_key"),
+        )
+        if any(
+            str(value).strip().removeprefix("key_") == normalized
+            for value in identifiers
+            if value is not None
+        ):
+            return str(form.get("formName") or form.get("name") or form_key)
+    return str(form_key)
 
 
 def _baseline_widgets(baseline: dict[str, Any]) -> list[dict[str, Any]]:

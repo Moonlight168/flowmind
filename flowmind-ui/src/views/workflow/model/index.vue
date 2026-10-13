@@ -123,7 +123,7 @@
       @fill="handleAiFillBasic"
     />
 
-    <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen>
+    <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen :before-close="beforeCloseDesigner">
       <div :class="['ai-designer-wrap', { 'ai-designer-wrap--with-panel': aiDesignVisible }]">
         <ProcessDesigner
           :key="`designer-${reloadIndex}`"
@@ -249,6 +249,7 @@ const designer = reactive({
   visible: false,
   title: ''
 });
+const skipDesignerCloseConfirm = ref(false);
 
 const history = reactive({
   visible: false,
@@ -373,6 +374,7 @@ const handleProcessView = async (row) => {
 }
 /** 设计按钮操作 */
 const handleDesigner = async (row) => {
+  skipDesignerCloseConfirm.value = false;
   reloadIndex.value++;
   designerForm.modelId = row.modelId;
   // 设置设计器表单信息
@@ -448,10 +450,18 @@ const getCategoryList = async () => {
 
 const onSaveDesigner = async (str) => {
   if (designerPreviewData.value) {
-    proxy.$modal.msgWarning('请先在 AI 变更预览中应用或放弃本次变更');
-    return;
+    try {
+      await proxy.$modal.confirm(
+        '当前 AI 变更预览尚未应用，继续保存将保存当前版本（未包含这次 AI 变更），是否继续？',
+        '提示'
+      );
+    } catch (action) {
+      return;
+    }
   }
-  bpmnXml.value = str;
+  // 有未应用预览时，设计器当前渲染的是预览 XML；确认保存仍应保存预览前的版本。
+  const saveXml = designerPreviewData.value ? bpmnXml.value : str;
+  bpmnXml.value = saveXml;
 
   // 检查是否为新模型（AI 生成的流程）
   if (!designerForm.modelId) {
@@ -469,7 +479,7 @@ const onSaveDesigner = async (str) => {
   // 已有模型，直接询问是否保存为新版本
   let dataBody = {
     modelId: designerForm.modelId,
-    bpmnXml: str
+    bpmnXml: saveXml
   }
   proxy.$modal.confirm('是否将此模型保存为新版本？').then(() => {
     confirmSave(dataBody, true)
@@ -487,6 +497,7 @@ const confirmSave = async (body, newVersion) => {
     proxy.$modal.msgSuccess("保存成功");
     // 流程设计已落定，本轮 AI 会话结束
     aiDesignDialogRef.value?.clearMessages();
+    skipDesignerCloseConfirm.value = true;
     designerLoading.value = false;
     designer.visible = false;
   } catch (error) {
@@ -494,6 +505,32 @@ const confirmSave = async (body, newVersion) => {
     // 保存失败时不关闭设计器，不刷新页面
   }
 }
+
+const normalizeFlowXml = (xml) => String(xml || '')
+  .replace(/<bpmndi:BPMNDiagram[\s\S]*?<\/bpmndi:BPMNDiagram>/g, '')
+  .replace(/<BPMNDiagram[\s\S]*?<\/BPMNDiagram>/g, '')
+  .replace(/>\s+</g, '><')
+  .trim();
+
+const beforeCloseDesigner = async (done) => {
+  if (skipDesignerCloseConfirm.value) {
+    skipDesignerCloseConfirm.value = false;
+    done();
+    return;
+  }
+  const closeAndClearSession = async () => {
+    await aiDesignDialogRef.value?.clearMessages?.();
+    done();
+  };
+  const current = await modelDesignerRef.value?.getCurrentXml?.();
+  if (!current || normalizeFlowXml(current) === normalizeFlowXml(bpmnXml.value)) {
+    await closeAndClearSession();
+    return;
+  }
+  proxy.$modal.confirm('当前流程存在未保存的设计，确定关闭吗？', '提示')
+    .then(() => closeAndClearSession())
+    .catch(() => {});
+};
 
 const categoryFormat = (row) => {
   var category = categoryOptions.value.find(function(k) {
