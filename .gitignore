@@ -3,6 +3,7 @@
 # =============================================
 .auto-dev/
 .claude/
+.pi/
 .planning/
 .playwright-mcp/
 .playwright-cli/
