@@ -161,6 +161,80 @@ def _assign_node_ids(nodes: list[dict]) -> list[str]:
     return node_ids
 
 
+def _extension_value(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return str(value)
+
+
+def _listener_attribute_name(name: str) -> str:
+    aliases = {
+        "class_name": "class",
+        "delegate_expression": "delegateExpression",
+    }
+    if name in aliases:
+        return aliases[name]
+    head, *tail = name.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+def _append_listener(
+    extensions: etree._Element,
+    flowable_ns: str,
+    listener_type: str,
+    config: dict,
+) -> None:
+    attrs = {
+        _listener_attribute_name(str(key)): _extension_value(value)
+        for key, value in config.items()
+        if key != "fields" and value is not None
+    }
+    listener = etree.SubElement(
+        extensions, f"{{{flowable_ns}}}{listener_type}", **attrs
+    )
+    fields = config.get("fields") or {}
+    field_items = fields.items() if isinstance(fields, dict) else []
+    for name, value in field_items:
+        field = etree.SubElement(
+            listener, f"{{{flowable_ns}}}field", name=str(name)
+        )
+        content = etree.SubElement(field, f"{{{flowable_ns}}}string")
+        content.text = _extension_value(value)
+
+
+def _append_user_task_extensions(
+    task: etree._Element,
+    bpmn_ns: str,
+    flowable_ns: str,
+    node: dict,
+) -> None:
+    task_listeners = node.get("task_listeners") or []
+    execution_listeners = node.get("execution_listeners") or []
+    properties = node.get("extension_properties") or {}
+    if not task_listeners and not execution_listeners and not properties:
+        return
+
+    extensions = etree.SubElement(task, f"{{{bpmn_ns}}}extensionElements")
+    for config in task_listeners:
+        if isinstance(config, dict):
+            _append_listener(extensions, flowable_ns, "taskListener", config)
+    for config in execution_listeners:
+        if isinstance(config, dict):
+            _append_listener(extensions, flowable_ns, "executionListener", config)
+    if isinstance(properties, dict) and properties:
+        container = etree.SubElement(extensions, f"{{{flowable_ns}}}properties")
+        for name, value in properties.items():
+            if value is not None:
+                etree.SubElement(
+                    container,
+                    f"{{{flowable_ns}}}property",
+                    name=str(name),
+                    value=_extension_value(value),
+                )
+
+
 def _create_node_elements(
     process: etree._Element,
     ns: dict[str, str],
@@ -205,8 +279,30 @@ def _create_node_elements(
                 )
             if node.get("data_type"):
                 attrs[f"{{{fl}}}dataType"] = node["data_type"]
+            if node.get("priority") is not None:
+                attrs[f"{{{fl}}}priority"] = str(node["priority"])
+            if node.get("due_date"):
+                attrs[f"{{{fl}}}dueDate"] = str(node["due_date"])
 
-            etree.SubElement(process, f"{{{bpmn}}}userTask", **attrs)
+            task_element = etree.SubElement(process, f"{{{bpmn}}}userTask", **attrs)
+            _append_user_task_extensions(task_element, bpmn, fl, node)
+            multi_instance = node.get("multi_instance") or {}
+            if isinstance(multi_instance, dict) and multi_instance:
+                loop_attrs = {}
+                for source, target in (
+                    ("collection", f"{{{fl}}}collection"),
+                    ("element_variable", f"{{{fl}}}elementVariable"),
+                    ("completion_condition", f"{{{fl}}}completionCondition"),
+                ):
+                    if multi_instance.get(source) is not None:
+                        loop_attrs[target] = str(multi_instance[source])
+                loop = etree.SubElement(
+                    task_element,
+                    f"{{{bpmn}}}multiInstanceLoopCharacteristics",
+                    **loop_attrs,
+                )
+                if multi_instance.get("sequential") is not None:
+                    loop.set("isSequential", str(bool(multi_instance["sequential"])).lower())
 
         elif node_type == "EXCLUSIVE_GATEWAY":
             attrs = {"id": node_id}

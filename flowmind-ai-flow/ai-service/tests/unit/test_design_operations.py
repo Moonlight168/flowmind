@@ -362,6 +362,28 @@ def test_empty_flow_requires_complete_replace_graph(monkeypatch) -> None:
     ]
 
 
+def test_new_approval_node_can_remain_unbound_without_form_requirement() -> None:
+    result = apply_design_operations(
+        "flow_design",
+        {
+            "nodes": [
+                {"id": "start", "type": "START_EVENT", "form_key": "leave_form"},
+                {"id": "end", "type": "END_EVENT"},
+            ],
+            "edges": [{"source": "start", "target": "end"}],
+        },
+        [
+            {
+                "op": "add_node",
+                "after_id": "start",
+                "node": {"id": "manager", "type": "USER_TASK", "name": "主管审批"},
+            }
+        ],
+    )
+
+    assert "form_key" not in result["nodes"][2]
+
+
 def test_generate_node_propagates_clarification_choices(monkeypatch):
     monkeypatch.setattr(
         generate_module,

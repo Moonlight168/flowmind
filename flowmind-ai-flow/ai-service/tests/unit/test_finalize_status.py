@@ -178,3 +178,37 @@ def test_flow_design_still_reports_pending_category():
     result = finalize_node(state)["design_output"]
 
     assert result["pending_entities"] == {"category_name": "请假审批"}
+
+
+def test_flow_design_exposes_complete_form_drafts_for_apply_confirmation():
+    draft = {
+        "form_name": "主管审批表",
+        "node_ids": ["manager"],
+        "widgetList": [
+            {
+                "type": "textarea",
+                "formItemFlag": True,
+                "options": {"name": "opinion", "label": "审批意见", "required": True},
+            }
+        ],
+        "formConfig": {},
+    }
+    state = {
+        "design_type": "flow_design",
+        "mode": "design",
+        "intent": "success",
+        "design_output": {
+            "nodes": [{"id": "manager", "type": "USER_TASK", "name": "主管审批"}],
+            "edges": [],
+            "new_forms": [draft],
+            "operations": [
+                {"op": "update_node", "node_id": "manager", "changes": {}}
+            ],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+
+    result = finalize_node(state)["design_output"]
+
+    assert result["pending_entities"]["forms"] == [draft]

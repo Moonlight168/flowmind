@@ -557,6 +557,7 @@ getList();
   backdrop-filter: blur(2px);
   color: #3b82f6;
   font-size: 14px;
+  pointer-events: auto;
 }
 
 .ai-design-mask-spinner {

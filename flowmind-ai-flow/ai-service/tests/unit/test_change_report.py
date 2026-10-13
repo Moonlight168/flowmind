@@ -196,3 +196,46 @@ def test_flow_edge_prefers_name():
     )
 
     assert _lines(details) == ["删除 1 条连线：驳回"]
+
+
+def test_flow_node_preview_summarizes_runtime_configuration():
+    _, details = build_change_report(
+        "flow_design",
+        [
+            {
+                "op": "add_node",
+                "node": {
+                    "id": "manager",
+                    "name": "直属主管审批",
+                    "form_key": "key_12",
+                    "candidate_groups": ["ROLE_MANAGER"],
+                    "multi_instance": {"collection": "managers"},
+                    "task_listeners": [{"event": "create"}],
+                    "execution_listeners": [{"event": "start"}],
+                    "priority": 50,
+                },
+            }
+        ],
+        {},
+        {},
+    )
+
+    assert details[0]["detail"] == (
+        "直属主管审批（已绑定表单、候选审批人、多实例、任务监听器1个、"
+        "执行监听器1个、时限配置）"
+    )
+
+
+def test_form_replace_preview_summarizes_required_and_options():
+    result = {
+        "widgetList": [
+            _widget("reason", "审批意见", required=True),
+            _widget("result", "审批结论", optionItems=[{"label": "通过"}, {"label": "驳回"}]),
+        ]
+    }
+
+    _, details = build_change_report(
+        "form_design", [{"op": "replace_form"}], {}, result
+    )
+
+    assert details[0]["detail"] == "审批意见（必填）、审批结论（2个选项）"

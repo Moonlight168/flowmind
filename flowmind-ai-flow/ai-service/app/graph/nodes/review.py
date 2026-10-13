@@ -258,7 +258,18 @@ def _clear_pending_entity_errors(
     """
     if context.design_type != "flow_design":
         return
-    if context.mode == "design" and str(design_output.get("start_form_name") or "").strip():
+    pending_form_nodes = {
+        str(node_id)
+        for draft in (design_output.get("new_forms") or [])
+        for node_id in (draft.get("node_ids") or [])
+    }
+    start_ids = {
+        str(node.get("id"))
+        for node in (design_output.get("nodes") or [])
+        if node.get("type", "").upper() == "START_EVENT" and node.get("id")
+    }
+    has_pending_start_form = bool(start_ids & pending_form_nodes)
+    if context.mode == "design" and has_pending_start_form:
         rules = _FORM_ASK_RULES
     elif context.mode == "basic" and str(design_output.get("category_name") or "").strip():
         rules = _CATEGORY_ASK_RULES

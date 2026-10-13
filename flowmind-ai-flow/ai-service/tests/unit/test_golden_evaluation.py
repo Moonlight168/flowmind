@@ -290,6 +290,12 @@ def test_repository_dataset_has_unique_coverage() -> None:
     assert any(case.expected_output.fallback_output for case in cases)
     assert any(len(case.input.turns) > 1 for case in cases)
     assert {case.source for case in cases} == {"real_anonymized", "curated"}
+    independent_form_case = next(
+        case for case in cases if case.id == "flow-leave-independent-approval-form"
+    )
+    assert independent_form_case.expected_output.status == "ready"
+    assert "pending_entities.forms" in independent_form_case.expected_output.required_paths
+    assert independent_form_case.expected_output.min_counts["pending_entities.forms"] == 1
 
 
 def test_cli_selects_one_case() -> None:

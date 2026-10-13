@@ -6,7 +6,7 @@ current artifact and validates the materialized result before it can be used.
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
@@ -39,6 +39,12 @@ class FlowNode(StrictModel):
     candidate_users: list[str] | None = None
     text: str | None = None
     data_type: str | None = None
+    priority: int | str | None = None
+    due_date: str | None = None
+    multi_instance: dict[str, Any] | None = None
+    task_listeners: list[dict[str, Any]] | None = None
+    execution_listeners: list[dict[str, Any]] | None = None
+    extension_properties: dict[str, Any] | None = None
 
 
 class FlowEdge(StrictModel):
@@ -105,17 +111,6 @@ FlowOperation = Annotated[
 ]
 
 
-class FlowDesign(StrictModel):
-    operations: list[FlowOperation] = Field(min_length=1)
-    #: 系统没有可用表单时给出建议的开始表单名；实际创建由前端在应用变更时完成
-    start_form_name: str | None = None
-
-
-#: 待创建的开始表单占位 key：后端据此生成 bpmn_xml，前端创建表单后替换成真实 key_<formId>
-#: （与前端 AiChatWindow/design 里的同名常量保持一致）
-PENDING_FORM_KEY = "key_ai_pending_form"
-
-
 class FormWidget(StrictModel):
     type: str
     formItemFlag: bool  # noqa: N815 - VForm3 uses camelCase
@@ -128,6 +123,49 @@ class FormWidget(StrictModel):
     rows: list[dict[str, Any]] | None = None
     category: str | None = None
     internal: bool | None = None
+
+
+class FlowFormDraft(StrictModel):
+    """A complete, directly creatable form proposed for flow nodes."""
+
+    form_name: str = Field(min_length=2, max_length=50)
+    node_ids: list[str] = Field(min_length=1)
+    widgetList: list[FormWidget] = Field(min_length=1)  # noqa: N815
+    formConfig: dict[str, Any] = Field(default_factory=dict)  # noqa: N815
+
+    @model_validator(mode="after")
+    def validate_business_fields(self) -> "FlowFormDraft":
+        business_fields: list[dict[str, Any]] = []
+
+        def collect(value: object) -> None:
+            if isinstance(value, dict):
+                if value.get("formItemFlag") is True:
+                    business_fields.append(value)
+                for child in value.values():
+                    collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+
+        collect([widget.model_dump() for widget in self.widgetList])
+        if not business_fields:
+            raise ValueError("generated form must contain at least one business field")
+        for field in business_fields:
+            options = field.get("options") or {}
+            if not str(options.get("name") or "").strip() or not str(
+                options.get("label") or ""
+            ).strip():
+                raise ValueError("generated form fields require options.name and options.label")
+            if field.get("type") in {"radio", "checkbox", "select", "cascader"} and not (
+                options.get("optionItems") or []
+            ):
+                raise ValueError("choice fields require non-empty options.optionItems")
+        return self
+
+
+class FlowDesign(StrictModel):
+    operations: list[FlowOperation] = Field(min_length=1)
+    new_forms: list[FlowFormDraft] = Field(default_factory=list)
 
 
 class ReplaceFormOperation(StrictModel):

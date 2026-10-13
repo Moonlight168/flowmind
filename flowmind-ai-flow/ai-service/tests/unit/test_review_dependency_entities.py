@@ -1,19 +1,7 @@
-"""
-FlowMind 智能流程设计服务 - 依赖实体（表单/分类）缺失时的 review 行为测试
+"""Review behavior for dependencies created only after preview confirmation."""
 
-模型给出建议名（start_form_name / category_name）时，由前端在「应用变更」时创建实体，
-本轮校验放行；模型没给建议名时退回追问，避免重试到死循环。
-"""
-
-from app.design.validators import (
-    ValidationError,
-    ValidationResult,
-    ValidatorContext,
-)
-from app.graph.nodes.review import (
-    _clear_pending_entity_errors,
-    _design_clarification,
-)
+from app.design.validators import ValidationError, ValidationResult, ValidatorContext
+from app.graph.nodes.review import _clear_pending_entity_errors, _design_clarification
 
 
 def _ctx(design_type: str = "flow_design", mode: str = "basic", **kw):
@@ -26,15 +14,30 @@ def _result(*rule_ids: str) -> ValidationResult:
     )
 
 
-# ---------- 有建议名：放行，交给前端创建 ----------
+def _pending_start_form() -> dict:
+    return {
+        "nodes": [{"id": "start", "type": "START_EVENT", "name": "开始"}],
+        "new_forms": [
+            {
+                "form_name": "申请信息表",
+                "node_ids": ["start"],
+                "widgetList": [
+                    {
+                        "type": "input",
+                        "formItemFlag": True,
+                        "options": {"name": "reason", "label": "申请原因"},
+                    }
+                ],
+                "formConfig": {},
+            }
+        ],
+    }
 
 
-def test_pending_start_form_clears_form_errors():
+def test_complete_pending_start_form_clears_form_errors():
     result = _result("NODE_N010", "NODE_N005")
 
-    _clear_pending_entity_errors(
-        result, {"start_form_name": "请假申请单"}, _ctx(mode="design")
-    )
+    _clear_pending_entity_errors(result, _pending_start_form(), _ctx(mode="design"))
 
     assert result.errors == []
     assert result.is_valid
@@ -50,32 +53,36 @@ def test_pending_category_clears_category_errors():
     assert result.is_valid
 
 
-def test_pending_name_does_not_clear_unrelated_errors():
+def test_pending_form_does_not_clear_unrelated_errors():
     result = _result("NODE_N010", "EDGE_E001")
 
-    _clear_pending_entity_errors(
-        result, {"start_form_name": "请假申请单"}, _ctx(mode="design")
-    )
+    _clear_pending_entity_errors(result, _pending_start_form(), _ctx(mode="design"))
 
-    assert [e.rule_id for e in result.errors] == ["EDGE_E001"]
+    assert [error.rule_id for error in result.errors] == ["EDGE_E001"]
+    assert not result.is_valid
+
+
+def test_form_draft_for_other_node_does_not_clear_start_form_errors():
+    result = _result("NODE_N010")
+    output = _pending_start_form()
+    output["new_forms"][0]["node_ids"] = ["manager"]
+
+    _clear_pending_entity_errors(result, output, _ctx(mode="design"))
+
     assert not result.is_valid
 
 
 def test_pending_category_does_not_clear_form_errors():
-    """basic 模式只放行分类相关错误，其他规则不受影响。"""
     result = _result("NODE_N010", "CAT_C005")
 
     _clear_pending_entity_errors(
         result, {"category_name": "人事管理"}, _ctx(mode="basic")
     )
 
-    assert [e.rule_id for e in result.errors] == ["NODE_N010"]
+    assert [error.rule_id for error in result.errors] == ["NODE_N010"]
 
 
-# ---------- 没有建议名：保持原样，退回追问 ----------
-
-
-def test_no_pending_name_keeps_errors():
+def test_no_pending_entity_keeps_errors():
     result = _result("NODE_N010")
 
     _clear_pending_entity_errors(result, {}, _ctx(mode="design"))
@@ -83,58 +90,46 @@ def test_no_pending_name_keeps_errors():
     assert not result.is_valid
 
 
-def test_blank_pending_name_is_ignored():
-    result = _result("NODE_N010")
-
-    _clear_pending_entity_errors(result, {"start_form_name": "   "}, _ctx(mode="design"))
-
-    assert not result.is_valid
-
-
-# ---------- 兜底追问 ----------
-
-
 def test_unrelated_error_returns_none():
-    errors = [ValidationError("CAT_C002", "分类编码不符合规范: ''")]
+    errors = [ValidationError("CAT_C002", "分类编码格式错误")]
     assert _design_clarification(errors, _ctx()) is None
 
 
 def test_empty_category_list_asks_user_to_create_one():
-    msg = _design_clarification(
+    message = _design_clarification(
         [ValidationError("CAT_C005", "当前系统还没有流程分类")], _ctx()
     )
 
-    assert msg is not None
-    assert "没有流程分类" in msg
+    assert message is not None
+    assert "没有流程分类" in message
 
 
 def test_mismatched_code_lists_available_categories():
-    ctx = _ctx(
+    context = _ctx(
         available_categories=[
             {"categoryId": 1, "code": "hr", "categoryName": "人事管理"},
             {"categoryId": 2, "code": "fin", "categoryName": "财务管理"},
         ]
     )
-    msg = _design_clarification(
-        [ValidationError("CAT_C003", "分类编码 'invented' 不存在")], ctx
+    message = _design_clarification(
+        [ValidationError("CAT_C003", "分类编码不存在")], context
     )
 
-    assert msg is not None
-    assert "人事管理" in msg
-    assert "财务管理" in msg
+    assert message is not None
+    assert "人事管理" in message
+    assert "财务管理" in message
 
 
 def test_category_design_code_conflict_is_not_a_user_question():
-    """分类设计里"编码已存在"可以换一个重试，不该打断用户。"""
-    ctx = _ctx(design_type="category_design", mode="design")
-    errors = [ValidationError("CAT_C003", "分类编码 'hr' 已存在，请换一个")]
+    context = _ctx(design_type="category_design", mode="design")
+    errors = [ValidationError("CAT_C003", "分类编码已存在")]
 
-    assert _design_clarification(errors, ctx) is None
+    assert _design_clarification(errors, context) is None
 
 
-def test_no_form_asks_user_to_create_one():
+def test_missing_form_without_complete_draft_asks_for_input():
     errors = [ValidationError("NODE_N010", "当前系统还没有表单")]
-    msg = _design_clarification(errors, _ctx(mode="design"))
+    message = _design_clarification(errors, _ctx(mode="design"))
 
-    assert msg is not None
-    assert "没有表单" in msg
+    assert message is not None
+    assert "没有表单" in message

@@ -44,6 +44,61 @@ def test_flow_design_valid():
     assert obj.operations[0].op == "replace_graph"
 
 
+def test_flow_design_accepts_complete_node_form_draft():
+    obj = FlowDesign(
+        operations=[
+            {
+                "op": "update_node",
+                "node_id": "manager",
+                "changes": {"candidate_groups": ["ROLE_MANAGER"]},
+            }
+        ],
+        new_forms=[
+            {
+                "form_name": "主管审批表",
+                "node_ids": ["manager"],
+                "widgetList": [
+                    {
+                        "type": "textarea",
+                        "formItemFlag": True,
+                        "options": {
+                            "name": "approval_opinion",
+                            "label": "审批意见",
+                            "required": True,
+                        },
+                    }
+                ],
+                "formConfig": {},
+            }
+        ],
+    )
+
+    assert obj.new_forms[0].node_ids == ["manager"]
+    assert obj.new_forms[0].widgetList[0].options["required"] is True
+
+
+def test_flow_design_rejects_incomplete_generated_form():
+    with pytest.raises(ValidationError):
+        FlowDesign(
+            operations=[
+                {"op": "update_node", "node_id": "manager", "changes": {}}
+            ],
+            new_forms=[
+                {
+                    "form_name": "审批表",
+                    "node_ids": ["manager"],
+                    "widgetList": [
+                        {
+                            "type": "textarea",
+                            "formItemFlag": True,
+                            "options": {"name": "", "label": ""},
+                        }
+                    ],
+                }
+            ],
+        )
+
+
 def test_flow_node_invalid_type_rejected():
     with pytest.raises(ValidationError):
         FlowNode(type="ROBOT_TASK", id="x", name="x")

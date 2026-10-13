@@ -712,11 +712,12 @@ const pendingNotices = computed(() => {
   const pending = pendingPreview.value?.pending_entities
   if (!pending) return []
   const notices = []
-  if (pending.form_checked) {
+  for (const form of pending.forms || []) {
+    const fieldCount = form.widgetList?.length || 0
     notices.push(
-      pending.form_exists
-        ? `将使用已有表单「${pending.start_form_name}」`
-        : `将创建占位表单「${pending.start_form_name}」，字段需你稍后完善`
+      form.exists
+        ? `将使用已有表单「${form.form_name}」`
+        : `将创建表单「${form.form_name}」（${fieldCount} 个字段），并绑定到 ${form.node_ids.length} 个节点`
     )
   }
   if (pending.category_checked) {
@@ -773,12 +774,6 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value || {}))
 }
 
-// 待创建的开始表单占位 key（与后端 design_models.PENDING_FORM_KEY 保持一致）
-const PENDING_FORM_KEY = 'key_ai_pending_form'
-
-// 占位表单骨架：保证表单设计器能正常打开
-const EMPTY_FORM_CONTENT = JSON.stringify({ widgetList: [], formConfig: {} })
-
 /** 按名称查表单（后端只读接口），查不到返回 null */
 async function findFormByName(formName) {
   const res = await listForm({ formName })
@@ -793,19 +788,41 @@ async function findCategoryByName(categoryName) {
   return rows.find((item) => item.categoryName === categoryName) || null
 }
 
-/** 按名称取表单，不存在则创建空占位（幂等，避免重复创建） */
-async function ensurePlaceholderForm(formName) {
-  const existing = await findFormByName(formName)
-  if (existing) return existing
-  await addForm({
-    formName,
-    content: EMPTY_FORM_CONTENT,
-    remark: 'AI 流程设计自动创建的占位表单，待完善字段'
+/** 按完整草案创建表单；同名表单存在时直接复用。 */
+async function ensureGeneratedForm(draft) {
+  const existing = await findFormByName(draft.form_name)
+  if (existing?.formId) return existing
+  const response = await addForm({
+    formName: draft.form_name,
+    content: JSON.stringify({
+      widgetList: draft.widgetList || [],
+      formConfig: draft.formConfig || {}
+    }),
+    remark: 'AI 流程设计生成，已在应用变更前由用户确认'
   })
-  // 新增接口只回 {code,msg}，不回实体，必须回查拿 formId
-  const created = await findFormByName(formName)
-  if (!created?.formId) throw new Error(`占位表单「${formName}」创建后未能查到`)
+  if (response?.code !== 200) {
+    throw new Error(response?.msg || `表单「${draft.form_name}」创建失败`)
+  }
+  const created = await findFormByName(draft.form_name)
+  if (!created?.formId) throw new Error(`表单「${draft.form_name}」创建后未能查到`)
   return created
+}
+
+function bindFormKeyInBpmnXml(xml, nodeIds, formKey) {
+  if (!xml || !nodeIds?.length) return xml
+  try {
+    const document = new DOMParser().parseFromString(xml, 'application/xml')
+    if (document.querySelector('parsererror')) return xml
+    const targets = new Set(nodeIds.map(String))
+    for (const element of Array.from(document.getElementsByTagName('*'))) {
+      if (targets.has(element.getAttribute('id'))) {
+        element.setAttributeNS('http://flowable.org/bpmn', 'flowable:formKey', formKey)
+      }
+    }
+    return new XMLSerializer().serializeToString(document)
+  } catch {
+    return xml
+  }
 }
 
 /** 按名称取分类，不存在则创建（幂等）。
@@ -825,7 +842,7 @@ async function ensureCategory(categoryName, code) {
 }
 
 /** 预览里「依赖实体」那两行要说的是接下来**会发生什么**。
- *  ensurePlaceholderForm / ensureCategory 都是先查后建，同名实体已存在时不会创建 ——
+ *  ensureGeneratedForm / ensureCategory 都是先查后建，同名实体已存在时不会创建 ——
  *  文案必须说「使用已有」，否则更新场景会被读成新建。查询标记没回来前不显示，
  *  免得先闪一句「将创建」再改口。
  *  必须写回 pendingPreview 上的对象（响应式代理），直接改 SSE 事件对象不会触发刷新。 */
@@ -833,16 +850,15 @@ async function markPendingEntities() {
   const preview = pendingPreview.value
   const pending = preview?.pending_entities
   if (!pending) return
-  if (pending.start_form_name) {
-    let existing = null
+  for (const form of pending.forms || []) {
     try {
-      existing = await findFormByName(pending.start_form_name)
+      const existing = await findFormByName(form.form_name)
+      if (pendingPreview.value !== preview) return
+      form.exists = Boolean(existing)
     } catch (e) {
-      console.warn('查询表单失败:', e)
+      console.warn('查询节点表单失败:', e)
+      form.exists = false
     }
-    if (pendingPreview.value !== preview) return
-    pending.form_exists = Boolean(existing)
-    pending.form_checked = true
   }
   if (pending.category_name) {
     let existing = null
@@ -861,19 +877,14 @@ async function markPendingEntities() {
  *  后端对业务库只读，实体创建统一在这里（用户点「应用变更」）完成。 */
 async function materializePendingEntities(formData, pending) {
   const result = cloneData(formData)
-  if (pending?.start_form_name) {
-    const form = await ensurePlaceholderForm(pending.start_form_name)
-    if (form?.formId) {
-      const realKey = `key_${form.formId}`
-      const start = (result.nodes || []).find(
-        (node) => String(node.type || '').toUpperCase() === 'START_EVENT'
-      )
-      if (start) start.form_key = realKey
-      // bpmn_xml 才是设计器的输入，占位 key 必须一并替换
-      if (typeof result.bpmn_xml === 'string' && result.bpmn_xml.includes(PENDING_FORM_KEY)) {
-        result.bpmn_xml = result.bpmn_xml.split(PENDING_FORM_KEY).join(realKey)
-      }
+  for (const draft of pending?.forms || []) {
+    const form = await ensureGeneratedForm(draft)
+    const realKey = `key_${form.formId}`
+    const targets = new Set((draft.node_ids || []).map(String))
+    for (const node of result.nodes || []) {
+      if (targets.has(String(node.id))) node.form_key = realKey
     }
+    result.bpmn_xml = bindFormKeyInBpmnXml(result.bpmn_xml, draft.node_ids, realKey)
   }
   if (pending?.category_name) {
     const category = await ensureCategory(pending.category_name, result.code)
@@ -911,25 +922,6 @@ function normalizeBpmnXml(xml) {
 
 async function applyPreview() {
   if (!pendingPreview.value) return
-  // 生成期间画布若被手动修改过，应用会整份覆盖这些改动——先提醒用户
-  if (typeof props.getCurrentBaseline === 'function' && previewBaseline.value?.bpmnXml) {
-    try {
-      const fresh = await props.getCurrentBaseline()
-      if (
-        fresh?.bpmnXml &&
-        normalizeBpmnXml(fresh.bpmnXml) !== normalizeBpmnXml(previewBaseline.value.bpmnXml)
-      ) {
-        await ElMessageBox.confirm(
-          '画布在 AI 生成期间被手动修改过，应用变更将覆盖这些改动，继续吗？',
-          '注意',
-          { type: 'warning', confirmButtonText: '继续应用', cancelButtonText: '取消', zIndex: 10000 }
-        )
-      }
-    } catch (e) {
-      if (e === 'cancel' || e === 'close') return
-      console.error('检查画布最新状态失败:', e)
-    }
-  }
   // 从旧版本继续生成：应用将丢弃当前版本之后的版本，先确认
   const versions = getVersions()
   if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
@@ -950,9 +942,6 @@ async function applyPreview() {
   if (pending) {
     try {
       formData = await materializePendingEntities(formData, pending)
-      if (pending.start_form_name) {
-        ElMessage.warning(`已创建占位表单「${pending.start_form_name}」，请到「表单设计」完善字段`)
-      }
     } catch (e) {
       console.error('创建依赖实体失败:', e)
       ElMessage.error('创建表单/分类失败，请稍后重试')
@@ -1198,6 +1187,10 @@ defineExpose({
   padding-left: 8px;
   color: #606266;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 .change-preview__operations li.is-add { border-left-color: #67c23a; }
 .change-preview__operations li.is-update { border-left-color: #e6a23c; }
@@ -1219,10 +1212,14 @@ defineExpose({
 }
 
 /* 确认弹窗必须高于 AI 设计窗，否则会被浮窗覆盖。 */
-.el-overlay.el-message-box {
+.el-overlay.el-message-box,
+.el-overlay.el-overlay-message-box,
+body > .el-overlay:has(.el-overlay-message-box) {
   z-index: 10000 !important;
 }
-.el-overlay.el-message-box .el-message-box {
+.el-overlay.el-message-box .el-message-box,
+.el-overlay.el-overlay-message-box .el-message-box,
+body > .el-overlay:has(.el-overlay-message-box) .el-message-box {
   z-index: 10001 !important;
 }
 </style>

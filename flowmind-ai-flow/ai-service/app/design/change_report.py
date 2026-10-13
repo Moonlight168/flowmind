@@ -54,6 +54,12 @@ _NODE_ATTRS = {
     "form_key": "表单",
     "type": "类型",
     "condition": "分支条件",
+    "priority": "优先级",
+    "due_date": "到期策略",
+    "multi_instance": "多实例",
+    "task_listeners": "任务监听器",
+    "execution_listeners": "执行监听器",
+    "extension_properties": "扩展属性",
 }
 
 
@@ -104,12 +110,12 @@ def _replace_report(
     """整体替换：摘要给出规模变化，明细列出新内容的名称。"""
     if kind == "form":
         old_count = len(_baseline_widgets(baseline))
-        names = [_widget_label(widget) for widget in result.get("widgetList") or []]
+        names = [_widget_summary(widget) for widget in result.get("widgetList") or []]
         unit, op_label = "个字段", "整体替换表单"
     else:
         old_count = len(baseline.get("nodes") or [])
         names = [
-            str(node.get("name") or node.get("id") or "")
+            _node_config_summary(node)
             for node in result.get("nodes") or []
         ]
         unit, op_label = "个节点", "整体替换流程图"
@@ -144,7 +150,7 @@ def _item_text(
         return ""
     if op == "add_node":
         node = operation.get("node") or {}
-        return str(node.get("name") or node.get("id") or "新节点")
+        return _node_config_summary(node)
     if op == "remove_node":
         return _node_label(old_nodes, operation.get("node_id"))
     if op == "update_node":
@@ -244,6 +250,19 @@ def _widget_label(widget: dict[str, Any]) -> str:
     return str(options.get("label") or options.get("name") or widget.get("type") or "新字段")
 
 
+def _widget_summary(widget: dict[str, Any]) -> str:
+    label = _widget_label(widget)
+    options = widget.get("options") or {}
+    details: list[str] = []
+    if options.get("required"):
+        details.append("必填")
+    if options.get("defaultValue") not in (None, ""):
+        details.append("有默认值")
+    if options.get("optionItems"):
+        details.append(f"{len(options['optionItems'])}个选项")
+    return f"{label}（{'、'.join(details)}）" if details else label
+
+
 def _widget_display(old_widgets: list[dict[str, Any]], widget_name: object) -> str:
     """优先显示组件标题（用户看得懂的），取不到才退回内部字段名。"""
     widget = find_widget(old_widgets, str(widget_name or ""))
@@ -255,6 +274,29 @@ def _widget_display(old_widgets: list[dict[str, Any]], widget_name: object) -> s
 def _node_label(nodes: list[dict[str, Any]], node_id: object) -> str:
     node = _find_node(nodes, node_id)
     return str((node or {}).get("name") or node_id or "?")
+
+
+def _node_config_summary(node: dict[str, Any]) -> str:
+    """以短摘要展示节点配置，避免把完整 JSON 堆进预览。"""
+    label = str(node.get("name") or node.get("id") or "新节点")
+    parts: list[str] = []
+    if node.get("form_key"):
+        parts.append("已绑定表单")
+    if node.get("assignee"):
+        parts.append("审批人")
+    if node.get("candidate_groups") or node.get("candidate_users"):
+        parts.append("候选审批人")
+    if node.get("multi_instance"):
+        parts.append("多实例")
+    if node.get("task_listeners"):
+        parts.append(f"任务监听器{len(node['task_listeners'])}个")
+    if node.get("execution_listeners"):
+        parts.append(f"执行监听器{len(node['execution_listeners'])}个")
+    if node.get("priority") is not None or node.get("due_date"):
+        parts.append("时限配置")
+    if node.get("extension_properties"):
+        parts.append("扩展属性")
+    return f"{label}（{'、'.join(parts)}）" if parts else label
 
 
 def _edge_label(edge: dict[str, Any]) -> str:

@@ -62,12 +62,14 @@ def finalize_node(state: AppState) -> AppState:
             pending = (
                 {
                     key: design_output[key]
-                    for key in ("start_form_name", "category_name")
+                    for key in ("category_name",)
                     if design_output.get(key)
                 }
                 if design_type == "flow_design"
                 else {}
             )
+            if design_type == "flow_design" and design_output.get("new_forms"):
+                pending["forms"] = design_output["new_forms"]
             if pending:
                 final_output["pending_entities"] = pending
     else:

@@ -107,7 +107,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button type="warning" plain icon="MagicStick" @click="handleAiDesignBasic">AI 设计</el-button>
-          <el-button type="primary" @click="submitForm">确 定</el-button>
+          <el-button type="primary" :loading="formSaving" :disabled="formSaving" @click="submitForm">确 定</el-button>
           <el-button @click="cancel">取 消</el-button>
         </div>
       </template>
@@ -215,7 +215,9 @@ const multiple = ref(true);
 const total = ref(0);
 const categoryOptions = ref([]);
 const designerLoading = ref(true);
+const formSaving = ref(false);
 const bpmnXml = ref('');
+const persistedBpmnXml = ref('');
 const reloadIndex = ref(0);
 const processXml = ref("");
 
@@ -382,6 +384,7 @@ const handleDesigner = async (row) => {
   designerForm.form.processKey = row.modelKey || '';
   const res = await getBpmnXml(row.modelId);
   bpmnXml.value = res.data || '';
+  persistedBpmnXml.value = bpmnXml.value;
   designerFlowInfo.value = {
     modelId: row.modelId,
     modelName: row.modelName,
@@ -430,8 +433,11 @@ const handleHistory = (row) => {
 }
 /** 提交表单操作 */
 const submitForm = async () => {
+  if (formSaving.value) return;
   modelFormRef.value.validate(async (valid) => {
-    if (valid) {
+    if (valid && !formSaving.value) {
+      formSaving.value = true;
+      try {
       // 普通模式：直接保存模型
       form.value.modelId ? await updateModel(form.value) : await addModel(form.value);
       proxy.$modal.msgSuccess("操作成功");
@@ -439,6 +445,9 @@ const submitForm = async () => {
       aiDesignBasicDialogRef.value?.clearMessages();
       dialog.visible = false;
       getList();
+      } finally {
+        formSaving.value = false;
+      }
     }
   })
 }
@@ -449,6 +458,7 @@ const getCategoryList = async () => {
 }
 
 const onSaveDesigner = async (str) => {
+  if (designerLoading.value) return;
   if (designerPreviewData.value) {
     try {
       await proxy.$modal.confirm(
@@ -490,6 +500,7 @@ const onSaveDesigner = async (str) => {
   })
 }
 const confirmSave = async (body, newVersion) => {
+  if (designerLoading.value) return;
   designerLoading.value = true;
   try {
     await saveModel(Object.assign(body, { newVersion: newVersion }));
@@ -498,6 +509,7 @@ const confirmSave = async (body, newVersion) => {
     // 流程设计已落定，本轮 AI 会话结束
     aiDesignDialogRef.value?.clearMessages();
     skipDesignerCloseConfirm.value = true;
+    persistedBpmnXml.value = body.bpmnXml;
     designerLoading.value = false;
     designer.visible = false;
   } catch (error) {
@@ -523,7 +535,7 @@ const beforeCloseDesigner = async (done) => {
     done();
   };
   const current = await modelDesignerRef.value?.getCurrentXml?.();
-  if (!current || normalizeFlowXml(current) === normalizeFlowXml(bpmnXml.value)) {
+  if (!current || normalizeFlowXml(current) === normalizeFlowXml(persistedBpmnXml.value)) {
     await closeAndClearSession();
     return;
   }
@@ -688,6 +700,7 @@ onMounted(async () => {
   backdrop-filter: blur(2px);
   color: #3b82f6;
   font-size: 14px;
+  pointer-events: auto;
 }
 
 .ai-design-mask-spinner {

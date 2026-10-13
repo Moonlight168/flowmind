@@ -10,7 +10,59 @@ NS = {
     "bpmndi": "http://www.omg.org/spec/BPMN/20100524/DI",
     "dc": "http://www.omg.org/spec/DD/20100524/DC",
     "di": "http://www.omg.org/spec/DD/20100524/DI",
+    "flowable": "http://flowable.org/bpmn",
 }
+
+
+def test_user_task_runtime_extensions_are_serialized():
+    structure = {
+        "nodes": [
+            {"id": "start", "type": "START_EVENT", "name": "开始"},
+            {
+                "id": "approve",
+                "type": "USER_TASK",
+                "name": "审批",
+                "candidate_groups": ["manager"],
+                "task_listeners": [
+                    {
+                        "event": "complete",
+                        "delegate_expression": "${approvalListener}",
+                        "fields": {"source": "flowmind"},
+                    }
+                ],
+                "execution_listeners": [
+                    {"event": "start", "class_name": "com.example.AuditListener"}
+                ],
+                "extension_properties": {"screen": "compact"},
+            },
+            {"id": "end", "type": "END_EVENT", "name": "结束"},
+        ],
+        "edges": [
+            {"source": "start", "target": "approve"},
+            {"source": "approve", "target": "end"},
+        ],
+    }
+
+    root = etree.fromstring(generate_bpmn_xml(structure, {"code": "test"}).encode())
+
+    task_listener = root.xpath(
+        "//bpmn:userTask[@id='approve']/bpmn:extensionElements/flowable:taskListener",
+        namespaces=NS,
+    )[0]
+    assert task_listener.get("event") == "complete"
+    assert task_listener.get("delegateExpression") == "${approvalListener}"
+    assert task_listener.xpath("string(flowable:field/@name)", namespaces=NS) == "source"
+    assert task_listener.xpath("string(flowable:field/flowable:string)", namespaces=NS) == "flowmind"
+    execution_listener = root.xpath(
+        "//bpmn:userTask[@id='approve']/bpmn:extensionElements/flowable:executionListener",
+        namespaces=NS,
+    )[0]
+    assert execution_listener.get("class") == "com.example.AuditListener"
+    prop = root.xpath(
+        "//bpmn:userTask[@id='approve']/bpmn:extensionElements/flowable:properties/flowable:property",
+        namespaces=NS,
+    )[0]
+    assert (prop.get("name"), prop.get("value")) == ("screen", "compact")
 
 
 def _branching_xml() -> etree._Element:
