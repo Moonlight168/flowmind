@@ -95,7 +95,7 @@ def generate_node(state: AppState) -> AppState:
 
     result = _generate_design_result(
         design_type, current_form_data, conversation_history, mode,
-        bool(state.get("allow_full_replace")) or _requests_full_replace(user_input)
+        bool(state.get("allow_full_replace"))
     )
 
     logger.debug(f"[design] LLM 返回: {str(result)[:200]}")
@@ -219,14 +219,6 @@ def _invalid_operation_result(operations: list[dict]) -> dict:
     }
 
 
-def _requests_full_replace(user_input: str) -> bool:
-    """Recognize the explicit user command for a complete redesign."""
-    return any(
-        phrase in user_input
-        for phrase in ("全部重新生成", "整体重做", "整体重建", "全量重建", "重做整张")
-    )
-
-
 def _materialize_result(
     result: dict,
     design_type: str,
@@ -236,17 +228,6 @@ def _materialize_result(
     allow_full_replace: bool = False,
 ) -> dict:
     operations = result["operations"]
-    baseline = current_form_data or {}
-    if (
-        design_type == "flow_design"
-        and mode == "design"
-        and any(operation.get("op") == "replace_graph" for operation in operations)
-        and not (
-            allow_full_replace
-            or (not baseline.get("nodes") and not baseline.get("edges"))
-        )
-    ):
-        raise ValueError("当前流程不是空流程，整体重生成需要明确开启全部重新生成")
     materialized = apply_design_operations(
         design_type, current_form_data, operations, mode=mode
     )
