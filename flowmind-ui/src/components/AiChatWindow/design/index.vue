@@ -870,13 +870,33 @@ async function materializePendingEntities(formData, pending) {
   return result
 }
 
+/** 比较流程业务结构，忽略 XML 格式化和画布布局变化，避免点击/拖动画布误触发确认。 */
+function normalizeBpmnXml(xml) {
+  if (typeof xml !== 'string' || !xml.trim()) return ''
+  try {
+    const document = new DOMParser().parseFromString(xml, 'application/xml')
+    if (document.querySelector('parsererror')) return xml.trim()
+    document.querySelectorAll('*').forEach((node) => {
+      if (node.localName === 'BPMNDiagram') node.remove()
+    })
+    return new XMLSerializer().serializeToString(document.documentElement)
+      .replace(/>\s+</g, '><')
+      .trim()
+  } catch {
+    return xml.trim()
+  }
+}
+
 async function applyPreview() {
   if (!pendingPreview.value) return
   // 生成期间画布若被手动修改过，应用会整份覆盖这些改动——先提醒用户
   if (typeof props.getCurrentBaseline === 'function' && previewBaseline.value?.bpmnXml) {
     try {
       const fresh = await props.getCurrentBaseline()
-      if (fresh?.bpmnXml && fresh.bpmnXml !== previewBaseline.value.bpmnXml) {
+      if (
+        fresh?.bpmnXml &&
+        normalizeBpmnXml(fresh.bpmnXml) !== normalizeBpmnXml(previewBaseline.value.bpmnXml)
+      ) {
         await ElMessageBox.confirm(
           '画布在 AI 生成期间被手动修改过，应用变更将覆盖这些改动，继续吗？',
           '注意',
@@ -1136,6 +1156,7 @@ defineExpose({
   font-weight: 600;
   color: #303133;
 }
+
 .change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
 .change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
 /* 每个动作一块，左侧色条区分新增/修改/删除/替换 */

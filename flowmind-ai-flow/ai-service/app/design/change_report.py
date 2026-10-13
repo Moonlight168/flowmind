@@ -159,14 +159,17 @@ def _update_widget_item(
     old_widget = find_widget(old_widgets, widget_name) or {}
     old_options = old_widget.get("options") or {}
     changes = operation.get("changes") or {}
-    parts = [
-        f"{_WIDGET_ATTRS.get(attr, attr)} {_format(old_options.get(attr))} → {_format(value)}"
-        for attr, value in (changes.get("options") or {}).items()
-    ]
+    parts = []
+    for attr, value in (changes.get("options") or {}).items():
+        old_value = old_options.get(attr)
+        if old_value != value:
+            parts.append(
+                f"{_WIDGET_ATTRS.get(attr, attr)} {_format(old_value)} → {_format(value)}"
+            )
     parts += [
         f"{_WIDGET_ATTRS.get(attr, attr)} {_format(old_widget.get(attr))} → {_format(value)}"
         for attr, value in changes.items()
-        if attr != "options"
+        if attr != "options" and old_widget.get(attr) != value
     ]
     label = _widget_display(old_widgets, widget_name)
     return f"{label} · {'、'.join(parts)}" if parts else f"{label} · 内容调整"
@@ -177,10 +180,13 @@ def _update_node_item(
 ) -> str:
     node_id = operation.get("node_id")
     old_node = _find_node(old_nodes, node_id) or {}
-    parts = [
-        f"{_NODE_ATTRS.get(attr, attr)} {_format(old_node.get(attr))} → {_format(value)}"
-        for attr, value in (operation.get("changes") or {}).items()
-    ]
+    parts = []
+    for attr, value in (operation.get("changes") or {}).items():
+        old_value = old_node.get(attr)
+        if old_value != value:
+            parts.append(
+                f"{_NODE_ATTRS.get(attr, attr)} {_format(old_value)} → {_format(value)}"
+            )
     label = str(old_node.get("name") or node_id or "?")
     return f"{label} · {'、'.join(parts)}" if parts else label
 
