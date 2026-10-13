@@ -102,7 +102,17 @@
           :class="`is-${item.action}`"
         >
           <span class="change-preview__op-label">{{ item.label }}</span>
-          <span class="change-preview__op-detail">{{ item.detail }}</span>
+          <div class="change-preview__op-detail">
+            <div
+              v-for="(row, rowIndex) in formatChangeDetails(item)"
+              :key="rowIndex"
+              class="change-preview__detail-row"
+              :class="{ 'is-plain': !row.title }"
+            >
+              <span v-if="row.title" class="change-preview__detail-title">{{ row.title }}</span>
+              <span class="change-preview__detail-changes">{{ row.changes }}</span>
+            </div>
+          </div>
         </li>
       </ul>
       <!-- 分类 / 流程基本信息：字段少，沿用两列 diff -->
@@ -759,6 +769,22 @@ function formatPreviewValue(value) {
   return value === undefined || value === null || value === '' ? '未设置' : String(value)
 }
 
+function formatChangeDetails(item) {
+  const details = String(item?.detail || '')
+    .split(item?.action === 'update' ? '；' : '\u0000')
+    .map((detail) => detail.trim())
+    .filter(Boolean)
+  return details.map((detail) => {
+    const separatorIndex = detail.indexOf(' · ')
+    return separatorIndex === -1
+      ? { title: '', changes: detail }
+      : {
+          title: detail.slice(0, separatorIndex),
+          changes: detail.slice(separatorIndex + 3)
+        }
+  })
+}
+
 function choiceLabel(choice) {
   if (typeof choice !== 'object' || choice === null) return String(choice)
   const label = choice.label || choice.name || choice.value || choice.code || choice.id
@@ -1169,28 +1195,49 @@ defineExpose({
 }
 
 .change-preview__pending { margin-top: 4px; font-size: 12px; color: #b88230; }
-.change-preview__operations { margin: 8px 0; max-height: 96px; overflow: auto; font-size: 12px; }
+.change-preview__operations {
+  margin: 8px 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+}
 /* 每个动作一块，左侧色条区分新增/修改/删除/替换 */
 .change-preview__operations li {
-  padding: 4px 0 4px 8px;
+  padding: 7px 8px;
+  margin-bottom: 6px;
   border-left: 2px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
   color: #303133;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 /* 动作标题与明细分行：挤在一行时，长列表折行后很难扫读 */
 .change-preview__op-label {
   display: block;
-  font-weight: 500;
+  font-weight: 600;
 }
 .change-preview__op-detail {
-  display: block;
-  padding-left: 8px;
+  display: grid;
+  gap: 5px;
+  margin-top: 5px;
+}
+.change-preview__detail-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 120px) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.change-preview__detail-title {
+  color: #303133;
+  font-weight: 500;
+}
+.change-preview__detail-changes {
   color: #606266;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+}
+.change-preview__detail-row.is-plain {
+  display: block;
 }
 .change-preview__operations li.is-add { border-left-color: #67c23a; }
 .change-preview__operations li.is-update { border-left-color: #e6a23c; }

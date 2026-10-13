@@ -95,6 +95,20 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
     </tr>
 </table>
 
+### AI 流程设计演示
+
+下面的演示展示了从自然语言描述到 BPMN 变更预览的完整过程：输入业务需求、由 AI 分析现有流程、生成节点配置变更，并由用户确认后应用。
+
+<p align="center">
+  <img src="./assets/demos/ai-design-flow.gif" alt="AI 流程设计操作演示" width="960" />
+</p>
+
+<p align="center">
+  <img src="./assets/demos/ai-design-preview.png" alt="AI 流程设计变更预览" width="960" />
+</p>
+
+> AI 只生成待确认的变更预览，用户点击“应用变更”后才会写入流程画布。
+
 ### OA 工作台
 
 <table>
@@ -239,4 +253,4 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
 
-**最后更新**: 2026-09-30
+**最后更新**: 2026-10-13
