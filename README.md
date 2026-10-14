@@ -210,7 +210,6 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 > 注意：AI 服务强依赖 Nacos 注册，需先启动 Docker 容器（`bin/start.bat` 已按序处理）。
-> Windows 本地手动运行 AI 若报 `SettingsError: field "prompt"`，是 cmd 遗留的 `PROMPT` 环境变量干扰 pydantic-settings，先执行 `set "PROMPT="` 再启动。
 
 ## 服务端口
 
