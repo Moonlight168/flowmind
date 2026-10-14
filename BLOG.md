@@ -93,7 +93,9 @@ FlowMind 2.0 重磅推出 AI 智能流程设计功能，让 AI 成为你的流�
 
 核心能力基于 FastAPI + LangGraph 构建，采用 design → review → format 三阶段工作流，自动调用通义千问、DeepSeek 等国产大模型。
 
-![AI设计分类](flowmind-ui/src/assets/images/README/ai设计分类.png)
+![AI生成流程基本信息](assets/demos/ai-basic-info-design.png)
+![AI表单设计](assets/demos/ai-form-design.png)
+![AI流程设计](assets/demos/ai-flow-design.png)
 ![全局AI助手](flowmind-ui/src/assets/images/README/全局ai助手.png)
 ![对话历史管理](flowmind-ui/src/assets/images/README/对话历史管理.png)
 
@@ -178,15 +180,15 @@ FlowMind 2.0 重磅推出 AI 智能流程设计功能，让 AI 成为你的流�
 
 ## 🖼️ AI 智能设计功能预览（2.0 新增）
 
-| AI 设计分类                                                                 | 全局 AI 助手                                                                 |
+| AI 基本信息生成                                                                 | 全局 AI 助手                                                                 |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![AI设计分类](flowmind-ui/src/assets/images/README/ai设计分类.png) | ![全局AI助手](flowmind-ui/src/assets/images/README/全局ai助手.png) |
-| - 输入需求描述，AI 自动生成分类 | - 贯穿全系统的 AI 辅助，随时代入 |
+| ![AI基本信息生成](assets/demos/ai-basic-info-design.png) | ![全局AI助手](flowmind-ui/src/assets/images/README/全局ai助手.png) |
+| - 输入需求描述，AI 自动生成流程基本信息 | - 贯穿全系统的 AI 辅助，随时代入 |
 
-| 对话历史管理                                                                 | 表单设计 AI 按钮                                                                 |
+| AI 表单设计                                                                 | AI 流程设计                                                                 |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![对话历史管理](flowmind-ui/src/assets/images/README/对话历史管理.png) | ![表单设计新增AI设计按钮](flowmind-ui/src/assets/images/README/表单设计新增ai设计按钮.png) |
-| - 对话自动保存，支持回溯继续 | - 一键唤起 AI 设计表单 |
+| ![AI表单设计](assets/demos/ai-form-design.png) | ![AI流程设计](assets/demos/ai-flow-design.png) |
+| - 生成字段并预览变更 | - 生成节点配置并预览变更 |
 
 ## 应用场景
 

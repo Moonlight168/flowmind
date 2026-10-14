@@ -87,8 +87,8 @@ npm run build:prod
         <td><img src="./src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
     </tr>
     <tr>
-        <td><img src="./src/assets/images/README/表单设计新增ai设计按钮.png" alt="表单设计AI按钮" width="100%"/><br/><div style="text-align: center;">表单设计 AI 按钮</div></td>
-        <td><img src="./src/assets/images/README/流程设计新增ai设计按钮.png" alt="流程设计AI按钮" width="100%"/><br/><div style="text-align: center;">流程设计 AI 按钮</div></td>
+        <td><img src="../assets/demos/ai-form-design.png" alt="AI表单设计" width="100%"/><br/><div style="text-align: center;">AI 表单设计</div></td>
+        <td><img src="../assets/demos/ai-flow-design.png" alt="AI流程设计" width="100%"/><br/><div style="text-align: center;">AI 流程设计</div></td>
     </tr>
 </table>
 

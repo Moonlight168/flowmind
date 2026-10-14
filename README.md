@@ -90,28 +90,24 @@ FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息�
 
 输入业务描述后，AI 自动整理流程分类、名称和标识等基础信息，减少重复录入。
 
+<p align="center">
+  <img src="./assets/demos/ai-basic-info-design.png" alt="AI 生成流程基本信息" width="960" />
+</p>
+
 #### 2. 表单设计
 
 根据业务描述生成可编辑表单，字段、校验和布局仍可在表单设计器中继续调整。
+
+<p align="center">
+  <img src="./assets/demos/ai-form-design.png" alt="AI 表单设计与变更预览" width="960" />
+</p>
 
 #### 3. 流程设计
 
 用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
 
 <p align="center">
-  <img src="./assets/demos/ai-design-prompt.png" alt="AI 流程设计窗口" width="960" />
-</p>
-
-<p align="center">
-  <img src="./assets/demos/ai-design-workflow.gif" alt="AI 流程设计动态演示" width="960" />
-</p>
-
-#### 4. 变更预览与确认
-
-AI 不会直接覆盖流程。系统先按节点分组展示变更内容，用户确认后才应用到画布，降低误操作风险。
-
-<p align="center">
-  <img src="./assets/demos/ai-design-preview.png" alt="AI 流程设计变更预览" width="960" />
+  <img src="./assets/demos/ai-flow-design.png" alt="AI 流程设计与变更预览" width="960" />
 </p>
 
 ### OA 工作台
