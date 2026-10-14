@@ -1,148 +1,219 @@
-# FlowMind：让业务描述直接变成可运行的审批流程
+# 开源推荐｜FlowMind：用 AI 生成 Flowable 审批流程，Vue3 + Spring Cloud + LangGraph 全栈实现
 
-FlowMind 是一个开源的智能流程审批平台，基于 RuoYi-Cloud、Flowable 与 Vue 3 构建，并通过独立的 FastAPI + LangGraph 服务提供 AI 辅助设计能力。
+> 关键词：AI 工作流、Flowable、BPMN、LangGraph、Spring Cloud、Vue3、智能审批、表单设计、开源项目
 
-它解决的不只是“画一张流程图”：从流程分类、基本信息、业务表单到 BPMN 节点配置，用户都可以先用自然语言描述需求，再审阅 AI 给出的结构化变更，确认后应用到可视化设计器中继续调整。
+如果你正在开发 OA、请假报销、采购审批或合同流转系统，应该遇到过这些问题：业务人员能说清楚需求，却不熟悉 BPMN；开发人员需要反复配置节点、审批人和表单；流程稍有变化，又要重新修改和验证。
 
-## 为什么做 FlowMind
+**FlowMind 尝试把这段重复工作交给 AI。**
 
-传统工作流平台通常要求使用者同时理解 BPMN、表单模型、审批人规则和引擎扩展属性。业务人员表达需求不难，把需求完整翻译成可执行模型才是最耗时的部分。
+用户只需描述业务需求，AI 就能辅助生成流程分类、基本信息、业务表单和 BPMN 流程。每次结果不会直接覆盖设计，而是先展示结构化变更，确认后再应用到可视化画布。
 
-FlowMind 将 AI 放在设计器旁边，而不是取代设计器：
+- GitHub：[https://github.com/Moonlight168/flowmind](https://github.com/Moonlight168/flowmind)
+- Gitee：[https://gitee.com/wish168/flowmind](https://gitee.com/wish168/flowmind)
+- 开源协议：MIT License
 
-- 用户负责描述业务目标和确认结果。
-- AI 查询现有分类、表单、角色与流程模型，生成结构化操作。
-- 系统先展示变更预览，确认后才更新画布。
-- 生成结果仍可在 BPMN-JS 和 VForm 3 中手动编辑。
+如果这个项目对你有帮助，欢迎点一个 **Star**。你的反馈也会帮助 FlowMind 继续完善 AI 生成质量与流程设计体验。
 
-这种方式兼顾生成效率与可控性，也避免 AI 直接覆盖当前设计。
+## 一、FlowMind 是什么？
 
-## 四类 AI 设计能力
+FlowMind 是一个开源的智能流程审批平台，基于 RuoYi-Cloud、Flowable 和 Vue 3 构建，使用 FastAPI + LangGraph 提供 AI 辅助设计能力。
 
-### 1. 流程分类
+它覆盖了流程设计、发布和执行的完整链路：
 
-根据业务用途生成分类名称、标识和说明，为后续流程模型建立清晰的归属。
+- 流程分类与模型管理
+- BPMN 2.0 可视化设计
+- 业务表单设计与绑定
+- 流程部署、发起与审批
+- 待办、已办、待签收和我发起的流程
+- 申请草稿、运行轨迹与审批记录
+- AI 分类、基本信息、表单和流程设计
+- Langfuse 可观测与黄金测试集回归
 
-![AI 流程分类设计](assets/demos/ai-category-design.png)
+FlowMind 的目标并不是让 AI 代替设计器，而是让 AI 成为设计器中的协作者：AI 负责理解需求和生成候选变更，用户保留最终决定权。
 
-### 2. 基本信息
+## 二、从一句业务描述到可编辑流程
 
-从自然语言中整理流程名称、模型标识、所属分类与业务描述，减少重复录入。
+传统方式通常要依次创建分类、填写模型信息、设计表单、绘制 BPMN、配置审批人，再检查每个节点是否满足 Flowable 的运行要求。
 
-![AI 流程基本信息生成](assets/demos/ai-basic-info-design.png)
+FlowMind 将这条链路拆成四类 AI 设计能力。
 
-### 3. 表单设计
+### 1. 流程分类设计
 
-生成可编辑的表单字段、选项、校验规则和布局配置；已有相似表单可以复用，需要独立表单时也能作为新设计继续完善。
+输入分类用途后，AI 生成分类名称、标识和说明，并在写入前展示字段变化。
 
-![AI 表单设计](assets/demos/ai-form-design.png)
+![FlowMind AI 流程分类设计](assets/demos/ai-category-design.png)
 
-### 4. 流程设计
+### 2. 流程基本信息生成
 
-生成或修改 BPMN 节点、连线、审批人、表单绑定、监听器和扩展属性。变更按节点归纳展示，用户确认后再应用到画布。
+AI 从业务描述中整理流程名称、模型标识、所属分类和说明，降低重复录入成本。
 
-![AI 流程设计](assets/demos/ai-flow-design.png)
+![FlowMind AI 流程基本信息生成](assets/demos/ai-basic-info-design.png)
 
-## 不止是流程生成
+### 3. 可编辑表单生成
 
-FlowMind 覆盖从设计到执行的完整链路：
+AI 不只生成字段名称，还会考虑字段类型、选项、必填校验和布局配置，结果可以继续在 VForm 3 设计器中调整。
 
-- 可视化 BPMN 建模、流程定义与部署。
-- 可视化表单设计与业务表单绑定。
-- 待办、已办、候选任务和我发起的流程。
-- 流程详情、运行轨迹与审批记录。
-- 流程申请草稿的保存、恢复与提交。
-- 用户、角色、部门、菜单和操作日志等后台管理能力。
-- Langfuse 链路观测与黄金测试集回归。
+![FlowMind AI 表单设计](assets/demos/ai-form-design.png)
 
-## 技术架构
+### 4. BPMN 流程生成与修改
+
+用户可以描述完整审批路径，也可以要求局部增加节点、调整审批人或修改表单绑定。AI 查询系统中的真实分类、角色、表单和模型后，生成结构化操作，再由用户确认是否应用。
+
+![FlowMind AI 流程设计](assets/demos/ai-flow-design.png)
+
+## 三、为什么先预览，再应用？
+
+让大模型直接重写 BPMN XML 看起来简单，但在真实系统中风险很高：节点 ID 可能失效、已有配置可能丢失、表单或角色也可能并不存在。
+
+FlowMind 使用“生成操作 → 校验操作 → 展示预览 → 用户确认 → 更新画布”的方式处理设计变更：
+
+```text
+自然语言需求
+    ↓
+ReAct Agent 查询真实业务数据
+    ↓
+生成结构化设计操作
+    ↓
+后端校验节点、字段和引用
+    ↓
+前端按字段或节点展示变更
+    ↓
+用户确认后应用到设计器
+```
+
+这样既能保留 AI 的生成效率，又能让每次修改可见、可确认、可继续编辑。
+
+## 四、技术架构
 
 ![FlowMind 系统架构](assets/diagrams/flowmind-architecture.png)
 
-| 模块 | 主要技术 | 职责 |
+FlowMind 由三个主要子项目组成：
+
+| 子项目 | 技术栈 | 主要职责 |
 | --- | --- | --- |
 | [flowmind-ui](flowmind-ui/README.md) | Vue 3、Element Plus、BPMN-JS、VForm 3 | 管理后台、审批工作台、流程与表单设计器 |
-| [flowmind-cloud](flowmind-cloud/README.md) | Spring Boot、Spring Cloud、Flowable | 网关、认证、系统数据与流程执行 |
-| [flowmind-ai-flow](flowmind-ai-flow/README.md) | FastAPI、LangGraph、LangChain | ReAct 生成、操作校验、会话状态与评测 |
+| [flowmind-cloud](flowmind-cloud/README.md) | Spring Boot、Spring Cloud、Flowable | 网关、认证、系统数据和流程执行 |
+| [flowmind-ai-flow](flowmind-ai-flow/README.md) | FastAPI、LangGraph、LangChain | ReAct 推理、操作校验、会话状态和评测 |
 
-典型请求链路如下：
+典型调用链路：
 
 ```text
-浏览器 → Gateway → Java 微服务
-              └→ AI 服务 → 模型提供商
+浏览器 → Gateway → Java 微服务 → Flowable / MySQL / Redis
+              └→ AI 服务 → 大模型提供商
                          └→ Langfuse（可选）
 ```
 
-Gateway 统一校验用户身份。AI 服务接收可信用户上下文，并通过后端接口查询实际分类、表单、角色和模型数据，不在提示词中维护业务白名单。
+Gateway 负责统一身份校验，并把可信用户上下文传递给 AI 服务。AI Agent 通过后端接口查询实际业务数据，不在提示词里维护容易过期的角色、表单或节点白名单。
 
-## 快速启动
+## 五、除了 AI，还包含哪些功能？
 
-### 完整服务
+### 审批工作台
 
-先在项目根目录构建 Java 服务和前端产物：
+- 发起流程并填写业务表单
+- 统一处理待办、已办和待签收任务
+- 查看我发起的流程及运行状态
+- 查看审批意见、流程轨迹和历史节点
+- 保存并恢复未提交的申请草稿
+
+### 后台流程管理
+
+- 流程分类管理
+- 流程模型设计
+- 表单设计与维护
+- 流程定义部署和版本管理
+- 用户、角色、部门、菜单和日志管理
+
+### AI 工程化能力
+
+- ReAct 工具调用与多轮会话
+- 结构化输出与操作级校验
+- Langfuse Trace 和 Prompt 观测
+- 黄金测试集与回归评测
+- 会话版本、草稿状态和未应用变更管理
+
+## 六、Docker 快速启动
+
+### 方式一：启动完整服务
+
+在项目根目录构建 Java 服务和前端产物：
 
 ```bat
 bin\build.bat
 ```
 
-再启动完整 Docker 服务：
+启动完整 Docker 编排：
 
 ```bash
 cd docker/flowmind
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-访问 <http://localhost:18088>。
+浏览器访问：<http://localhost:18088>
 
-### 开发环境
+### 方式二：开发环境
 
-开发编排默认启动前端、AI 服务及 AI 设计链路所需的 Java 服务，并支持 Vue 与 FastAPI 源码热更新：
+开发编排默认启动前端、AI 服务和 AI 设计链路所需的 Java 服务，并支持 Vue 与 FastAPI 源码热更新：
 
 ```bash
 cd docker/flowmind
 docker compose up -d --remove-orphans
 ```
 
-File、Gen、Job 和 Monitor 等非必要 Java 服务使用可选 profile：
+按需启动其他 Java 服务：
 
 ```bash
 docker compose --profile optional up -d
 ```
 
-Langfuse 作为独立基础设施按需启动：
+Langfuse 使用独立编排：
 
 ```bash
 docker compose -f docker-compose.langfuse.yml up -d
 ```
 
-## 本地服务入口
+## 七、本地服务地址
 
 | 服务 | 地址 |
 | --- | --- |
-| FlowMind | <http://localhost:18088> |
+| FlowMind Web | <http://localhost:18088> |
 | Gateway | <http://localhost:9001> |
 | Nacos | <http://localhost:19090/nacos> |
 | MySQL | `localhost:13306` |
 | Redis | `localhost:16379` |
 | Langfuse | <http://localhost:13001> |
 
-生产编排不会把 AI 容器端口直接暴露到宿主机。前端统一通过 Gateway 的 `/flowmind-ai/**` 路径访问 AI 服务。
+生产编排不会直接暴露 AI 容器端口。前端统一通过 Gateway 的 `/flowmind-ai/**` 路径访问 AI 服务。
 
-## 适用场景
+## 八、这个项目适合谁？
 
-- 请假、报销、采购、合同等企业审批流程。
-- 需要嵌入现有系统的流程与表单设计能力。
-- 工作流、微服务与 AI Agent 的学习和二次开发。
-- 需要通过黄金测试集持续验证生成质量的 AI 应用。
+- 正在开发 OA、审批中心或企业流程平台的开发者
+- 想学习 Flowable 与 BPMN 2.0 落地方式的同学
+- 想实践 Vue 3 + Spring Cloud 微服务项目的全栈开发者
+- 想了解 LangGraph ReAct Agent、结构化输出和评测体系的 AI 应用开发者
+- 需要在现有业务系统中集成流程与表单设计能力的团队
 
-## 继续了解
+## 九、后续计划
 
-- [中文 README](README.md)：功能总览、截图与完整启动说明。
-- [English README](README_EN.md)：English overview and setup guide.
-- [GitHub 仓库](https://github.com/Moonlight168/flowmind)
-- [Gitee 仓库](https://gitee.com/wish168/flowmind)
+FlowMind 仍在持续迭代，后续会继续关注：
 
-欢迎通过 Issue 反馈问题或提出建议。提交代码前请确保密钥、本地 `.env` 和未脱敏业务数据不会进入版本库。
+- 提升复杂条件分支和多实例任务的生成质量
+- 完善表单与流程节点之间的语义匹配
+- 扩充黄金测试集和自动化回归场景
+- 改进 AI 变更预览的可读性
+- 优化 Docker 开发体验与部署文档
+
+## 十、写在最后
+
+工作流系统真正困难的地方，不只是把节点画出来，而是让流程、表单、人员规则和运行配置能够长期协同演进。
+
+FlowMind 希望用一种更稳妥的方式把 AI 引入流程设计：不隐藏变更、不伪造成功，也不剥夺用户对最终模型的控制权。
+
+如果你也在研究 **Flowable、BPMN、LangGraph 或 AI 工作流设计**，欢迎体验项目并提交 Issue：
+
+- GitHub：[https://github.com/Moonlight168/flowmind](https://github.com/Moonlight168/flowmind)
+- Gitee：[https://gitee.com/wish168/flowmind](https://gitee.com/wish168/flowmind)
+
+觉得项目有价值，欢迎 **Star、Fork 或分享给同样在做工作流与 AI 应用的朋友**。每一个真实反馈，都会成为项目继续迭代的动力。
 
 ## 开源协议
 
