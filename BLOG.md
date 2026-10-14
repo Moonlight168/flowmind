@@ -1,245 +1,157 @@
-# FlowMind：基于RuoYi-Cloud的毕业设计级工作流管理系统
+# FlowMind：让业务描述直接变成可运行的审批流程
 
-## 📖 项目概述
+FlowMind 是一个开源的智能流程审批平台，基于 RuoYi-Cloud、Flowable 与 Vue 3 构建，并通过独立的 FastAPI + LangGraph 服务提供 AI 辅助设计能力。
 
-FlowMind 是一个基于 RuoYi-Cloud 框架扩展开发的工作流管理系统，集成了 Flowable 工作流引擎。核心亮点是 **AI 智能流程设计**——通过自然语言描述需求，AI 自动生成流程分类、BPMN 流程结构和表单，让不懂 BPMN 的用户也能快速设计工作流。
+它解决的不只是“画一张流程图”：从流程分类、基本信息、业务表单到 BPMN 节点配置，用户都可以先用自然语言描述需求，再审阅 AI 给出的结构化变更，确认后应用到可视化设计器中继续调整。
 
-系统新增了审批中心和草稿箱功能，支持完整的流程生命周期管理。这是一个完全开源的毕业设计级项目，适合作为计算机、软件工程等相关专业的毕业设计参考或直接使用。
+<p align="center">
+  <a href="./assets/demos/flowmind-ai-design-demo.mp4">
+    <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI 设计演示" width="960" />
+  </a>
+</p>
 
-## 🎓 为什么选择FlowMind作为毕业设计？
+<p align="center"><a href="./assets/demos/flowmind-ai-design-demo.mp4">▶ 查看 AI 分类、基本信息、表单与流程设计演示</a></p>
 
-每年毕业季，是不是都在为选什么题目而纠结？想找一个既能展示技术实力，又能在答辩时让老师眼前一亮的项目？
+## 为什么做 FlowMind
 
-别再纠结了！FlowMind就是你的最佳选择！这是一个**专为毕业设计而生**的工作流管理系统，集成了当下最火的技术栈，功能全面，代码质量高，文档齐全，让你轻松搞定毕业设计，稳拿高分！
+传统工作流平台通常要求使用者同时理解 BPMN、表单模型、审批人规则和引擎扩展属性。业务人员表达需求不难，把需求完整翻译成可执行模型才是最耗时的部分。
 
-1. **技术栈全面**：涵盖前后端主流技术，包括Vue3、Spring Cloud、Flowable等，展示全面的技术能力
-2. **功能完整**：不仅有基础的用户权限管理，还有复杂的工作流引擎，满足毕业设计的功能要求
-3. **文档齐全**：提供详细的部署和使用文档，降低学习和实现难度
-4. **开源免费**：完全开源，无任何商业限制，可以放心使用和修改
-5. **扩展性强**：基于成熟的RuoYi-Cloud框架，便于二次开发和功能扩展
+FlowMind 将 AI 放在设计器旁边，而不是取代设计器：
 
-## 🏗️ 技术架构
+- 用户负责描述业务目标和确认结果。
+- AI 查询现有分类、表单、角色与流程模型，生成结构化操作。
+- 系统先展示变更预览，确认后才更新画布。
+- 生成结果仍可在 BPMN-JS 和 VForm 3 中手动编辑。
 
-### 前端技术栈
+这种方式兼顾生成效率与可控性，也避免 AI 直接覆盖当前设计。
 
-- **Vue3**：采用最新的Vue3 Composition API，提供更好的代码组织和复用性
-- **Element Plus**：企业级UI组件库，提供丰富的组件和主题定制能力
-- **Vite**：极速的前端构建工具，提升开发体验
+## 四类 AI 设计能力
 
-### 后端技术栈
+### 1. 流程分类
 
-- **Spring Boot 3**：最新的Spring Boot版本，提供更好的性能和开发体验
-- **Spring Cloud Alibaba**：国内领先的微服务解决方案，包含Nacos、Sentinel、Seata等组件
-- **Flowable**：轻量级的工作流引擎，支持BPMN 2.0标准
-- **MyBatis-Plus**：增强的MyBatis框架，简化数据库操作
-- **MySQL**：稳定可靠的关系型数据库
-- **Redis**：高性能缓存，用于权限认证和热点数据缓存
+根据业务用途生成分类名称、标识和说明，为后续流程模型建立清晰的归属。
 
-### AI 服务技术栈
+![AI 流程分类设计](assets/demos/ai-category-design.png)
 
-- **FastAPI**：高性能 Python Web 框架
-- **LangChain / LangGraph**：LLM 应用开发框架和基于图的工作流引擎
-- **OpenAI 兼容接口**：支持通义千问、DeepSeek、Kimi 等国产大模型
-- **Redis Checkpoint**：会话状态持久化，支持中断恢复
+### 2. 基本信息
 
-## 🎯 核心功能
+从自然语言中整理流程名称、模型标识、所属分类与业务描述，减少重复录入。
 
-### RuoYi-Cloud基础功能
+![AI 流程基本信息生成](assets/demos/ai-basic-info-design.png)
 
-FlowMind保留了RuoYi-Cloud的全部17项基础功能，包括：
+### 3. 表单设计
 
-- 用户管理、部门管理、岗位管理
-- 菜单管理、角色管理、字典管理
-- 参数管理、通知公告、操作日志
-- 登录日志、在线用户、定时任务
-- 代码生成、系统接口、服务监控
-- 在线构建器、连接池监视
+生成可编辑的表单字段、选项、校验规则和布局配置；已有相似表单可以复用，需要独立表单时也能作为新设计继续完善。
 
-### FlowMind创新功能
+![AI 表单设计](assets/demos/ai-form-design.png)
 
-#### 1. 审批中心
+### 4. 流程设计
 
-提供统一的流程审批管理界面，包括：
+生成或修改 BPMN 节点、连线、审批人、表单绑定、监听器和扩展属性。变更按节点归纳展示，用户确认后再应用到画布。
 
-- **待办任务**：显示当前用户需要处理的任务列表
-- **已办任务**：显示当前用户已经处理完成的任务列表
-- **待签任务**：显示当前用户可以签收的任务列表
-- **我的流程**：显示当前用户发起的流程实例列表
-- **流程详情**：查看流程实例的详细信息、流程图和审批记录
-- **用户审批页面**：提供直观的流程审批操作界面，支持批量审批和审批意见填写
+![AI 流程设计](assets/demos/ai-flow-design.png)
 
-#### 2. 草稿箱
+## 不止是流程生成
 
-支持流程草稿的保存、编辑和管理：
+FlowMind 覆盖从设计到执行的完整链路：
 
-- **草稿列表**：显示用户保存的流程草稿列表
-- **草稿编辑**：支持编辑已保存的草稿，继续完善流程申请
-- **草稿删除**：支持删除不需要的草稿
-- **草稿转正**：支持将草稿直接转换为正式流程申请
+- 可视化 BPMN 建模、流程定义与部署。
+- 可视化表单设计与业务表单绑定。
+- 待办、已办、候选任务和我发起的流程。
+- 流程详情、运行轨迹与审批记录。
+- 流程申请草稿的保存、恢复与提交。
+- 用户、角色、部门、菜单和操作日志等后台管理能力。
+- Langfuse 链路观测与黄金测试集回归。
 
-#### 3. AI 智能流程设计（2.0 新增）
+## 技术架构
 
-FlowMind 2.0 重磅推出 AI 智能流程设计功能，让 AI 成为你的流程设计助手：
+![FlowMind 系统架构](assets/diagrams/flowmind-architecture.png)
 
-**AI 设计分类**：描述业务场景，AI 自动生成分类名称、标识符和审批节点配置
+| 模块 | 主要技术 | 职责 |
+| --- | --- | --- |
+| [flowmind-ui](flowmind-ui/README.md) | Vue 3、Element Plus、BPMN-JS、VForm 3 | 管理后台、审批工作台、流程与表单设计器 |
+| [flowmind-cloud](flowmind-cloud/README.md) | Spring Boot、Spring Cloud、Flowable | 网关、认证、系统数据与流程执行 |
+| [flowmind-ai-flow](flowmind-ai-flow/README.md) | FastAPI、LangGraph、LangChain | ReAct 生成、操作校验、会话状态与评测 |
 
-**AI 设计流程**：输入流程需求，AI 自动生成 BPMN 2.0 结构，支持条件分支、并行审批，直接导入 Flowable 即可使用
+典型请求链路如下：
 
-**AI 设计表单**：根据流程自动生成表单字段，输出 v-form-designer 兼容的 JSON 格式
+```text
+浏览器 → Gateway → Java 微服务
+              └→ AI 服务 → 模型提供商
+                         └→ Langfuse（可选）
+```
 
-**全局 AI 助手**：贯穿整个系统的 AI 辅助，随时呼出，支持多轮对话优化设计结果
+Gateway 统一校验用户身份。AI 服务接收可信用户上下文，并通过后端接口查询实际分类、表单、角色和模型数据，不在提示词中维护业务白名单。
 
-**对话历史管理**：与 AI 的对话自动保存，支持回溯和继续对话，上下文理解让修正更精准
+## 快速启动
 
-核心能力基于 FastAPI + LangGraph 构建，采用 design → review → format 三阶段工作流，自动调用通义千问、DeepSeek 等国产大模型。
+### 完整服务
 
-![AI生成流程基本信息](assets/demos/ai-basic-info-design.png)
-![AI表单设计](assets/demos/ai-form-design.png)
-![AI流程设计](assets/demos/ai-flow-design.png)
-![全局AI助手](flowmind-ui/src/assets/images/README/全局ai助手.png)
-![对话历史管理](flowmind-ui/src/assets/images/README/对话历史管理.png)
+先在项目根目录构建 Java 服务和前端产物：
 
-## 🚀 毕业设计使用指南
+```bat
+bin\build.bat
+```
 
-### 🔗 项目地址
+再启动完整 Docker 服务：
 
-### 🌟 GitHub
+```bash
+cd docker/flowmind
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-[https://github.com/Moonlight168/flowmind](https://github.com/Moonlight168/flowmind)
+访问 <http://localhost:18088>。
 
-### 🚀 Gitee
+### 开发环境
 
-[https://gitee.com/wish168/flowmind](https://gitee.com/wish168/flowmind)
+开发编排默认启动前端、AI 服务及 AI 设计链路所需的 Java 服务，并支持 Vue 与 FastAPI 源码热更新：
 
-### 📖 部署教程
+```bash
+cd docker/flowmind
+docker compose up -d --remove-orphans
+```
 
-1. **克隆项目**：从GitHub或Gitee克隆项目到本地
-2. **环境准备**：安装JDK17、Node.js、MySQL、Redis等必要环境
-3. **数据库配置**：导入SQL文件，修改数据库连接配置
-4. **启动后端**：运行Nacos、Gateway、Auth等服务
-5. **启动前端**：安装依赖并启动前端项目
-6. **开始使用**：使用管理员账号登录系统
+File、Gen、Job 和 Monitor 等非必要 Java 服务使用可选 profile：
 
-[部署教程](https://codebyggbond.dpdns.org/series/myprojects/FlowMind/%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88.html)
+```bash
+docker compose --profile optional up -d
+```
 
-## 项目优势
+Langfuse 作为独立基础设施按需启动：
 
-### 🏆 技术亮点突出
+```bash
+docker compose -f docker-compose.langfuse.yml up -d
+```
 
-- **微服务架构**：Spring Cloud Alibaba全家桶，展示你对分布式系统的理解
-- **前后端分离**：Vue3 + Spring Boot，展示全栈开发能力
-- **工作流引擎**：Flowable集成，展示你对业务流程的掌控能力
-- **AI 智能设计**：LangGraph 工作流 + 国产大模型，展示 LLM 应用开发能力
-- **响应式设计**：适配多种设备，展示你的前端功底
+## 本地服务入口
 
-### 🎯 功能完整度高
+| 服务 | 地址 |
+| --- | --- |
+| FlowMind | <http://localhost:18088> |
+| Gateway | <http://localhost:9001> |
+| Nacos | <http://localhost:19090/nacos> |
+| MySQL | `localhost:13306` |
+| Redis | `localhost:16379` |
+| Langfuse | <http://localhost:13001> |
 
-- **基础功能**：用户管理、权限控制、角色分配，一应俱全
-- **核心功能**：流程设计、流程部署、流程发起、流程审批，完整工作流
-- **创新功能**：审批中心、草稿箱，让你的毕业设计与众不同
-- **扩展功能**：系统监控、日志管理、代码生成，展示工程化思维
+生产编排不会把 AI 容器端口直接暴露到宿主机。前端统一通过 Gateway 的 `/flowmind-ai/**` 路径访问 AI 服务。
 
-### 🔧 二次开发友好
+## 适用场景
 
-- **基于成熟框架**：基于RuoYi-Cloud开发，架构稳定，文档丰富
-- **代码结构清晰**：模块化设计，易于理解和修改
+- 请假、报销、采购、合同等企业审批流程。
+- 需要嵌入现有系统的流程与表单设计能力。
+- 工作流、微服务与 AI Agent 的学习和二次开发。
+- 需要通过黄金测试集持续验证生成质量的 AI 应用。
 
-### 在线体验
+## 继续了解
 
-**想先看看效果？** 立即体验在线演示！
+- [中文 README](README.md)：功能总览、截图与完整启动说明。
+- [English README](README_EN.md)：English overview and setup guide.
+- [GitHub 仓库](https://github.com/Moonlight168/flowmind)
+- [Gitee 仓库](https://gitee.com/wish168/flowmind)
 
-👉 [在线体验地址](https://codebyggbond.dpdns.org/series/myprojects/FlowMind/)
+欢迎通过 Issue 反馈问题或提出建议。提交代码前请确保密钥、本地 `.env` 和未脱敏业务数据不会进入版本库。
 
-> 💡 **注意**：项目还在持续开发中，部分功能可能正在完善，在线体验尚未完成！
+## 开源协议
 
-**测试账号**：
-
-- 管理员：admin / 123456
-
-## 🖼️ 项目预览
-
-| 🚪 登录/工作台                                                                              | 💼 审批中心                                                                                 |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![工作台](https://i-blog.csdnimg.cn/direct/991b82bbc4d14eafaecd333f8091db04.png#pic_center)   | ![我的待办](https://i-blog.csdnimg.cn/direct/1b57bcb0cb9e4d818f8ae23bc8e0cb29.png#pic_center) |
-| - 工作台核心操作面板                                                                        | - 审批中心待办事项                                                                          |
-| ![我的流程](https://i-blog.csdnimg.cn/direct/f2dfa76ab06a4b749e5d38717f75c566.png#pic_center) | ![应用中心](https://i-blog.csdnimg.cn/direct/17a6942077a64bc888286a083091aa3a.png#pic_center) |
-| - 审批中心我的流程                                                                          | - 应用中心功能入口                                                                          |
-
-| 📝 流程操作                                                                                 | 🔧 流程配置                                                                                 |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![流程发起](https://i-blog.csdnimg.cn/direct/da986040856343a8852bfe7f3dafbc56.png#pic_center) | ![表单设计](https://i-blog.csdnimg.cn/direct/de0bf3d2eb8945e4a5f2876a087ed928.png#pic_center) |
-| - 快速发起新流程                                                                            | - 可视化表单编辑                                                                            |
-| ![草稿箱](https://i-blog.csdnimg.cn/direct/75d0358f47c4438b998cf051112f0b75.png#pic_center)   | ![流程设计](https://i-blog.csdnimg.cn/direct/5780331666e64419a4e8d90a1e3770e0.png#pic_center) |
-| - 流程草稿暂存/编辑                                                                         | - 拖拽式流程设计                                                                            |
-| ![流程分类](https://i-blog.csdnimg.cn/direct/dd364e4aa6ae4b81831625e3807c373b.png#pic_center) | ![流程部署](https://i-blog.csdnimg.cn/direct/736175d3089346da829dba6cf7bb587f.png#pic_center) |
-| - 流程分类管理                                                                              | - 流程发布/部署                                                                             |
-
-| 👤 个人中心                                                                                 | 👤 个人信息编辑                                                                                 |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| ![个人信息](https://i-blog.csdnimg.cn/direct/9b06570bca0f4fafb21c59387d8bacc8.png#pic_center) | ![个人信息编辑](https://i-blog.csdnimg.cn/direct/087bdfa5e7f343a0832623431ae3571b.png#pic_center) |
-
-## 🖼️ AI 智能设计功能预览（2.0 新增）
-
-| AI 基本信息生成                                                                 | 全局 AI 助手                                                                 |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![AI基本信息生成](assets/demos/ai-basic-info-design.png) | ![全局AI助手](flowmind-ui/src/assets/images/README/全局ai助手.png) |
-| - 输入需求描述，AI 自动生成流程基本信息 | - 贯穿全系统的 AI 辅助，随时代入 |
-
-| AI 表单设计                                                                 | AI 流程设计                                                                 |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| ![AI表单设计](assets/demos/ai-form-design.png) | ![AI流程设计](assets/demos/ai-flow-design.png) |
-| - 生成字段并预览变更 | - 生成节点配置并预览变更 |
-
-## 应用场景
-
-### 📚 适合专业
-
-- **计算机相关专业**：展示基本的编程和系统设计能力
-- **信息管理类专业**：展示简单的业务流程处理能力
-- **软件工程相关专业**：展示项目开发全过程
-- **其他理工科专业**：作为选修课或兴趣项目，展示学习能力和技术热情
-
-### 🚀 可扩展方向
-
-- **界面美化**：调整UI设计，让系统更好看
-- **功能完善**：添加一些实用的小功能，如数据导出、消息提醒
-- **移动端适配**：简单适配手机浏览器，展示响应式设计
-- **数据统计**：添加简单的图表展示，让数据更直观
-- **用户管理**：完善权限管理，区分管理员和普通用户
-
-### 🎯 答辩亮点
-
-1. **技术实用**：使用常见技术栈，易于理解和维护
-2. **功能完整**：包含基本的增删改查，展示全面开发能力
-3. **界面友好**：简洁明了的用户界面，操作简单直观
-4. **文档齐全**：有完整的使用说明和开发文档，展示规范开发流程
-
-## 🤝 贡献指南
-
-### 🌟 如何参与
-
-1. **Fork项目**：点击项目页面右上角的Fork按钮
-2. **克隆代码**：将你Fork的项目克隆到本地
-3. **创建分支**：`git checkout -b feature/新功能`
-4. **提交代码**：`git commit -m '添加了某个功能'`
-5. **推送分支**：`git push origin feature/新功能`
-6. **提交PR**：创建Pull Request，我会尽快查看
-
-### 交流学习
-
-- **项目展示**：优秀贡献者会在项目中特别感谢
-- **技术交流**：一起学习，共同进步
-- **开源经验**：获得参与开源项目的经验，对求职有帮助
-- **友谊长存**：认识志同道合的开发朋友
-
-## 🎉 给毕业设计加个星，让更多同学受益！
-
-如果你觉得FlowMind对你的毕业设计有帮助，请不要吝啬你的⭐️Star！
-
-**你的每一个Star都是对我最大的鼓励，也是支持我继续完善项目的动力！**
-
-**让更多同学能够轻松搞定毕业设计，让我们一起加油！**
-
-## 📝 开源协议
-
-本项目采用 [MIT License](LICENSE) 开源协议，你可以自由使用、修改和分发，但请保留版权声明。
+FlowMind 基于 [MIT License](LICENSE) 开源，并在 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 的基础上扩展开发。

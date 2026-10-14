@@ -4,9 +4,12 @@
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind</h1>
 <h4 align="center">基于 RuoYi-Cloud + Flowable 的智能工作流管理系统</h4>
 <p align="center">
+  <strong>简体中文</strong> · <a href="./README_EN.md">English</a>
+</p>
+<p align="center">
 	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg"></a>
 	<a href="https://github.com/Moonlight168/flowmind"><img src="https://img.shields.io/github/stars/Moonlight168/flowmind?style=flat"></a>
-	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+	<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
 ## 快速预览
@@ -271,6 +274,6 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
+基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [MIT License](./LICENSE) 开源协议。
 
-**最后更新**: 2026-10-13
+**最后更新**: 2026-10-14
