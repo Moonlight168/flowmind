@@ -30,10 +30,10 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 | **AI 设计分类** | 自然语言描述 → 自动生成流程分类              |
 | **AI 设计流程** | 业务需求描述 → 自动生成 BPMN 2.0 流程        |
 | **AI 设计表单** | 表单内容描述 → 自动生成 v-form-designer 表单 |
-| **React 模式** | 基于 ReAct 架构的智能 Agent，支持多轮追问     |
+| **ReAct 模式** | 基于 ReAct 架构的智能 Agent，支持多轮追问     |
 | **追问优化**    | AI 主动询问细节，持续优化设计结果直到满意    |
 
-### React 模式 Agent
+### ReAct 模式 Agent
 
 全新的 Agent 架构，采用 Reasoning + Acting 模式：
 
