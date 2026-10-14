@@ -106,7 +106,7 @@ ReAct Agent 查询真实业务数据
 
 ## 五、技术架构
 
-![FlowMind 系统架构](assets/diagrams/flowmind-architecture.png)
+![FlowMind 系统架构](assets/diagrams/flowmind-architecture-current.svg)
 
 FlowMind 由三个主要子项目组成：
 

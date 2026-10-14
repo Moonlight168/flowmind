@@ -39,7 +39,7 @@ FlowMind is an open-source workflow approval platform that combines visual BPMN 
 
 ## Architecture
 
-![FlowMind architecture](./assets/diagrams/flowmind-architecture.png)
+![FlowMind architecture](./assets/diagrams/flowmind-architecture-current.svg)
 
 | Project | Stack | Responsibility |
 | --- | --- | --- |
