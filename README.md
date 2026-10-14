@@ -82,32 +82,45 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ## 演示图
 
-### AI 功能
+### AI 设计闭环
 
-<table>
-    <tr>
-        <td><img src="./flowmind-ui/src/assets/images/README/全局ai助手.png" alt="全局AI助手" width="100%"/><br/><div style="text-align: center;">全局 AI 助手</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
-    </tr>
-    <tr>
-        <td><img src="./flowmind-ui/src/assets/images/README/表单设计新增ai设计按钮.png" alt="AI设计分类" width="100%"/><br/><div style="text-align: center;">AI 设计分类</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/流程设计新增ai设计按钮.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">AI 生成流程</div></td>
-    </tr>
-</table>
+FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息、表单字段、流程节点和运行配置都可以先由 AI 生成，再由用户确认和调整。
 
-### AI 流程设计演示
+#### 1. 基本信息生成
 
-下面的演示展示了从自然语言描述到 BPMN 变更预览的完整过程：输入业务需求、由 AI 分析现有流程、生成节点配置变更，并由用户确认后应用。
+输入业务描述后，AI 自动整理流程分类、名称和标识等基础信息，减少重复录入。
 
 <p align="center">
-  <img src="./assets/demos/ai-design-flow.gif" alt="AI 流程设计操作演示" width="960" />
+  <img src="./flowmind-ui/src/assets/images/README/ai设计分类.png" alt="AI 设计流程分类" width="48%" />
+  <img src="./flowmind-ui/src/assets/images/README/自动填充ai生成的流程分类参数.png" alt="AI 自动填充流程分类参数" width="48%" />
 </p>
+
+#### 2. 表单设计
+
+根据业务描述生成可编辑表单，字段、校验和布局仍可在表单设计器中继续调整。
+
+<p align="center">
+  <img src="./flowmind-ui/src/assets/images/README/表单设计新增ai设计按钮.png" alt="表单 AI 设计入口" width="48%" />
+  <img src="./flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单设计器" width="48%" />
+</p>
+
+#### 3. 流程设计
+
+用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
+
+<p align="center">
+  <img src="./assets/demos/ai-design-flow.gif" alt="AI 流程设计动态演示" width="960" />
+</p>
+
+#### 4. 变更预览与确认
+
+AI 不会直接覆盖流程。系统先按节点分组展示变更内容，用户确认后才应用到画布，降低误操作风险。
 
 <p align="center">
   <img src="./assets/demos/ai-design-preview.png" alt="AI 流程设计变更预览" width="960" />
 </p>
 
-> AI 只生成待确认的变更预览，用户点击“应用变更”后才会写入流程画布。
+> GIF 展示完整操作过程，静态截图用于查看最终预览细节；两者内容互补，不重复承担说明。
 
 ### OA 工作台
 
@@ -131,11 +144,7 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 <table>
     <tr>
         <td><img src="./flowmind-ui/src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/流程设计.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">流程设计</div></td>
-    </tr>
-    <tr>
         <td><img src="./flowmind-ui/src/assets/images/README/流程部署.png" alt="流程部署" width="100%"/><br/><div style="text-align: center;">流程部署</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
     </tr>
 </table>
 
