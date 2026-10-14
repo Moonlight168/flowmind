@@ -6,7 +6,7 @@ FlowMind 后端服务基于 RuoYi-Cloud 框架，集成 Flowable 工作流引擎
 
 **核心模块**：
 - **Flowable 工作流**：流程设计、部署、执行和监控
-- **认证服务**：用户认证、权限管理（JWT，AI 服务复用同一密钥解析）
+- **认证服务**：统一完成用户认证与权限管理；AI 请求经网关校验后注入用户上下文
 - **系统管理**：用户、部门、角色、菜单等管理
 - **查询接口**：流程分类、表单、角色、流程模型等查询接口，供 AI 服务（`integrations/backend`）检索真实数据
 
@@ -54,6 +54,8 @@ bin/run-all.bat
 mvn spring-boot:run -Dspring.profiles.active=dev
 ```
 
+日常开发也可以在 `docker/flowmind` 下运行 `docker compose up -d --remove-orphans`，默认启动 AI 链路所需的 Gateway、Auth、System 和 Flowable；File、Gen、Job、Monitor 通过 `optional` profile 按需启动。
+
 ## 服务端口（本地开发）
 
 | 服务     | 端口 | 说明          |
@@ -70,4 +72,4 @@ mvn spring-boot:run -Dspring.profiles.active=dev
 
 ---
 
-**文档更新日期**: 2026-09-02
+**文档更新日期**: 2026-10-14

@@ -9,13 +9,23 @@
 	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
 
+## 快速预览
+
+<p align="center">
+  <a href="./assets/demos/flowmind-ai-design-demo.mp4">
+    <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI 设计演示" width="960" />
+  </a>
+</p>
+
+<p align="center"><a href="./assets/demos/flowmind-ai-design-demo.mp4">▶ 点击观看 AI 分类、基本信息、表单与流程设计演示</a></p>
+
 ## 项目简介
 
 FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用微服务架构，包含三个主要子项目：
 
 | 子项目                     | 技术栈                  | 端口    | 职责                            |
 | -------------------------- | ----------------------- | ------- | ------------------------------- |
-| **flowmind-ui**      | Vue 3 + Element Plus    | 88/80 | 用户界面、AI 助手、审批中心     |
+| **flowmind-ui**      | Vue 3 + Element Plus    | 18088（容器内 88/80） | 用户界面、AI 助手、审批中心     |
 | **flowmind-cloud**   | Spring Cloud + Flowable | 9001-9007 | 业务逻辑、Flowable 流程引擎（网关 9001） |
 | **flowmind-ai-flow** | FastAPI + LangGraph     | 8000    | AI 意图识别、流程设计、表单生成 |
 
@@ -86,7 +96,15 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息、表单字段、流程节点和运行配置都可以由 AI 协助生成，再由用户确认和调整。
 
-#### 1. 基本信息生成
+#### 1. 流程分类设计
+
+根据业务主题生成分类名称、编码和说明，并在应用前展示字段变更。
+
+<p align="center">
+  <img src="./assets/demos/ai-category-design.png" alt="AI 流程分类设计" width="960" />
+</p>
+
+#### 2. 基本信息生成
 
 输入业务描述后，AI 自动整理流程分类、名称和标识等基础信息，减少重复录入。
 
@@ -94,7 +112,7 @@ FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息�
   <img src="./assets/demos/ai-basic-info-design.png" alt="AI 生成流程基本信息" width="960" />
 </p>
 
-#### 2. 表单设计
+#### 3. 表单设计
 
 根据业务描述生成可编辑表单，字段、校验和布局仍可在表单设计器中继续调整。
 
@@ -102,7 +120,7 @@ FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息�
   <img src="./assets/demos/ai-form-design.png" alt="AI 表单设计与变更预览" width="960" />
 </p>
 
-#### 3. 流程设计
+#### 4. 流程设计
 
 用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
 

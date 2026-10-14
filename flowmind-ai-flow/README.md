@@ -2,11 +2,14 @@
 
 基于 FastAPI + LangGraph 的智能流程设计服务，支持 AI 自动生成 Flowable 流程分类、流程和表单。
 
+[▶ 观看 FlowMind AI 设计快速演示](../assets/demos/flowmind-ai-design-demo.mp4)
+
 ## 核心功能
 
 | 功能                  | 说明                               |
 | --------------------- | ---------------------------------- |
 | **AI 设计分类** | 自然语言描述自动生成流程分类       |
+| **AI 基本信息** | 自动生成流程名称、分类与业务描述   |
 | **AI 设计流程** | 自动生成 BPMN 2.0 流程结构         |
 | **AI 设计表单** | 自动生成 v-form-designer 表单 JSON |
 | **多轮对话**    | LangGraph 工作流持续优化设计       |
@@ -73,7 +76,7 @@ flowmind-ai-flow/
     │   ├── llm/                  # 统一模型运行时与 Provider 降级
     │   ├── integrations/backend/ # Java 后端 HTTP Client
     │   ├── domain/               # DTO 与结构化设计模型
-    │   ├── core/                 # JWT 认证解析与异常基类
+    │   ├── core/                 # 网关用户上下文与异常基类
     │   ├── evaluation/           # 黄金数据集加载与确定性契约评分
     │   ├── infra/                # checkpoint、日志、observability（Langfuse）、Nacos
     │   ├── prompts/              # Markdown 提示词与 versions.json 灰度配置
@@ -85,6 +88,8 @@ flowmind-ai-flow/
 ```
 
 > 开发基础设施（含 FlowMind 独立 Langfuse）位于 `docker/flowmind/docker-compose.yml`；完整 Docker 环境位于同目录的 `docker-compose.prod.yml`。
+
+> AI 服务自身不重复校验 JWT。生产环境仅允许经 Gateway 的 `/flowmind-ai/**` 路径访问，由网关校验令牌并注入用户身份；AI 容器端口不直接发布到宿主机。
 
 ## 核心 API
 
@@ -172,4 +177,4 @@ PROMPT_VERSION_OVERRIDES={"agents/chat.md":"v1"}
 
 ---
 
-**文档更新日期**: 2026-09-02
+**文档更新日期**: 2026-10-14

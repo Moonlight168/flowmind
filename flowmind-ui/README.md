@@ -1,12 +1,18 @@
 <p align="center">
 	<img alt="logo" src="https://oscimg.oschina.net/oscnet/up-b99b286755aef70355a7084753f89cdb7c9.png">
 </p>
-<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind UI v2.0.0</h1>
+<h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind UI v3.6.6</h1>
 <h4 align="center">基于 RuoYi-Vue3（Vue 3 + Element Plus）前端的工作流管理系统</h4>
 <p align="center">
-	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.0.0-brightgreen.svg"></a>
-	<a href="https://github.com/Moonlight168/flowmind-ui/blob/master/LICENSE"><img src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg"></a>
+	<a href="https://github.com/Moonlight168/flowmind/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
+
+<p align="center">
+  <a href="../assets/demos/flowmind-ai-design-demo.mp4"><img src="../assets/demos/ai-flow-design.png" alt="FlowMind AI 设计演示" width="960" /></a>
+</p>
+
+<p align="center"><a href="../assets/demos/flowmind-ai-design-demo.mp4">▶ 观看 AI 设计快速演示</a></p>
 
 ## 平台简介
 
@@ -27,7 +33,7 @@
 
 | 软件    | 版本          |
 | ------- | ------------- |
-| Node.js | 18+（Vite 6） |
+| Node.js | 22（与开发容器一致） |
 
 ### 安装运行
 
@@ -55,8 +61,8 @@ npm run build:prod
 
 | 环境     | 地址                          |
 | -------- | ----------------------------- |
-| 开发环境 | http://localhost:88           |
-| 生产环境 | http://localhost（Nginx 80）  |
+| 宿主机 Vite | http://localhost:88        |
+| Docker 开发/生产 | http://localhost:18088 |
 
 ---
 
@@ -83,12 +89,16 @@ npm run build:prod
 
 <table>
     <tr>
-        <td><img src="./src/assets/images/README/全局ai助手.png" alt="全局AI助手" width="100%"/><br/><div style="text-align: center;">全局 AI 助手</div></td>
-        <td><img src="./src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
+        <td><img src="../assets/demos/ai-category-design.png" alt="AI流程分类设计" width="100%"/><br/><div style="text-align: center;">AI 流程分类设计</div></td>
+        <td><img src="../assets/demos/ai-basic-info-design.png" alt="AI基本信息生成" width="100%"/><br/><div style="text-align: center;">AI 基本信息生成</div></td>
     </tr>
     <tr>
         <td><img src="../assets/demos/ai-form-design.png" alt="AI表单设计" width="100%"/><br/><div style="text-align: center;">AI 表单设计</div></td>
         <td><img src="../assets/demos/ai-flow-design.png" alt="AI流程设计" width="100%"/><br/><div style="text-align: center;">AI 流程设计</div></td>
+    </tr>
+    <tr>
+        <td><img src="./src/assets/images/README/全局ai助手.png" alt="全局AI助手" width="100%"/><br/><div style="text-align: center;">全局 AI 助手</div></td>
+        <td><img src="./src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
     </tr>
 </table>
 
@@ -200,4 +210,4 @@ VITE_APP_BASE_API=/prod-api  # 生产由 Nginx 反向代理到网关
 
 ---
 
-**文档更新日期**: 2026-09-02
+**文档更新日期**: 2026-10-14
