@@ -84,29 +84,23 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ### AI 设计闭环
 
-FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息、表单字段、流程节点和运行配置都可以先由 AI 生成，再由用户确认和调整。
+FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息、表单字段、流程节点和运行配置都可以由 AI 协助生成，再由用户确认和调整。
 
 #### 1. 基本信息生成
 
 输入业务描述后，AI 自动整理流程分类、名称和标识等基础信息，减少重复录入。
 
-<p align="center">
-  <img src="./flowmind-ui/src/assets/images/README/ai设计分类.png" alt="AI 设计流程分类" width="48%" />
-  <img src="./flowmind-ui/src/assets/images/README/自动填充ai生成的流程分类参数.png" alt="AI 自动填充流程分类参数" width="48%" />
-</p>
-
 #### 2. 表单设计
 
 根据业务描述生成可编辑表单，字段、校验和布局仍可在表单设计器中继续调整。
 
-<p align="center">
-  <img src="./flowmind-ui/src/assets/images/README/表单设计新增ai设计按钮.png" alt="表单 AI 设计入口" width="48%" />
-  <img src="./flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单设计器" width="48%" />
-</p>
-
 #### 3. 流程设计
 
 用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
+
+<p align="center">
+  <img src="./assets/demos/ai-design-prompt.png" alt="AI 流程设计窗口" width="960" />
+</p>
 
 <p align="center">
   <img src="./assets/demos/ai-design-workflow.gif" alt="AI 流程设计动态演示" width="960" />
@@ -119,8 +113,6 @@ AI 不会直接覆盖流程。系统先按节点分组展示变更内容，用�
 <p align="center">
   <img src="./assets/demos/ai-design-preview.png" alt="AI 流程设计变更预览" width="960" />
 </p>
-
-> GIF 展示完整操作过程，静态截图用于查看最终预览细节；两者内容互补，不重复承担说明。
 
 ### OA 工作台
 
