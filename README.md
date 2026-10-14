@@ -109,7 +109,7 @@ FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息�
 用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
 
 <p align="center">
-  <img src="./assets/demos/ai-design-flow.gif" alt="AI 流程设计动态演示" width="960" />
+  <img src="./assets/demos/ai-design-workflow.gif" alt="AI 流程设计动态演示" width="960" />
 </p>
 
 #### 4. 变更预览与确认
