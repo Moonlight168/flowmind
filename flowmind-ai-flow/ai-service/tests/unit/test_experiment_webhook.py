@@ -37,26 +37,24 @@ def _capture_runner(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def test_parse_experiment_request_reads_nested_dataset_and_config() -> None:
     request = webhook.parse_experiment_request(
         {
-            "dataset": {"id": "d-1", "name": "flowmind-design-golden-v1"},
-            "config": {"run_name": "r-1", "case_id": "c-1", "max_concurrency": 3},
+            "dataset": {"id": "d-1", "name": "flowmind-flow-model-design-v1"},
+            "config": {"case_id": "c-1", "max_concurrency": 3},
         }
     )
 
-    assert request.dataset_name == "flowmind-design-golden-v1"
+    assert request.dataset_name == "flowmind-flow-model-design-v1"
     assert request.dataset_id == "d-1"
-    assert request.run_name == "r-1"
     assert request.case_id == "c-1"
     assert request.max_concurrency == 3
 
 
 def test_parse_experiment_request_reads_flat_payload() -> None:
     request = webhook.parse_experiment_request(
-        {"datasetName": "ds", "datasetId": "id-1", "runName": "r"}
+        {"datasetName": "ds", "datasetId": "id-1"}
     )
 
     assert request.dataset_name == "ds"
     assert request.dataset_id == "id-1"
-    assert request.run_name == "r"
     assert request.max_concurrency == 1
 
 
@@ -96,7 +94,7 @@ async def test_trigger_experiment_falls_back_to_default_dataset(
 
     assert response.status_code == 202
     await tasks()
-    assert captured["dataset_name"] == runner.DEFAULT_DATASET_NAME
+    assert captured["dataset_name"] == "flow"
 
 
 def test_webhook_route_accepts_json_body_over_http(
@@ -112,7 +110,9 @@ def test_webhook_route_accepts_json_body_over_http(
     """
     captured = _capture_runner(monkeypatch)
 
-    response = client.post("/webhooks/experiment", json={"dataset": {"name": "ds-http"}})
+    response = client.post(
+        "/webhooks/experiment", json={"dataset": {"name": "ds-http"}}
+    )
 
     assert response.status_code == 202
     assert captured["dataset_name"] == "ds-http"

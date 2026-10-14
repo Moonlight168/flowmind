@@ -81,8 +81,8 @@ flowmind-ai-flow/
     │   ├── infra/                # checkpoint、日志、observability（Langfuse）、Nacos
     │   ├── prompts/              # Markdown 提示词与 versions.json 灰度配置
     │   └── config/               # settings.py 类型化配置
-    ├── scripts/run_golden_eval.py # 黄金集评估入口
-    ├── evals/                    # golden_dataset.jsonl 用例
+    ├── scripts/run_evaluation.py # 数据集评测入口
+    ├── evals/datasets/           # 分类、基本信息、表单、流程模型数据集
     ├── .env.example
     └── pyproject.toml
 ```
@@ -141,14 +141,15 @@ flowmind-ai-flow/
 在 `ai-service` 目录配置 Langfuse 密钥和专用测试账号的 `FLOWMIND_AUTH_TOKEN`，然后执行：
 
 ```bash
-# 执行全部用例
-python -m scripts.run_golden_eval
+# 上传全部数据集并执行评测
+python -m scripts.upload_dataset all
+python -m scripts.run_evaluation all
 
-# 精确执行某一条用例
-python -m scripts.run_golden_eval --case-id flow-linear-leave
+# 精确执行流程模型数据集中的一条用例
+python -m scripts.run_evaluation flow --case-id flow-linear-leave
 ```
 
-脚本会幂等同步 `evals/golden_dataset.jsonl`。每条用例统一使用 `turns` 表示单轮或多轮匿名真实对话/人工覆盖用例，并在 Langfuse Dataset Run 中记录每轮输出、操作、校验、模型降级和契约评分。单条运行失败会转换为可评分的兜底结果，不中断同批其他用例。
+评测按分类、基本信息、表单和流程模型四类设计窗口拆分数据集。每条用例以 `turns` 表示单轮或多轮真实对话；Langfuse 中的 TypeScript 状态评估器检查每轮是否有输出，以及状态是否为 `ready` 或 `needs_input`。单条运行失败会转为可观测的错误结果，不中断其余用例。
 
 ## 提示词版本与灰度发布
 

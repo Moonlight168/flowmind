@@ -103,7 +103,7 @@ yarn test:e2e          # E2E 测试
 - **core/**: JWT 认证解析与异常基类（`auth.py`/`auth_context.py`/`exceptions.py`）
 - **integrations/backend/**: Java 后端分类、表单、角色和流程模型 HTTP 客户端
 - **domain/**: `domain/dto/` 数据传输对象；`domain/design_models.py` 为结构化设计模型
-- **evaluation/**: 黄金数据集加载、真实链路执行与确定性契约评分（入口 `scripts/run_golden_eval.py`）
+- **evaluation/**: 按设计窗口加载数据集并执行真实链路评测（入口 `scripts/run_evaluation.py`）；Langfuse TypeScript 评估器校验输出和状态
 - **infra/**: Redis checkpoint、日志、observability（Langfuse）与 Nacos 封装
 
 **设计模式**：LangGraph 显式编排、统一模型运行时、外部 HTTP Client、确定性校验 Pipeline

@@ -18,7 +18,6 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 from app.design.intent import Intent
-from app.evaluation.golden_dataset import evaluate_contract, load_golden_cases
 
 # 用 importlib 获取真实模块（避免模块名与变量名冲突导致拿到编译图对象）
 react_agent_node = importlib.import_module("app.graph.nodes.generate")
@@ -155,10 +154,10 @@ def test_flow_design_full_chain(chain, monkeypatch):
     assert 'bpmnElement="endEvent"' not in form_data["bpmn_xml"]
 
 
-def test_model_failure_reaches_golden_fallback_score(
+def test_model_failure_returns_safe_error(
     chain: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """生产节点兜底经 format 后仍满足黄金集的备用契约。"""
+    """模型不可用时，生产链路返回可识别的安全错误。"""
     monkeypatch.setattr(
         react_agent_node,
         "discriminate_intent",
@@ -172,14 +171,9 @@ def test_model_failure_reaches_golden_fallback_score(
     result = invoke_design_workflow(
         "flow_design", "设计请假审批流程", thread_id="test-eval-fallback"
     )
-    cases = load_golden_cases("evals/golden_dataset.jsonl")
-    expected = next(case for case in cases if case.id == "flow-linear-leave")
-    scores = evaluate_contract(
-        output=result, expected_output=expected.expected_output.model_dump()
-    )
-
     assert result["error_type"] == "internal"
-    assert {score.name: score.value for score in scores}["fallback_contract"] == 1
+    assert result["status"] == "error"
+    assert result["message"]
 
 
 def test_flow_design_basic(chain, monkeypatch):

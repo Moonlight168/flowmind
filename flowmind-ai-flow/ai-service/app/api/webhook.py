@@ -26,7 +26,6 @@ router = APIRouter(prefix="/webhooks", tags=["webhook"])
 DATASET_SECTION_KEY = "dataset"
 DATASET_NAME_KEYS = ("datasetName", "dataset_name")
 DATASET_ID_KEYS = ("datasetId", "dataset_id")
-RUN_NAME_KEYS = ("runName", "run_name")
 CASE_ID_KEYS = ("caseId", "case_id")
 MAX_CONCURRENCY_KEYS = ("maxConcurrency", "max_concurrency")
 CONFIG_SECTION_KEYS = (
@@ -44,7 +43,6 @@ class ExperimentRequest(BaseModel):
 
     dataset_name: str | None = None
     dataset_id: str | None = None
-    run_name: str | None = None
     case_id: str | None = None
     max_concurrency: int = 1
 
@@ -103,7 +101,6 @@ def parse_experiment_request(payload: Any) -> ExperimentRequest:
             or _first_str(config, DATASET_NAME_KEYS)
         ),
         dataset_id=_first_str(dataset, ("id",)) or _first_str(body, DATASET_ID_KEYS),
-        run_name=_first_str(config, RUN_NAME_KEYS) or _first_str(body, RUN_NAME_KEYS),
         case_id=_first_str(config, CASE_ID_KEYS) or _first_str(body, CASE_ID_KEYS),
         max_concurrency=(
             _first_int(config, MAX_CONCURRENCY_KEYS)
@@ -132,12 +129,11 @@ def _run_experiment_task(experiment: ExperimentRequest) -> None:
     """后台执行实验；失败仅记录日志，不再回传（202 已发出）。"""
     from app.evaluation import runner
 
-    dataset_name = experiment.dataset_name or runner.DEFAULT_DATASET_NAME
+    dataset_name = experiment.dataset_name or "flow"
     try:
         runner.run_dataset_experiment(
             dataset_name,
             case_id=experiment.case_id,
-            run_name=experiment.run_name,
             max_concurrency=experiment.max_concurrency,
             extra_metadata={
                 "trigger": "langfuse_webhook",
@@ -160,8 +156,8 @@ async def trigger_experiment(
     experiment = parse_experiment_request(await _read_payload(request))
     logger.info(
         f"[实验 webhook] 收到触发请求 dataset={experiment.dataset_name}, "
-        f"dataset_id={experiment.dataset_id}, run={experiment.run_name}, "
-        f"case={experiment.case_id}, max_concurrency={experiment.max_concurrency}"
+        f"dataset_id={experiment.dataset_id}, case={experiment.case_id}, "
+        f"max_concurrency={experiment.max_concurrency}"
     )
     background_tasks.add_task(_run_experiment_task, experiment)
     body = ResponseVO[dict[str, Any]](
@@ -169,7 +165,6 @@ async def trigger_experiment(
         message="accepted",
         data={
             "dataset_name": experiment.dataset_name,
-            "run_name": experiment.run_name,
             "case_id": experiment.case_id,
         },
     )

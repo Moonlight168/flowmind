@@ -1,0 +1,10 @@
+{"id":"basic-create-expense","source":"real_anonymized","turns":[{"user_input":"创建报销审批流程基本信息，编码 expense_approval，描述用于员工报销"}],"tags":["create","normal"]}
+{"id":"basic-create-leave","source":"curated","turns":[{"user_input":"创建员工请假审批流程，编码 leave_approval"}],"tags":["create","normal"]}
+{"id":"basic-with-category","source":"curated","turns":[{"user_input":"创建采购申请流程基本信息，归入采购管理分类，编码 purchase_request"}],"tags":["create","category"]}
+{"id":"basic-update-name","source":"curated","turns":[{"user_input":"流程名称改为差旅报销审批流程","current_artifact":{"flow_name":"报销审批流程","code":"expense_approval","description":"员工报销"}}],"tags":["update","existing-artifact"]}
+{"id":"basic-update-code","source":"curated","turns":[{"user_input":"只将流程编码改为 travel_expense_approval","current_artifact":{"flow_name":"差旅报销审批流程","code":"expense_approval"}}],"tags":["update","existing-artifact"]}
+{"id":"basic-update-description","source":"curated","turns":[{"user_input":"补充说明：适用于国内外差旅费用报销","current_artifact":{"flow_name":"差旅报销审批流程","code":"travel_expense_approval"}}],"tags":["update","existing-artifact"]}
+{"id":"basic-multi-turn","source":"real_anonymized","turns":[{"user_input":"创建合同审批流程，编码 contract_approval"},{"user_input":"补充流程说明，并归入合同管理分类"}],"tags":["multi-turn","create","update"]}
+{"id":"basic-missing-name","source":"curated","turns":[{"user_input":"帮我补一下流程基础信息"}],"tags":["exception","needs-input"]}
+{"id":"basic-invalid-code","source":"curated","turns":[{"user_input":"流程名称为采购申请，编码为 采购审批"}],"tags":["exception","invalid-input"]}
+{"id":"basic-unknown-category","source":"curated","turns":[{"user_input":"创建流程并归入不存在的火星业务分类"}],"tags":["exception","dependency"]}

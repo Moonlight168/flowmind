@@ -1,12 +1,11 @@
-"""把本地 Markdown 提示词上传到 Langfuse 提示词管理（幂等）。
+"""Synchronize local Markdown prompts to Langfuse idempotently.
 
-命名规则：逻辑路径去掉 `.md`，例如 `agents/intent.md` -> `agents/intent`。
-标签规则：`versions.json` 中的 stable 版本打 `production`，其余版本打 `canary`。
-正文与已存在版本一致时只修正标签、不再新建版本，避免重复。
+The logical path without `.md` is used as the prompt name. Stable versions use
+the `production` label, while other versions use `canary`.
 
-用法：
-    poetry run python -m scripts.upload_prompts_to_langfuse
-    poetry run python -m scripts.upload_prompts_to_langfuse --dry-run
+Usage:
+    poetry run python -m scripts.upload_prompts
+    poetry run python -m scripts.upload_prompts --dry-run
 """
 
 from __future__ import annotations
@@ -14,14 +13,16 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from app.config.settings import settings
 from app.infra.logger import logger
 from app.infra.observability import get_client
 from app.prompts.loader import PROMPT_ROOT, PROMPT_VERSIONS_FILE
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 PRODUCTION_LABEL = "production"
 CANARY_LABEL = "canary"
@@ -42,16 +43,10 @@ class PromptVersionUpload:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="上传本地 Markdown 提示词到 Langfuse（幂等）"
+        description="上传本地 Markdown 提示词到 Langfuse (幂等)"
     )
     parser.add_argument(
-        "--registry",
-        type=Path,
-        default=PROMPT_VERSIONS_FILE,
-        help="提示词版本配置路径",
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="只打印计划，不写 Langfuse"
+        "--dry-run", action="store_true", help="只打印计划, 不写 Langfuse"
     )
     return parser.parse_args(argv)
 
@@ -81,10 +76,10 @@ def _group_by_name(
 
 
 def _existing_content_versions(client: Any, name: str) -> dict[str, int]:
-    """返回该提示词已存在版本的 {正文: 版本号}，用于幂等判断。
+    """Return a content-to-version index for idempotent prompt uploads.
 
-    Langfuse 的取单条接口把提示词名放在 URL 路径上，而本项目提示词名含 `/`
-    （如 `agents/chat`），必须自行 URL 编码，否则会被当作多级路径返回 404。
+    Prompt names containing `/` must be URL encoded before the single-prompt
+    API call; otherwise Langfuse interprets them as nested URL paths.
     """
     meta = client.api.prompts.list(name=name, limit=PROMPT_LIST_LIMIT)
     if not meta.data:
@@ -119,7 +114,7 @@ def _sync_version(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    uploads = build_uploads(args.registry)
+    uploads = build_uploads(PROMPT_VERSIONS_FILE)
     if args.dry_run:
         for upload in uploads:
             logger.info(

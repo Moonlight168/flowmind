@@ -1,84 +1,54 @@
 # scripts
 
-黄金数据集与提示词的 Langfuse 同步脚本，以及从 Langfuse 触发评估实验的 webhook。
+FlowMind 的提示词、评测数据集和 Langfuse 状态评估器同步脚本。
 
 ## 前置条件
 
-- 在 `ai-service` 目录执行，依赖已由 Poetry 安装。
-- `.env` 配置好 Langfuse 密钥（`LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_BASE_URL`）。
-- 跑评估还需 `FLOWMIND_AUTH_TOKEN`（测试账号 Bearer Token）。
-- Langfuse 与所需后端服务已启动。
+- 在 `ai-service` 目录执行，依赖由 Poetry 安装。
+- `.env` 配置 Langfuse 密钥。
+- 执行真实评测还需要 `FLOWMIND_AUTH_TOKEN`。
+- Langfuse、AI 服务和评测所需后端服务已经启动。
+
+## 评测数据集
+
+| 参数 | 设计窗口 | 本地文件 | Langfuse Dataset |
+|---|---|---|---|
+| `category` | 流程分类 | `evals/datasets/category_design.jsonl` | `flowmind-category-design-v1` |
+| `basic` | 流程基本信息 | `evals/datasets/basic_info_design.jsonl` | `flowmind-basic-info-design-v1` |
+| `form` | 表单设计 | `evals/datasets/form_design.jsonl` | `flowmind-form-design-v1` |
+| `flow` | 流程模型 | `evals/datasets/flow_model_design.jsonl` | `flowmind-flow-model-design-v1` |
+
+`all` 会依次处理四个数据集。
 
 ## 使用
 
-1. 上传/更新数据集（用例变更后执行，幂等 upsert）
+上传数据集：
 
 ```bash
-# 默认：源文件 evals/golden_dataset.jsonl → Langfuse 数据集 flowmind-design-golden-v1
-poetry run python -m scripts.upload_golden_to_langfuse
-# 如需换数据集名/源文件，显式传参
-poetry run python -m scripts.upload_golden_to_langfuse --dataset-path evals/golden_dataset.jsonl --dataset-name flowmind-design-golden-v1
+poetry run python -m scripts.upload_dataset flow
+poetry run python -m scripts.upload_dataset all
 ```
 
-2. 上传/更新提示词（提示词变更后执行，幂等：内容一致则只补标签）
+上传提示词：
 
 ```bash
-# 提示词目录下每个 .md → 一个 Langfuse Prompt（名称=相对路径去掉 .md）
-# 稳定版打 production 标签，其余打 canary 标签
-poetry run python -m scripts.upload_prompts_to_langfuse
+poetry run python -m scripts.upload_prompts
+poetry run python -m scripts.upload_prompts --dry-run
 ```
 
-3. 上传/更新契约评估器（评估器变更后执行，幂等：源码一致则跳过）
+上传唯一的 TypeScript 状态评估器：
 
 ```bash
-# 源文件 evals/evaluators/design_contract.ts → Langfuse code evaluator
-poetry run python -m scripts.upload_evaluator_to_langfuse
+poetry run python -m scripts.upload_evaluator
+poetry run python -m scripts.upload_evaluator --dry-run
 ```
 
-> 自托管 Langfuse 的 code evaluator 需要配置 code evaluator dispatcher 才会真正执行；
-> 未配置时评估器仍会创建成功，但不会自动运行。
-
-4. 从 Langfuse 拉取用例跑实验并上报评分
+运行真实评测：
 
 ```bash
-poetry run python -m scripts.run_golden_eval
-poetry run python -m scripts.run_golden_eval --case-id flow-linear-leave
-poetry run python -m scripts.run_golden_eval --run-name my-run --max-concurrency 2
+poetry run python -m scripts.run_evaluation flow
+poetry run python -m scripts.run_evaluation flow --case-id flow-linear-leave
+poetry run python -m scripts.run_evaluation all --max-concurrency 2
 ```
 
-执行完整链路是：先上传（步骤 1、2、3），再跑评估（步骤 4）。评估只从 Langfuse 拉取，不会触发上传。
-
-## UI 触发实验（可选）
-
-除命令行外，可在 Langfuse 控制台一键触发同一个实验：
-
-1. 进入 `Datasets` → `flowmind-design-golden-v1` → `Start Experiment`。
-2. 选 `Custom Experiment`，点 `⚡` 打开 webhook 配置。
-3. 填写 URL。Langfuse 只放行 `host.docker.internal` 的 80/443（见
-   `infra/langfuse/.env.example` 的白名单说明），所以接收端必须落在 80 端口：
-   - 开发环境：`http://host.docker.internal/webhooks/experiment`
-     AI 服务在 `docker/flowmind/docker-compose.yml` 里直接监听 80 并发布到 `127.0.0.1:80`，不需要 nginx。
-   - 生产环境：`http://flowmind-nginx/webhooks/experiment`（经 nginx 转发到 AI 服务的 8000）
-
-   Default config 可留空，或填 `{"run_name": "ui-trigger", "max_concurrency": 2}`。
-4. 触发后 AI 服务只回 202 并在后台跑；后台任务需要测试账号的 `FLOWMIND_AUTH_TOKEN`，
-   缺了会在日志里报「缺少 FLOWMIND_AUTH_TOKEN, 无法验证完整后端调用链」。
-5. 点 `Run` 触发，AI 服务异步执行并把评分写回为新的 Dataset Run。
-
-## 参数
-
-| 脚本   | 参数                  | 说明                                                 |
-| ------ | --------------------- | ---------------------------------------------------- |
-| upload | `--dataset-path`    | 本地 JSONL 路径，默认`evals/golden_dataset.jsonl`  |
-| upload | `--dataset-name`    | Langfuse 数据集名，默认`flowmind-design-golden-v1` |
-| prompt | 无                    | 目录/标签在脚本常量中配置                            |
-| evaluator | `--evaluator-path` | 本地评估器源码路径，默认`evals/evaluators/design_contract.ts` |
-| evaluator | `--name`       | Langfuse 评估器名，默认`flowmind-design-contract` |
-| eval   | `--case-id`         | 只跑指定用例 ID，缺省跑全部                          |
-| eval   | `--dataset-name`    | 要拉取的数据集名，需与上传一致                       |
-| eval   | `--run-name`        | Dataset Run 名称，缺省按时间生成                     |
-| eval   | `--max-concurrency` | 并发用例数，默认 1（串行）                           |
-
-## 结果
-
-日志末尾会打印评分汇总和 Langfuse Dataset Run 链接，可在 Langfuse 控制台查看每条用例的输入、输出与分数。
+状态评估器只检查每一轮是否有有效输出，以及状态是否为 `ready` 或 `needs_input`。`error` 和空输出均视为失败。自托管 Langfuse 必须启动 Code Evaluator Dispatcher，才能生成 `case_pass` 分数。
