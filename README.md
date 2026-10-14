@@ -133,10 +133,16 @@ AI 不会直接覆盖流程。系统先按节点分组展示变更内容，用�
 
 ### 流程管理
 
+后台管理端提供流程分类、模型设计、部署发布和表单维护能力。
+
 <table>
     <tr>
         <td><img src="./flowmind-ui/src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
+        <td><img src="./flowmind-ui/src/assets/images/README/流程设计.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">流程设计</div></td>
+    </tr>
+    <tr>
         <td><img src="./flowmind-ui/src/assets/images/README/流程部署.png" alt="流程部署" width="100%"/><br/><div style="text-align: center;">流程部署</div></td>
+        <td><img src="./flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
     </tr>
 </table>
 
