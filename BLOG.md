@@ -4,10 +4,6 @@ FlowMind 是一个开源的智能流程审批平台，基于 RuoYi-Cloud、Flowa
 
 它解决的不只是“画一张流程图”：从流程分类、基本信息、业务表单到 BPMN 节点配置，用户都可以先用自然语言描述需求，再审阅 AI 给出的结构化变更，确认后应用到可视化设计器中继续调整。
 
-<p align="center">
-  <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI 流程设计" width="960" />
-</p>
-
 ## 为什么做 FlowMind
 
 传统工作流平台通常要求使用者同时理解 BPMN、表单模型、审批人规则和引擎扩展属性。业务人员表达需求不难，把需求完整翻译成可执行模型才是最耗时的部分。

@@ -12,12 +12,6 @@
 	<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
-## 快速预览
-
-<p align="center">
-  <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI 流程设计" width="960" />
-</p>
-
 ## 项目简介
 
 FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意图识别、流程自动生成和审批意见智能推荐。系统采用微服务架构，包含三个主要子项目：

@@ -15,12 +15,6 @@
   <img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg" alt="FlowMind v3.6.6">
 </p>
 
-## Quick preview
-
-<p align="center">
-  <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI workflow design" width="960">
-</p>
-
 FlowMind is an open-source workflow approval platform that combines visual BPMN modeling, form design, approval operations, and an AI design assistant. Users can describe a business process in natural language, review structured changes, and apply them to the current design only after confirmation.
 
 ## AI design workflow
