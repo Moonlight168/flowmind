@@ -15,26 +15,13 @@
   <img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg" alt="FlowMind v3.6.6">
 </p>
 
-FlowMind is an open-source workflow approval platform that combines visual BPMN modeling, form design, approval operations, and an AI design assistant. Users can describe a business process in natural language, review structured changes, and apply them to the current design only after confirmation.
-
 ## Quick preview
 
 <p align="center">
-  <a href="./assets/demos/flowmind-ai-design-demo.mp4">
-    <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI design demo" width="960">
-  </a>
+  <img src="./assets/demos/ai-flow-design.png" alt="FlowMind AI workflow design" width="960">
 </p>
 
-<p align="center"><a href="./assets/demos/flowmind-ai-design-demo.mp4">▶ Watch the 18-second AI design overview</a></p>
-
-## Highlights
-
-- **AI-assisted design** — generate workflow categories, model metadata, forms, and BPMN changes from natural language.
-- **Review before apply** — field-level and node-level previews keep generated changes explicit and reversible.
-- **ReAct agent** — retrieves existing categories, forms, roles, and models before proposing structured operations.
-- **Visual modeling** — BPMN-JS process editor and VForm 3 form designer remain fully editable after generation.
-- **Approval workspace** — launch requests, process tasks, inspect history, and manage drafts from one interface.
-- **Production-ready stack** — Spring Cloud services, Flowable, FastAPI, Redis, MySQL, Nacos, and optional Langfuse observability.
+FlowMind is an open-source workflow approval platform that combines visual BPMN modeling, form design, approval operations, and an AI design assistant. Users can describe a business process in natural language, review structured changes, and apply them to the current design only after confirmation.
 
 ## AI design workflow
 
@@ -65,6 +52,15 @@ FlowMind is an open-source workflow approval platform that combines visual BPMN 
 | [flowmind-ui](./flowmind-ui/README.md) | Vue 3, Element Plus, BPMN-JS, VForm 3 | Administration UI, approval workspace, and AI design interaction |
 | [flowmind-cloud](./flowmind-cloud/README.md) | Spring Boot, Spring Cloud, Flowable | Gateway, identity, system data, and workflow execution |
 | [flowmind-ai-flow](./flowmind-ai-flow/README.md) | FastAPI, LangGraph, LangChain | ReAct generation, validation, conversation state, and observability |
+
+## Highlights
+
+- **AI-assisted design** — generate workflow categories, model metadata, forms, and BPMN changes from natural language.
+- **Review before apply** — field-level and node-level previews keep generated changes explicit and reversible.
+- **ReAct agent** — retrieves existing categories, forms, roles, and models before proposing structured operations.
+- **Visual modeling** — BPMN-JS process editor and VForm 3 form designer remain fully editable after generation.
+- **Approval workspace** — launch requests, process tasks, inspect history, and manage drafts from one interface.
+- **Production-ready stack** — Spring Cloud services, Flowable, FastAPI, Redis, MySQL, Nacos, and optional Langfuse observability.
 
 ## Quick start
 
