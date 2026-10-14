@@ -49,6 +49,44 @@ def test_flow_update_does_not_mutate_or_drop_unmentioned_nodes() -> None:
     assert result["edges"] == baseline["edges"]
 
 
+def test_flow_update_normalizes_singular_role_assignment_type() -> None:
+    """模型偶尔返回 ROLE，但前端设计器只识别 ROLES。"""
+    baseline = {
+        "nodes": [
+            {
+                "id": "manager",
+                "type": "USER_TASK",
+                "name": "直属主管审批",
+                "data_type": "INITIATOR",
+                "assignee": "${initiator}",
+                "text": "流程发起人",
+            }
+        ],
+        "edges": [],
+    }
+
+    result = apply_design_operations(
+        "flow_design",
+        baseline,
+        [
+            {
+                "op": "update_node",
+                "node_id": "manager",
+                "changes": {
+                    "data_type": "ROLE",
+                    "assignee": None,
+                    "candidate_groups": ["ROLE1"],
+                    "text": "超级管理员",
+                },
+            }
+        ],
+    )
+
+    assert result["nodes"][0]["data_type"] == "ROLES"
+    assert result["nodes"][0]["candidate_groups"] == ["ROLE1"]
+    assert result["nodes"][0]["text"] == "超级管理员"
+
+
 def test_flow_node_insert_rewires_single_outgoing_edge() -> None:
     baseline = {
         "nodes": [

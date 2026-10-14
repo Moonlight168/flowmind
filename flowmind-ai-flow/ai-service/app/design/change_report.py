@@ -62,6 +62,28 @@ _NODE_ATTRS = {
     "extension_properties": "扩展属性",
 }
 
+_ASSIGNMENT_ATTRS = {
+    "assignee",
+    "candidate_users",
+    "candidate_groups",
+    "data_type",
+    "text",
+}
+
+_ASSIGNMENT_TYPES = {
+    "INITIATOR": "发起人",
+    "USERS": "指定用户",
+    "ROLES": "角色",
+    "DEPTS": "部门",
+    "EXPRESSION": "表达式",
+}
+
+_ASSIGNMENT_TYPE_ALIASES = {
+    "ROLE": "ROLES",
+    "USER": "USERS",
+    "DEPT": "DEPTS",
+}
+
 
 def build_change_report(
     design_type: str,
@@ -190,8 +212,11 @@ def _update_node_item(
 ) -> str:
     node_id = operation.get("node_id")
     old_node = _find_node(old_nodes, node_id) or {}
-    parts = []
-    for attr, value in (operation.get("changes") or {}).items():
+    changes = operation.get("changes") or {}
+    parts = _assignment_change_parts(old_node, changes)
+    for attr, value in changes.items():
+        if attr in _ASSIGNMENT_ATTRS:
+            continue
         old_value = old_node.get(attr)
         if attr == "form_key":
             old_value = _form_display(old_value, available_forms)
@@ -202,6 +227,63 @@ def _update_node_item(
             )
     label = str(old_node.get("name") or node_id or "?")
     return f"{label} · {'、'.join(parts)}" if parts else label
+
+
+def _assignment_change_parts(
+    old_node: dict[str, Any], changes: dict[str, Any]
+) -> list[str]:
+    if not (_ASSIGNMENT_ATTRS & changes.keys()):
+        return []
+
+    old_type = _normalize_assignment_type(old_node.get("data_type"))
+    new_type = _normalize_assignment_type(changes.get("data_type", old_type))
+    parts: list[str] = []
+    if old_type != new_type:
+        parts.append(
+            f"审批方式 {_assignment_type_label(old_type)} → "
+            f"{_assignment_type_label(new_type)}"
+        )
+
+    display_name = changes.get("text")
+    if new_type == "ROLES":
+        old_value = (
+            old_node.get("text")
+            if old_type == "ROLES"
+            else None
+        )
+        new_value = display_name or changes.get(
+            "candidate_groups", old_node.get("candidate_groups")
+        )
+        if old_value != new_value:
+            parts.append(
+                f"候选角色 {_format(old_value)} → {_format(new_value)}"
+            )
+    elif new_type == "DEPTS":
+        old_value = old_node.get("text") if old_type == "DEPTS" else None
+        new_value = display_name or changes.get(
+            "candidate_groups", old_node.get("candidate_groups")
+        )
+        if old_value != new_value:
+            parts.append(
+                f"候选部门 {_format(old_value)} → {_format(new_value)}"
+            )
+    elif new_type in {"USERS", "EXPRESSION"}:
+        old_value = old_node.get("text") if old_type == new_type else None
+        new_value = display_name or changes.get("assignee") or changes.get(
+            "candidate_users", old_node.get("candidate_users")
+        )
+        if old_value != new_value:
+            parts.append(f"审批人 {_format(old_value)} → {_format(new_value)}")
+    return parts
+
+
+def _normalize_assignment_type(value: object) -> str:
+    normalized = str(value or "").strip().upper()
+    return _ASSIGNMENT_TYPE_ALIASES.get(normalized, normalized)
+
+
+def _assignment_type_label(value: str) -> str:
+    return _ASSIGNMENT_TYPES.get(value, value or "未设置")
 
 
 def _form_display(form_key: object, available_forms: list[dict[str, Any]]) -> str:

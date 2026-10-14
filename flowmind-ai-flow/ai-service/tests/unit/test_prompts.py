@@ -125,3 +125,15 @@ def test_baseline_still_drops_other_empty_values() -> None:
 
     assert '"formName": "已有名字"' in prompt
     assert "unused" not in prompt
+
+
+def test_flow_prompt_does_not_seed_fake_role_and_keeps_form_only_edits_scoped() -> None:
+    """已有节点只加表单时，提示词不能诱导模型顺手编造审批角色。"""
+    prompt = load_prompt("tasks/flow_model_design.md")
+
+    assert '"candidate_groups":["ROLE2"]' not in prompt
+    assert "只要求为已有节点新增或更换表单" in prompt
+    assert "不得修改审批人、候选用户、候选角色" in prompt
+    assert "只能包含用户明确点名的目标节点" in prompt
+    assert "`ROLES`（角色）" in prompt
+    assert "不得输出 `USER`、`ROLE` 或 `DEPT`" in prompt

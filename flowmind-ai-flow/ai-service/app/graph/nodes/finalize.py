@@ -1,5 +1,7 @@
 """Convert validated design state into the public response contract."""
 
+from copy import deepcopy
+
 from app.design.bpmn_generator import generate_bpmn_xml
 from app.design.change_report import build_change_report
 from app.design.validators import build_category
@@ -37,12 +39,24 @@ def finalize_node(state: AppState) -> AppState:
             # 分类与流程基本信息只改几个文本字段，前端沿用原有的字段 diff 呈现；
             # 表单与流程模型用后端的变更摘要 + 明细分组
             if (design_type, mode) in _SUMMARY_ENTITIES:
+                report_operations = operations
+                report_form_data = form_data
+                report_forms = state.get("available_forms") or []
+                if design_type == "flow_design" and design_output.get("new_forms"):
+                    report_operations, report_form_data, report_forms = (
+                        _with_pending_form_bindings(
+                            operations,
+                            form_data,
+                            report_forms,
+                            design_output["new_forms"],
+                        )
+                    )
                 summary, details = build_change_report(
                     design_type,
-                    operations,
+                    report_operations,
                     state.get("current_form_data") or {},
-                    form_data,
-                    state.get("available_forms") or [],
+                    report_form_data,
+                    report_forms,
                 )
             final_output = {
                 "status": "ready",
@@ -83,6 +97,55 @@ def finalize_node(state: AppState) -> AppState:
     )
     state["design_output"] = final_output
     return state
+
+
+def _with_pending_form_bindings(
+    operations: list[dict],
+    form_data: dict,
+    available_forms: list[dict],
+    drafts: list[dict],
+) -> tuple[list[dict], dict, list[dict]]:
+    """把待创建表单投影到仅用于展示的 diff，不污染真实设计操作。"""
+    report_operations = deepcopy(operations)
+    report_form_data = deepcopy(form_data)
+    report_forms = deepcopy(available_forms)
+    result_nodes = {
+        str(node.get("id")): node for node in report_form_data.get("nodes") or []
+    }
+
+    for index, draft in enumerate(drafts):
+        form_name = str(draft.get("form_name") or "待创建表单")
+        preview_key = f"__pending_form_{index}"
+        report_forms.append({"formKey": preview_key, "formName": form_name})
+        for raw_node_id in draft.get("node_ids") or []:
+            node_id = str(raw_node_id)
+            if node_id in result_nodes:
+                result_nodes[node_id]["form_key"] = preview_key
+
+            matched = False
+            for operation in report_operations:
+                op = operation.get("op")
+                if op == "add_node" and str((operation.get("node") or {}).get("id")) == node_id:
+                    operation.setdefault("node", {})["form_key"] = preview_key
+                    matched = True
+                    break
+                if op == "update_node" and str(operation.get("node_id")) == node_id:
+                    operation.setdefault("changes", {})["form_key"] = preview_key
+                    matched = True
+                    break
+            if not matched and not any(
+                operation.get("op") == "replace_graph"
+                for operation in report_operations
+            ):
+                report_operations.append(
+                    {
+                        "op": "update_node",
+                        "node_id": node_id,
+                        "changes": {"form_key": preview_key},
+                    }
+                )
+
+    return report_operations, report_form_data, report_forms
 
 
 def _needs_input(design_output: dict) -> dict:

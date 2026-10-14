@@ -212,3 +212,59 @@ def test_flow_design_exposes_complete_form_drafts_for_apply_confirmation():
     result = finalize_node(state)["design_output"]
 
     assert result["pending_entities"]["forms"] == [draft]
+
+
+def test_flow_preview_includes_pending_form_binding_in_target_node_diff():
+    """表单尚未创建真实 key 时，节点明细仍要显示待应用的表单绑定。"""
+    draft = {
+        "form_name": "请假审批意见表",
+        "node_ids": ["manager"],
+        "widgetList": [
+            {
+                "type": "textarea",
+                "formItemFlag": True,
+                "options": {"name": "opinion", "label": "审批意见", "required": True},
+            }
+        ],
+        "formConfig": {},
+    }
+    state = {
+        "design_type": "flow_design",
+        "mode": "design",
+        "intent": "success",
+        "current_form_data": {
+            "modelName": "员工请假审批流程",
+            "nodes": [
+                {"id": "manager", "type": "USER_TASK", "name": "直属主管审批"},
+                {"id": "director", "type": "USER_TASK", "name": "部门负责人审批"},
+            ],
+            "edges": [],
+        },
+        "design_output": {
+            "nodes": [
+                {"id": "manager", "type": "USER_TASK", "name": "直属主管审批"},
+                {"id": "director", "type": "USER_TASK", "name": "部门负责人审批"},
+            ],
+            "edges": [],
+            "new_forms": [draft],
+            "operations": [
+                {"op": "update_node", "node_id": "manager", "changes": {}}
+            ],
+            "operation_count": 1,
+            "review": {"passed": True, "errors": []},
+        },
+    }
+
+    result = finalize_node(state)["design_output"]
+
+    assert result["message"] == "流程「员工请假审批流程」：修改 1 个节点"
+    assert result["change_details"] == [
+        {
+            "action": "update",
+            "label": "修改 1 个节点",
+            "detail": "直属主管审批 · 表单 未绑定 → 请假审批意见表",
+        }
+    ]
+    assert result["operations"] == [
+        {"op": "update_node", "node_id": "manager", "changes": {}}
+    ]

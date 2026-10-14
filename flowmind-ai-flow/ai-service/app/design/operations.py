@@ -10,6 +10,13 @@ from typing import Any
 from app.design.widget_tree import iter_child_lists
 
 
+_DATA_TYPE_ALIASES = {
+    "ROLE": "ROLES",
+    "USER": "USERS",
+    "DEPT": "DEPTS",
+}
+
+
 def apply_design_operations(
     design_type: str,
     baseline: dict[str, Any] | None,
@@ -69,7 +76,9 @@ def _apply_flow_operation(
 ) -> None:
     op = operation.get("op")
     if op == "replace_graph":
-        result["nodes"] = deepcopy(operation.get("nodes") or [])
+        result["nodes"] = [
+            _normalize_flow_node(node) for node in operation.get("nodes") or []
+        ]
         result["edges"] = deepcopy(operation.get("edges") or [])
         automatic_edges.clear()
         return
@@ -82,7 +91,7 @@ def _apply_flow_operation(
         node = _find_by_id(result.get("nodes", []), operation.get("node_id"))
         if node is None:
             raise ValueError(f"要修改的流程节点不存在: {operation.get('node_id')}")
-        node.update(operation.get("changes") or {})
+        node.update(_normalize_assignment_fields(operation.get("changes") or {}))
         return
     if op == "remove_node":
         _remove_flow_node(result, operation.get("node_id"))
@@ -133,7 +142,7 @@ def _find_automatic_edge(
 def _add_flow_node(
     result: dict[str, Any], operation: dict[str, Any]
 ) -> tuple[str, str] | None:
-    node = deepcopy(operation.get("node") or {})
+    node = _normalize_flow_node(operation.get("node") or {})
     if not node.get("id"):
         raise ValueError("新增流程节点缺少 id")
     nodes = result.setdefault("nodes", [])
@@ -147,6 +156,20 @@ def _add_flow_node(
         raise ValueError(f"要插入的位置节点不存在: {after_id}")
     _insert_after(result.setdefault("edges", []), after_id, node["id"])
     return after_id, node["id"]
+
+
+def _normalize_flow_node(node: dict[str, Any]) -> dict[str, Any]:
+    return _normalize_assignment_fields(node)
+
+
+def _normalize_assignment_fields(values: dict[str, Any]) -> dict[str, Any]:
+    """统一模型输出与 BPMN 设计器的审批人类型枚举。"""
+    normalized = deepcopy(values)
+    data_type = normalized.get("data_type")
+    if isinstance(data_type, str):
+        upper = data_type.strip().upper()
+        normalized["data_type"] = _DATA_TYPE_ALIASES.get(upper, upper)
+    return normalized
 
 
 def _insert_after(edges: list[dict[str, Any]], after_id: str, node_id: str) -> None:

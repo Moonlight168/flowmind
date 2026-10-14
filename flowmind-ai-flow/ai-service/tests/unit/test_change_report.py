@@ -226,6 +226,46 @@ def test_flow_node_preview_summarizes_runtime_configuration():
     )
 
 
+def test_flow_assignment_preview_uses_business_labels_and_role_name():
+    baseline = {
+        "nodes": [
+            {
+                "id": "manager",
+                "type": "USER_TASK",
+                "name": "直属主管审批",
+                "data_type": "INITIATOR",
+                "assignee": "${initiator}",
+                "text": "流程发起人",
+            }
+        ]
+    }
+    operations = [
+        {
+            "op": "update_node",
+            "node_id": "manager",
+            "changes": {
+                "assignee": None,
+                "text": "超级管理员",
+                "data_type": "ROLE",
+                "candidate_groups": ["ROLE1"],
+            },
+        }
+    ]
+
+    _, details = build_change_report("flow_design", operations, baseline, {})
+
+    assert details == [
+        {
+            "action": "update",
+            "label": "修改 1 个节点",
+            "detail": (
+                "直属主管审批 · 审批方式 发起人 → 角色、"
+                "候选角色 未设置 → 超级管理员"
+            ),
+        }
+    ]
+
+
 def test_form_replace_preview_summarizes_required_and_options():
     result = {
         "widgetList": [

@@ -30,6 +30,7 @@ import { getProcessForm, startProcess } from '@/api/workflow/work/process.js';
 import { saveDraft as saveDraftApi, getDraftByDefId, getDraft } from '@/api/workflow/work/draft.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { EditPen } from '@element-plus/icons-vue';
+import { collectDraftFormData } from './draftForm.js';
 
 
 const route = useRoute();
@@ -138,8 +139,8 @@ const reset = () => {
 // 保存草稿
 const saveDraft = async () => {
   try {
-    // 先验证必填字段
-    const currentFormData = await vfRenderRef.value.getFormData(true);
+    // 草稿允许保留未完成内容，仅读取当前值；必填校验只在正式提交时执行。
+    const currentFormData = await collectDraftFormData(vfRenderRef.value);
     
     // 准备草稿数据
     const draftData = {
@@ -166,11 +167,6 @@ const saveDraft = async () => {
       ElMessage.info('保存草稿失败');
     }
   } catch (error) {
-    // vform 校验失败时 reject 的是字符串；不要靠匹配中文文案判断，
-    // 否则界面切到英文语言包就失效
-    if (typeof error === 'string') {
-      ElMessage.warning('请填写所有必填字段后再保存草稿');
-    }
     throw error; // 抛出错误，让调用方知道保存失败
   }
 };
