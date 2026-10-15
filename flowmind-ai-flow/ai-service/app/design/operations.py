@@ -9,7 +9,6 @@ from typing import Any
 
 from app.design.widget_tree import iter_child_lists
 
-
 _DATA_TYPE_ALIASES = {
     "ROLE": "ROLES",
     "USER": "USERS",

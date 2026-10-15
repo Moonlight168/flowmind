@@ -32,6 +32,7 @@ from langgraph.checkpoint.base import (
 )
 
 from app.config.settings import SECONDS_PER_HOUR, settings
+from app.core.exceptions import PERSISTENCE_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,8 @@ class RedisCheckpoint(BaseCheckpointSaver):
     """Redis 对话存储（LangGraph 检查点标准接口 + 简化列表管理）
 
     简化版数据（_save_chat_thread / save_preview）的写入失败按约定使用
-    `except Exception` 兜底静默降级（仓库规范"禁止 except Exception"的例外）：
-    列表预览是优化而非正确性，失败不得阻断主流程；主检查点路径仍然失败即抛。
+    Redis、序列化和输入异常按约定静默降级：列表预览是优化而非正确性，失败不
+    得阻断主流程；主检查点路径仍然失败即抛。
     """
 
     # LangGraph 内部前缀
@@ -233,7 +234,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
             self.redis.sadd(self.CHAT_THREADS_KEY, thread_id)
             self.redis.expire(self.CHAT_THREADS_KEY, self.ttl_seconds)
 
-        except Exception as e:
+        except PERSISTENCE_ERRORS as e:
             logger.warning(f"Failed to save chat thread: {e}")
 
     def save_preview(self, thread_id: str, user_input: str, ns: str = "") -> None:
@@ -253,7 +254,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
                     self.redis.setex(
                         thread_key, self.ttl_seconds, ormsgpack.packb(thread_data)
                     )
-                except Exception:
+                except PERSISTENCE_ERRORS:
                     pass
             else:
                 thread_data = {
@@ -269,7 +270,7 @@ class RedisCheckpoint(BaseCheckpointSaver):
             self.redis.sadd(self.CHAT_THREADS_KEY, thread_id)
             self.redis.expire(self.CHAT_THREADS_KEY, self.ttl_seconds)
 
-        except Exception as e:
+        except PERSISTENCE_ERRORS as e:
             logger.warning(f"Failed to save preview: {e}")
 
     def list(

@@ -8,12 +8,6 @@
 	<a href="https://github.com/Moonlight168/flowmind/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
 
-<p align="center">
-  <a href="../assets/demos/flowmind-ai-design-demo.mp4"><img src="../assets/demos/ai-flow-design.png" alt="FlowMind AI 设计演示" width="960" /></a>
-</p>
-
-<p align="center"><a href="../assets/demos/flowmind-ai-design-demo.mp4">▶ 观看 AI 设计快速演示</a></p>
-
 ## 平台简介
 
 本项目基于 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue) 前端框架进行扩展开发，集成 AI 智能流程设计功能。

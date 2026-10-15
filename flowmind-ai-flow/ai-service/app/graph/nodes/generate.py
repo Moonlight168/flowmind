@@ -12,6 +12,7 @@ from itertools import pairwise
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from app.core.exceptions import ErrorCode
 from app.design.generation import run_react_agent
 from app.design.history import compress_history
 from app.design.intent import discriminate_intent
@@ -212,7 +213,7 @@ def _invalid_operation_result(operations: list[dict]) -> dict:
     return {
         "intent": "error",
         "message": "生成的变更无法应用，请明确要修改的节点或字段后重试",
-        "error_type": "invalid_operation",
+        "error_type": ErrorCode.INVALID_OPERATION.value,
         "retryable": True,
         "operation_count": len(operations),
     }

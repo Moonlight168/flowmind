@@ -6,16 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-import httpx
 import requests
 from langgraph.errors import EmptyInputError, GraphRecursionError, InvalidUpdateError
-from openai import OpenAIError
-from pydantic import ValidationError
-from redis.exceptions import RedisError
 
 from app.config.settings import settings
 from app.core.auth_context import set_auth_token
-from app.core.exceptions import FlowDesignException
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS, ErrorCode, FlowDesignException
 from app.evaluation.datasets import (
     DatasetSpec,
     decode_dataset_value,
@@ -29,11 +25,8 @@ EXPERIMENT_NAME = "flowmind-design-evaluation"
 EXPERIMENT_DESCRIPTION = "FlowMind AI 设计数据集评测"
 UPLOAD_HINT = "scripts.upload_dataset.py"
 EVALUATION_RUNTIME_ERRORS = (
-    OpenAIError,
-    httpx.HTTPError,
+    *EXPECTED_RUNTIME_ERRORS,
     requests.RequestException,
-    RedisError,
-    ValidationError,
     EmptyInputError,
     GraphRecursionError,
     InvalidUpdateError,
@@ -114,7 +107,7 @@ def build_workflow_task(auth_token: str, spec: DatasetSpec) -> Any:
                 "status": "error",
                 "intent": "error",
                 "form_data": None,
-                "error_type": "evaluation_runtime",
+                "error_type": ErrorCode.EVALUATION_RUNTIME.value,
                 "message": "评测执行失败，已隔离该用例",
                 "failed_exception": type(exc).__name__,
             }

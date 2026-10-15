@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from app.api._sse import to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS
 from app.domain.dto import ChatRequestDTO, ResponseVO
 from app.graph.chat_graph import (
     chat_workflow,
@@ -95,7 +96,7 @@ def chat_stream(
                 trace_id=trace_id,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except Exception as exc:
+        except EXPECTED_RUNTIME_ERRORS as exc:
             # 流式边界兜底（与设计端点一致）：白名单外的异常会穿透到桥接层
             # 造成流静默截断且服务端无日志，这里统一转为 error 事件。
             logger.error(f"[chat-stream] 流式调用失败: {exc}", exc_info=True)
