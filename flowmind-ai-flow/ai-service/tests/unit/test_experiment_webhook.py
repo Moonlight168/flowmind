@@ -83,7 +83,7 @@ async def test_trigger_experiment_returns_202_and_runs_in_background(
     }
 
 
-async def test_trigger_experiment_falls_back_to_default_dataset(
+async def test_trigger_experiment_does_not_run_unknown_dataset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _capture_runner(monkeypatch)
@@ -94,7 +94,21 @@ async def test_trigger_experiment_falls_back_to_default_dataset(
 
     assert response.status_code == 202
     await tasks()
-    assert captured["dataset_name"] == "flow"
+    assert captured == {}
+
+
+async def test_dataset_id_without_name_does_not_run_wrong_dataset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = _capture_runner(monkeypatch)
+    request = _FakeRequest(json.dumps({"datasetId": "d-1"}).encode())
+    tasks = BackgroundTasks()
+
+    response = await webhook.trigger_experiment.__wrapped__(request, tasks)
+
+    assert response.status_code == 202
+    await tasks()
+    assert captured == {}
 
 
 def test_webhook_route_accepts_json_body_over_http(

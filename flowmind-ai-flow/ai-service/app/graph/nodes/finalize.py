@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 
+from app.core.exceptions import ErrorCode
 from app.design.bpmn_generator import generate_bpmn_xml
 from app.design.change_report import build_change_report
 from app.design.validators import build_category
@@ -26,7 +27,7 @@ def finalize_node(state: AppState) -> AppState:
         if not review.get("passed", True):
             final_output = _error(
                 design_output,
-                error_type="validation_failed",
+                error_type=ErrorCode.VALIDATION_FAILED.value,
                 message="生成结果未通过校验，请调整需求后重试",
             )
         else:
@@ -171,7 +172,7 @@ def _error(
         "intent": "error",
         "form_data": None,
         "message": message or design_output.get("message") or "系统错误，请重试",
-        "error_type": error_type or design_output.get("error_type", "unknown"),
+        "error_type": error_type or design_output.get("error_type", ErrorCode.UNKNOWN.value),
         "retryable": design_output.get("retryable", True),
         "validation": design_output.get("review", {}),
         "operation_count": design_output.get("operation_count", 0),

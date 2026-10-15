@@ -4,16 +4,41 @@ FlowMind 智能流程设计服务 - 异常处理
 本模块定义统一异常处理体系，提供异常类定义和全局异常处理器。
 """
 
+from enum import StrEnum
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
+from openai import OpenAIError
 from pydantic import ValidationError
+from redis.exceptions import RedisError
 
 from app.config.settings import settings
 from app.domain.dto import ResponseVO
 from app.infra.logger import get_trace_id, logger
+
+
+class ErrorCode(StrEnum):
+    """对外返回的稳定错误码，避免业务代码散落字符串。"""
+
+    UNKNOWN = "unknown"
+    INTERNAL = "internal"
+    VALIDATION_FAILED = "validation_failed"
+    INVALID_OPERATION = "invalid_operation"
+    EVALUATION_RUNTIME = "evaluation_runtime"
+    HTTP_ERROR = "HTTP_ERROR"
+    FLOW_DESIGN = "FLOW_DESIGN_ERROR"
+    VALIDATION = "VALIDATION_ERROR"
+    RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
+    SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
+    CONFIGURATION = "CONFIGURATION_ERROR"
+
+
+PERSISTENCE_ERRORS = (RedisError, OSError, TypeError, ValueError)
+CONFIGURATION_ERRORS = (NameError, TypeError, ValueError)
+INFRASTRUCTURE_ERRORS = (OSError, RuntimeError, TypeError, ValueError)
 
 # ============== 异常基类 ==============
 
@@ -27,7 +52,7 @@ class AIApprovalException(Exception):  # noqa: N818 - 既有命名，改 Error �
     def __init__(
         self,
         message: str,
-        error_code: str = "UNKNOWN_ERROR",
+        error_code: str | ErrorCode = ErrorCode.UNKNOWN,
         status_code: int = 500,
         details: dict[str, Any] | None = None,
     ):
@@ -44,6 +69,21 @@ class AIApprovalException(Exception):  # noqa: N818 - 既有命名，改 Error �
             message=self.message,
             trace_id=get_trace_id(),
         ).model_dump()
+
+
+# 流式边界和工作流节点只捕获这些可预期异常；未知异常继续抛出，避免掩盖程序错误。
+EXPECTED_RUNTIME_ERRORS = (
+    AIApprovalException,
+    httpx.HTTPError,
+    OpenAIError,
+    RedisError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+    KeyError,
+    ValidationError,
+)
 
 
 # ============== 具体异常类型 ==============
@@ -66,7 +106,7 @@ class FlowDesignException(AIApprovalException):
 
         super().__init__(
             message=message,
-            error_code="FLOW_DESIGN_ERROR",
+            error_code=ErrorCode.FLOW_DESIGN,
             status_code=500,
             details=details,
         )
@@ -89,7 +129,7 @@ class ValidationException(AIApprovalException):
 
         super().__init__(
             message=message,
-            error_code="VALIDATION_ERROR",
+            error_code=ErrorCode.VALIDATION,
             status_code=400,
             details=details,
         )
@@ -112,7 +152,7 @@ class ResourceNotFoundException(AIApprovalException):
 
         super().__init__(
             message=message,
-            error_code="RESOURCE_NOT_FOUND",
+            error_code=ErrorCode.RESOURCE_NOT_FOUND,
             status_code=404,
             details={
                 "resource_type": resource_type,
@@ -140,7 +180,7 @@ class ServiceUnavailableException(AIApprovalException):
 
         super().__init__(
             message=message,
-            error_code="SERVICE_UNAVAILABLE",
+            error_code=ErrorCode.SERVICE_UNAVAILABLE,
             status_code=503,
             details=details,
         )
@@ -159,7 +199,7 @@ class ConfigurationException(AIApprovalException):
 
         super().__init__(
             message=message,
-            error_code="CONFIGURATION_ERROR",
+            error_code=ErrorCode.CONFIGURATION,
             status_code=500,
             details=details,
         )

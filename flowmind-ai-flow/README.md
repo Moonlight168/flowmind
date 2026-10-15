@@ -2,7 +2,6 @@
 
 基于 FastAPI + LangGraph 的智能流程设计服务，支持 AI 自动生成 Flowable 流程分类、流程和表单。
 
-[▶ 观看 FlowMind AI 设计快速演示](../assets/demos/flowmind-ai-design-demo.mp4)
 
 ## 核心功能
 

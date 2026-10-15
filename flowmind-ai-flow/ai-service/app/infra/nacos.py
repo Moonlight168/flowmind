@@ -10,6 +10,7 @@ import time
 import nacos
 
 from app.config.settings import settings
+from app.core.exceptions import INFRASTRUCTURE_ERRORS
 from app.infra.logger import logger
 
 
@@ -77,7 +78,7 @@ class NacosRegistry:
             )
             return True
 
-        except Exception as e:
+        except INFRASTRUCTURE_ERRORS as e:
             logger.error(f"服务注册异常：{e}")
             return False
 
@@ -89,7 +90,7 @@ class NacosRegistry:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except Exception:
+        except OSError:
             return "127.0.0.1"
 
     def deregister(self) -> bool:
@@ -114,7 +115,7 @@ class NacosRegistry:
             logger.info(f"服务注销成功 - 服务名：{self.service_name}")
             return True
 
-        except Exception as e:
+        except INFRASTRUCTURE_ERRORS as e:
             logger.error(f"服务注销异常：{e}")
             return False
 

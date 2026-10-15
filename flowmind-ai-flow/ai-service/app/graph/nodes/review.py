@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from app.config.settings import settings
 from app.core.auth_context import get_auth_token
+from app.core.exceptions import ErrorCode
 from app.design.validators import (
     BaselineValidator,
     BPMNXMLValidator,
@@ -82,7 +83,7 @@ def review_node(state: AppState) -> AppState:
         # 确定性校验失败：优先透出具体校验原因（如"还没有流程分类"），
         # 它比通用文案更能指导用户下一步动作；无具体原因时才退回通用提示
         first_error = result.errors[0].message if result.errors else None
-        design_output["error_type"] = "validation_failed"
+        design_output["error_type"] = ErrorCode.VALIDATION_FAILED.value
         design_output["message"] = (
             first_error or "生成结果反复未通过校验，请调整需求后重试"
         )

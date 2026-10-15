@@ -11,6 +11,8 @@ from functools import wraps
 
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
+from app.core.exceptions import CONFIGURATION_ERRORS
+
 from .logger_config import generate_request_id, generate_trace_id, logger
 
 
@@ -56,7 +58,7 @@ def log_api_endpoint(skip_paths: list[str] | None = None):
                     elapsed_ms=int((time.time() - start_time) * 1000),
                 )
                 return result
-            except Exception as e:
+            except (OSError, RuntimeError, TypeError, ValueError) as e:
                 logger.error(
                     "请求失败",
                     path=path,
@@ -82,7 +84,7 @@ def log_api_endpoint(skip_paths: list[str] | None = None):
                     for name, param in original.parameters.items()
                 ]
             )
-        except Exception:  # noqa: BLE001 - 解析不了就维持原样，交给 FastAPI 自己报错
+        except CONFIGURATION_ERRORS:
             pass
 
         return wrapper
