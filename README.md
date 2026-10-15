@@ -4,9 +4,12 @@
 <h1 align="center" style="margin: 30px 0 30px; font-weight: bold;">FlowMind</h1>
 <h4 align="center">基于 RuoYi-Cloud + Flowable 的智能工作流管理系统</h4>
 <p align="center">
-	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v2.1.0-brightgreen.svg"></a>
+  <strong>简体中文</strong> · <a href="./README_EN.md">English</a>
+</p>
+<p align="center">
+	<a href="https://gitee.com/wish168/flowmind"><img src="https://img.shields.io/badge/FlowMind-v3.6.6-brightgreen.svg"></a>
 	<a href="https://github.com/Moonlight168/flowmind"><img src="https://img.shields.io/github/stars/Moonlight168/flowmind?style=flat"></a>
-	<a href="https://gitee.com/wish168/flowmind/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+	<a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
 ## 项目简介
@@ -15,75 +18,15 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 | 子项目                     | 技术栈                  | 端口    | 职责                            |
 | -------------------------- | ----------------------- | ------- | ------------------------------- |
-| **flowmind-ui**      | Vue 3 + Element Plus    | 5173/80 | 用户界面、AI 助手、审批中心     |
-| **flowmind-cloud**   | Spring Cloud + Flowable | 8080    | 业务逻辑、Flowable 流程引擎     |
+| **flowmind-ui**      | Vue 3 + Element Plus    | 18088（容器内 88/80） | 用户界面、AI 助手、审批中心     |
+| **flowmind-cloud**   | Spring Cloud + Flowable | 9001-9007 | 业务逻辑、Flowable 流程引擎（网关 9001） |
 | **flowmind-ai-flow** | FastAPI + LangGraph     | 8000    | AI 意图识别、流程设计、表单生成 |
-
-## 核心特性
-
-### AI 智能设计
-
-通过自然语言描述，自动生成流程分类、BPMN 流程结构和用户表单：
-
-| 功能                  | 说明                                          |
-| --------------------- | --------------------------------------------- |
-| **AI 设计分类** | 自然语言描述 → 自动生成流程分类              |
-| **AI 设计流程** | 业务需求描述 → 自动生成 BPMN 2.0 流程        |
-| **AI 设计表单** | 表单内容描述 → 自动生成 v-form-designer 表单 |
-| **React 模式** | 基于 ReAct 架构的智能 Agent，支持多轮追问     |
-| **追问优化**    | AI 主动询问细节，持续优化设计结果直到满意    |
-
-### React 模式 Agent
-
-全新的 Agent 架构，采用 Reasoning + Acting 模式：
-
-- **智能推理**：AI 分析用户意图，规划执行步骤
-- **工具调用**：动态调用 BPMN 设计、表单生成等工具
-- **追问机制**：主动询问缺失信息，确保设计完整
-- **结果验证**：自动验证生成结果的正确性
-
-### 全局 AI 助手
-
-悬浮式 AI 助手，随时随地调用 AI 能力：
-
-- 对话历史自动保存
-- 支持查看、继续和删除对话
-- 一键跳转到对应设计页面
-
-### 审批中心
-
-统一的流程审批管理界面：
-
-- **待办事项**：需要处理的审批任务
-- **已办事项**：已完成的审批记录
-- **我的流程**：我发起的流程申请
-- **待签收**：需要签收的任务
-
-### 草稿箱
-
-- 流程草稿随时保存
-- 编辑、删除、提交
-- 与审批中心无缝集成
 
 ## 系统架构
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        前端层 (flowmind-ui)                      │
-│              Vue 3 + Element Plus + BPMN-JS                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼ HTTP
-┌─────────────────────────────────────────────────────────────────┐
-│                    API 网关 (Spring Cloud Gateway)               │
-└─────────────────────────────────────────────────────────────────┘
-                    │                       │
-                    ▼                       ▼
-         ┌──────────────────┐    ┌─────────────────────┐
-         │  业务模块        │    │  AI 服务            │
-         │  (Flowable)      │    │  (FastAPI+LangGraph)│
-         └──────────────────┘    └─────────────────────┘
-```
+![FlowMind 系统架构](./assets/diagrams/flowmind-architecture-current.svg)
+
+> FlowMind 由 Vue 3 前端、Java 微服务和 FastAPI AI 服务协同组成，统一接入流程引擎与基础设施，支持从设计、部署到审批执行的完整链路。
 
 ## 技术栈
 
@@ -96,18 +39,41 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ## 演示图
 
-### AI 功能
+### AI 设计闭环
 
-<table>
-    <tr>
-        <td><img src="./flowmind-ui/src/assets/images/README/全局ai助手.png" alt="全局AI助手" width="100%"/><br/><div style="text-align: center;">全局 AI 助手</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/对话历史管理.png" alt="对话历史管理" width="100%"/><br/><div style="text-align: center;">对话历史管理</div></td>
-    </tr>
-    <tr>
-        <td><img src="./flowmind-ui/src/assets/images/README/表单设计新增ai设计按钮.png" alt="AI设计分类" width="100%"/><br/><div style="text-align: center;">AI 设计分类</div></td>
-        <td><img src="./flowmind-ui/src/assets/images/README/流程设计新增ai设计按钮.png" alt="流程设计" width="100%"/><br/><div style="text-align: center;">AI 生成流程</div></td>
-    </tr>
-</table>
+FlowMind 将自然语言需求拆解为可执行的设计步骤。基本信息、表单字段、流程节点和运行配置都可以由 AI 协助生成，再由用户确认和调整。
+
+#### 1. 流程分类设计
+
+根据业务主题生成分类名称、编码和说明，并在应用前展示字段变更。
+
+<p align="center">
+  <img src="./assets/demos/ai-category-design.png" alt="AI 流程分类设计" width="960" />
+</p>
+
+#### 2. 基本信息生成
+
+输入业务描述后，AI 自动整理流程分类、名称和标识等基础信息，减少重复录入。
+
+<p align="center">
+  <img src="./assets/demos/ai-basic-info-design.png" alt="AI 生成流程基本信息" width="960" />
+</p>
+
+#### 3. 表单设计
+
+根据业务描述生成可编辑表单，字段、校验和布局仍可在表单设计器中继续调整。
+
+<p align="center">
+  <img src="./assets/demos/ai-form-design.png" alt="AI 表单设计与变更预览" width="960" />
+</p>
+
+#### 4. 流程设计
+
+用自然语言描述审批路径，AI 生成 BPMN 节点、审批人、表单绑定等配置，并在画布中继续编辑。
+
+<p align="center">
+  <img src="./assets/demos/ai-flow-design.png" alt="AI 流程设计与变更预览" width="960" />
+</p>
 
 ### OA 工作台
 
@@ -128,6 +94,8 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ### 流程管理
 
+后台管理端提供流程分类、模型设计、部署发布和表单维护能力。
+
 <table>
     <tr>
         <td><img src="./flowmind-ui/src/assets/images/README/流程分类.png" alt="流程分类" width="100%"/><br/><div style="text-align: center;">流程分类</div></td>
@@ -138,6 +106,39 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
         <td><img src="./flowmind-ui/src/assets/images/README/表单编辑.png" alt="表单编辑" width="100%"/><br/><div style="text-align: center;">表单编辑</div></td>
     </tr>
 </table>
+
+## 核心特性
+
+### AI 智能设计
+
+通过自然语言描述，自动生成流程分类、BPMN 流程结构和用户表单：
+
+| 功能                  | 说明                                          |
+| --------------------- | --------------------------------------------- |
+| **AI 设计分类** | 自然语言描述 → 自动生成流程分类              |
+| **AI 设计流程** | 业务需求描述 → 自动生成 BPMN 2.0 流程        |
+| **AI 设计表单** | 表单内容描述 → 自动生成 v-form-designer 表单 |
+| **ReAct 模式** | 基于 ReAct 架构的智能 Agent，支持多轮追问     |
+| **追问优化**    | AI 主动询问细节，持续优化设计结果直到满意    |
+
+### ReAct 模式 Agent
+
+- **智能推理**：分析用户意图并规划执行步骤
+- **工具调用**：查询实际分类、表单、角色和模型后生成变更
+- **追问机制**：主动询问缺失信息，逐步完善设计
+- **结果验证**：在应用前校验结构化操作和生成结果
+
+### 全局 AI 助手
+
+- 对话历史自动保存
+- 支持查看、继续和删除对话
+- 一键跳转到对应设计页面
+
+### 审批中心与草稿箱
+
+- 统一管理待办、已办、待签收和我发起的流程
+- 支持申请草稿保存、恢复、删除和提交
+- 查看流程运行轨迹与完整审批记录
 
 ## 快速开始
 
@@ -158,24 +159,47 @@ bin\build.bat
 
 ```bash
 cd docker\flowmind
-docker-compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-### 开发环境（启动脚本）
+该命令启动前端、Java 微服务、AI 服务、MySQL、Redis 和 Nacos，默认入口为 http://localhost:18088。Sentinel 与 Langfuse 均按需单独启动：
 
-前提：Docker 服务已启动且可用
+从开发环境切换到生产环境前，先执行 `docker compose down --remove-orphans`，避免 Vite 与 Nginx 同时占用 18088。
 
 ```bash
-bin\start.bat
+# 可选：Sentinel
+docker compose --profile sentinel up -d flowmind-sentinel
+
+# 可选：独立 Langfuse（复用 FlowMind 网络和原有独立数据卷）
+docker compose -f docker-compose.langfuse.yml up -d
 ```
 
-自动启动：Docker 基础环境 → Java 后端 → 前端
+### 开发环境（Docker，支持热更新）
 
-**已启动服务**：Gateway (9001)、Auth (9200)、System (9201)、Flowable (9204)
+默认 Compose 只启动 AI 功能所需的开发链路：MySQL、Redis、Nacos、Gateway、Auth、System、Flowable、Vite 前端和 AI 服务。File、Gen、Job、Monitor 改为可选服务。
 
-**未启动（可选）**：File (9202)、Gen (9203)、Job (9205)、Visual
+```bash
+cd docker\flowmind
+docker compose up -d --remove-orphans
+```
 
-AI 服务（需单独启动）：
+需要全部可选服务时：
+
+```bash
+docker compose --profile optional up -d
+```
+
+也可以只启动某一个，例如 `docker compose up -d flowmind-file`。
+
+也可以在仓库根目录运行 `bin\start.bat`。开发入口仍为 http://localhost:18088。
+
+`--remove-orphans` 会清理之前由生产 Compose 创建的 Nginx 容器。日志中的 `/docker-entrypoint.sh: Configuration complete` 表示 Nginx 配置成功；若随后出现 `port is already allocated`，说明旧 Nginx 与开发 Vite 同时绑定了 18088。
+
+前端源码挂载到 Node 22 容器，由 Vite 自动热更新；AI 的 `app/` 挂载到容器，由 Uvicorn `--reload` 自动重载。Java 服务未引入 DevTools，修改后仍需重新打包并重启对应容器。File、Gen、Job、Monitor、Langfuse 与 Sentinel 不会默认启动。
+
+### 宿主机开发（可选）
+
+需要单独调试某个进程时，也可以在宿主机手动启动 AI：
 
 ```bash
 cd flowmind-ai-flow/ai-service
@@ -183,16 +207,32 @@ poetry install
 poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+> 注意：AI 服务强依赖 Nacos 注册，需先启动 Docker 容器（`bin/start.bat` 已按序处理）。
+
 ## 服务端口
 
-| 服务     | 端口    | 访问地址                    |
-| -------- | ------- | --------------------------- |
-| 前端     | 5173/80 | http://localhost:5173       |
-| API 网关 | 8080    | http://localhost:8080       |
-| AI 服务  | 8000    | http://localhost:8000       |
-| Nacos    | 8848    | http://localhost:8848/nacos |
-| MySQL    | 3306    | localhost:3306              |
-| Redis    | 6379    | localhost:6379              |
+开发 Docker 的前端从宿主机 18088 映射到 Vite 容器 88；直接在宿主机运行 Vite 时才使用 88。
+
+| 服务                 | 端口                     | 访问地址                            |
+| -------------------- | ------------------------ | ----------------------------------- |
+| 前端（开发 Docker）  | 18088（容器内 88）       | http://localhost:18088              |
+| 前端（宿主机 Vite）  | 88                       | http://localhost:88                 |
+| 前端（生产 Nginx）   | 18088                    | http://localhost:18088              |
+| API 网关（Gateway）  | 9001                     | http://localhost:9001               |
+| Auth 认证            | 9002                     | —                                   |
+| System 系统          | 9003                     | —                                   |
+| Flowable 流程        | 9007                     | —                                   |
+| AI 服务              | 8000（开发环境另发布 127.0.0.1:80） | http://localhost:8000               |
+| Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
+| MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
+| Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
+| Langfuse             | 13001（容器内 3000）    | http://localhost:13001              |
+
+> 可选模块端口：Gen 9004、Job 9005、File 9006。完整开发环境使用 `docker-compose.yml`，独立 Langfuse 使用 `docker-compose.langfuse.yml`，完整生产环境使用 `docker-compose.prod.yml`。
+>
+> 开发环境的 AI 服务直接监听 80 并发布到 `127.0.0.1:80`，供 Langfuse 的 Remote Experiment webhook
+> 经 `http://host.docker.internal/webhooks/experiment` 回调，不必再为一个反代端口去起 Nginx；
+> 生产环境不发布该端口，仍只经网关访问。
 
 ## 项目仓库
 
@@ -211,6 +251,6 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [Apache License 2.0](https://github.com/Moonlight168/flowmind/blob/master/LICENSE) 开源协议。
+基于 [RuoYi-Cloud](https://gitee.com/y_project/RuoYi-Cloud) 扩展开发，遵循 [MIT License](./LICENSE) 开源协议。
 
-**最后更新**: 2026-06-04
+**最后更新**: 2026-10-14

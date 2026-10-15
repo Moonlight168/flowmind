@@ -81,64 +81,37 @@
 
 <script setup name="Own" lang="js">
 import { listOwnProcess, stopProcess, delProcess } from "@/api/workflow/work/process";
-import { listAllCategory } from "@/api/workflow/category";
-
+import { useTaskList } from './useTaskList';
 
 const router = useRouter();
 const { proxy } = getCurrentInstance() ;
 const { wf_process_status } = proxy.useDict("wf_process_status");
 
-
-
-
-const categoryOptions = ref([]);
-
-const ownProcessList = ref([]);
-const loading = ref(true);
-const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const dateRange = ref(['','']);
-
-const queryFormRef = ref();
-
-const queryParams = ref({
-  pageNum: 1,
-  pageSize: 10,
-  processKey: '',
-  processName: '',
-  category: ''
+const {
+  rows: ownProcessList,
+  loading,
+  showSearch,
+  total,
+  dateRange,
+  queryFormRef,
+  categoryOptions,
+  queryParams,
+  getList,
+  handleQuery,
+  resetQuery,
+  categoryFormat
+} = useTaskList({
+  fetcher: listOwnProcess,
+  defaultQuery: { processKey: '', processName: '', category: '' }
 });
 
-/** 查询流程分类列表 */
-const getCategoryList = async () => {
-  const res = await listAllCategory();
-  categoryOptions.value = res.data;
-};
-/** 查询我的流程列表 */
-const getList = async () => {
-  loading.value = true;
-  const res = await listOwnProcess(proxy.addDateRange(queryParams.value, dateRange.value));
-  ownProcessList.value = res.rows;
-  total.value = res.total;
-  loading.value = false;
-}
-/** 搜索按钮操作 */
-const handleQuery = () => {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-/** 重置按钮操作 */
-const resetQuery = () => {
-  queryFormRef.value.resetFields();
-  handleQuery();
-}
+// 多选态：工具栏的删除按钮靠 multiple 决定是否可用
+const ids = ref([]);
+const multiple = ref(true);
+
 /** 多选框选中数据 */
 const handleSelectionChange = (selection) => {
   ids.value = selection.map(item => item.procInsId);
-  single.value = selection.length != 1;
   multiple.value = !selection.length;
 }
 /** 流程详情 */
@@ -156,16 +129,6 @@ const handleStop = async (row) => {
   proxy?.$modal.msgSuccess("操作成功");
   getList();
 }
-/** 再次发起流程 */
-const handleAgain = (row) => {
-  // router.push({
-  //   path: '/workflow/process/start/' + row.deployId,
-  //   query: {
-  //     definitionId: row.procDefId,
-  //     procInsId: row.procInsId
-  //   }
-  // })
-}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
   const procInsIds = row.procInsId || ids.value;
@@ -174,20 +137,4 @@ const handleDelete = async (row) => {
   getList();
   proxy.$modal.msgSuccess("删除成功");
 }
-
-/** 导出按钮操作 */
-const handleExport = () => {
-  proxy.download("workflow/process/ownExport", {
-    ...queryParams.value
-  }, `own_process_${new Date().getTime()}.xlsx`);
-}
-
-const categoryFormat = (row) => {
-  return categoryOptions.value.find(k => k.code === row.category).categoryName ?categoryOptions.value.find(k => k.code === row.category).categoryName: '';
-}
-
-onMounted(() => {
-  getCategoryList();
-  getList();
-});
 </script>

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 
-from app.utils.auth import TokenUser
+from app.core.auth import TokenUser
 
 _auth_token: ContextVar[str | None] = ContextVar("auth_token", default=None)
 _current_user: ContextVar[TokenUser | None] = ContextVar("current_user", default=None)

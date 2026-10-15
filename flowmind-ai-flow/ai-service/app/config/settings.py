@@ -11,9 +11,8 @@ FlowMind 智能流程设计服务 - 配置管理
 版本: 3.0.0
 """
 
-import json
-import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -21,13 +20,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 加载 .env 文件（确保在 Settings 初始化前读取环境变量）
 _env_path = Path(__file__).parent.parent.parent / ".env"
-load_dotenv(_env_path, override=True)
+load_dotenv(_env_path, override=False)
 
 # ============ 默认值常量 ============
 SECONDS_PER_HOUR = 3600
 DEFAULT_MAX_TOKENS = 4096  # 增加到 4096 以支持复杂流程设计
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_TOP_P = 0.9
+STRUCTURED_OUTPUT_METHODS = frozenset({"json_schema", "function_calling", "json_mode"})
 
 # 默认模型配置
 DEFAULT_MODELS = [
@@ -36,25 +36,16 @@ DEFAULT_MODELS = [
         "model": "qwen2.5_1.5b_instruct",
         "base_url": "http://localhost:8001/v1",
         "timeout": 60,
+        "supports_structured_output": False,
     },
     {
         "name": "qwen",
         "model": "qwen-turbo",
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "api_key": None,
+        "supports_structured_output": True,
     },
 ]
-
-
-class DatabaseSettings(BaseSettings):
-    """数据库配置"""
-
-    url: str | None = Field(
-        default=None,
-        alias="DATABASE_URL",
-    )
-
-    model_config = SettingsConfigDict(env_prefix="DB_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 class RedisSettings(BaseSettings):
@@ -66,17 +57,28 @@ class RedisSettings(BaseSettings):
     password: str | None = Field(default=None)
     checkpoint_ttl_hours: int = Field(default=720)  # 30天
 
-    model_config = SettingsConfigDict(env_prefix="REDIS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="REDIS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 class FallbackSettings(BaseSettings):
     """容错配置"""
 
     enabled: bool = Field(default=True)
-    max_retries: int = Field(default=3)
-    retry_interval: float = Field(default=1.0)
+    max_retries: int = Field(
+        default=3, ge=0, description="首选模型之外允许尝试的备用 Provider 数量"
+    )
+    retry_interval: float = Field(
+        default=1.0, ge=0, description="切换 Provider 前的等待秒数"
+    )
 
-    model_config = SettingsConfigDict(env_prefix="FALLBACK_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="FALLBACK_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class AppSettings(BaseSettings):
@@ -89,20 +91,23 @@ class AppSettings(BaseSettings):
         default=["http://localhost:5173", "http://localhost:80"],
         description="允许的跨域来源，prod环境需修改为实际域名",
     )
-    execution_mode: str = Field(
-        default="invoke",
-        description="工作流执行模式: stream(分步执行,调试用) / invoke(同步执行,生产用)",
+    workers: int = Field(
+        default=4,
+        description="uvicorn worker 进程数（debug 模式强制为 1）",
+    )
+    allow_memory_fallback: bool = Field(
+        default=False,
+        description="Redis checkpoint 不可用时是否允许降级为内存存储（仅限本地调试）",
+    )
+    startup_dependency_wait_seconds: int = Field(
+        default=180,
+        ge=0,
+        description="启动时等待 Redis/Nacos 等依赖就绪的最长秒数，超时才放弃",
     )
 
-    model_config = SettingsConfigDict(env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-    @field_validator("execution_mode")
-    @classmethod
-    def validate_execution_mode(cls, v: str) -> str:
-        allowed = ["stream", "invoke"]
-        if v not in allowed:
-            raise ValueError(f"execution_mode 仅支持: {', '.join(allowed)}")
-        return v
+    model_config = SettingsConfigDict(
+        env_prefix="APP_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
 
 class LogSettings(BaseSettings):
@@ -112,8 +117,9 @@ class LogSettings(BaseSettings):
     format: str = Field(default="chain")  # simple/detailed/chain
     llm_detail: str = Field(default="summary")  # none/summary/full
 
-    model_config = SettingsConfigDict(env_prefix="LOG_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
+    model_config = SettingsConfigDict(
+        env_prefix="LOG_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     @field_validator("format")
     @classmethod
@@ -146,15 +152,104 @@ class BackendSettings(BaseSettings):
     role_api_path: str = Field(default="/system/role")
     timeout: int = Field(default=30)
 
-    model_config = SettingsConfigDict(env_prefix="BACKEND_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="BACKEND_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class NacosSettings(BaseSettings):
     """Nacos 配置"""
 
+    enabled: bool = Field(default=True)
     server_addr: str = Field(default="localhost:8848")
+    register_ip: str | None = Field(default=None)
+    register_port: int = Field(default=0, ge=0, le=65535)
+    retry_interval: float = Field(default=5.0, ge=0)
 
-    model_config = SettingsConfigDict(env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="NACOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+class ObservabilitySettings(BaseSettings):
+    """Langfuse 链路监控配置。"""
+
+    public_key: str = Field(default="")
+    secret_key: str = Field(default="")
+    base_url: str = Field(default="https://cloud.langfuse.com")
+    tracing_enabled: bool = Field(default=True)
+    tracing_environment: str = Field(default="development")
+
+    model_config = SettingsConfigDict(
+        env_prefix="LANGFUSE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class PromptSettings(BaseSettings):
+    """提示词版本与灰度发布配置。"""
+
+    rollout_enabled: bool = Field(default=False)
+    version_overrides: dict[str, str] = Field(default_factory=dict)
+
+    model_config = SettingsConfigDict(
+        env_prefix="PROMPT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class EvaluationSettings(BaseSettings):
+    """黄金数据集运行配置。"""
+
+    auth_token: str = Field(default="")
+
+    model_config = SettingsConfigDict(
+        env_prefix="FLOWMIND_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class CompressConfig(BaseSettings):
+    """对话历史压缩配置"""
+
+    max_messages: int = Field(default=12, description="消息数超过该值才触发压缩")
+    keep_recent: int = Field(default=4, description="保留最近 N 条完整消息")
+    enable_llm_summary: bool = Field(
+        default=True, description="True=中间段 LLM 摘要；False=纯裁剪"
+    )
+    summary_max_tokens: int = Field(default=300, description="LLM 摘要 token 上限")
+
+    model_config = SettingsConfigDict(
+        env_prefix="COMPRESS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+class ValidationConfig(BaseSettings):
+    """校验配置"""
+
+    review_max_retry_count: int = Field(default=3, description="review 节点重试预算")
+    structured_max_retry_count: int = Field(
+        default=3, ge=1, description="结构化内容语义重试预算"
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="VALIDATION_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 class Settings(BaseSettings):
@@ -164,23 +259,28 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
-        protected_namespaces=('settings_',),  # 禁用 model_ 命名空间保护
+        protected_namespaces=("settings_",),  # 禁用 model_ 命名空间保护
     )
 
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     fallback: FallbackSettings = Field(default_factory=FallbackSettings)
     app: AppSettings = Field(default_factory=AppSettings)
     backend: BackendSettings = Field(default_factory=BackendSettings)
     nacos: NacosSettings = Field(default_factory=NacosSettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    # 字段名不能叫 prompt：pydantic 会去读同名环境变量 PROMPT（终端提示符，常见于 shell/CI），
+    # 该值不是 JSON 会导致 Settings 构造失败、服务无法启动。
+    prompt_config: PromptSettings = Field(default_factory=PromptSettings)
+    evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     log: LogSettings = Field(default_factory=LogSettings)
+    compress: CompressConfig = Field(default_factory=CompressConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
-    jwt_secret: str = Field(default_factory=lambda: os.getenv("JWT_SECRET", ""))
+    models: list[dict[str, Any]] = Field(
+        default_factory=lambda: [dict(model) for model in DEFAULT_MODELS]
+    )
 
     model_priority: str = Field(default="vllm,qwen")
-    triple_protection_enabled: bool = Field(default=True)  # 三级保障体系开关
-    rules_table: str = Field(default="approval_rules")
-    langgraph_checkpoint_dir: str | None = Field(default=None)
 
     @field_validator("model_priority", mode="before")
     @classmethod
@@ -192,17 +292,11 @@ class Settings(BaseSettings):
 
     def get_model_providers(self) -> dict[str, dict]:
         """获取模型列表配置"""
-        # 优先从环境变量 MODELS 读取 JSON 配置
-        models_env = os.getenv("MODELS", "")
-        if models_env:
-            try:
-                models_list = json.loads(models_env)
-                return {m["name"]: _normalize_model_config(m) for m in models_list if m.get("name")}
-            except json.JSONDecodeError:
-                pass  # 解析失败，使用默认配置
-
-        # 默认配置
-        return {m["name"]: _normalize_model_config(m) for m in DEFAULT_MODELS}
+        return {
+            model["name"]: _normalize_model_config(model)
+            for model in self.models
+            if model.get("name")
+        }
 
     def get_fallback_config(self) -> dict:
         return {
@@ -211,48 +305,18 @@ class Settings(BaseSettings):
             "retry_interval": self.fallback.retry_interval,
         }
 
-    def reload_model_priority(self, new_priority: str | None = None) -> list[str]:
-        """重新加载模型优先级配置
-
-        Args:
-            new_priority: 新的优先级字符串，为 None 时从环境变量加载
-
-        Returns:
-            更新后的模型优先级列表
-        """
-        if new_priority is None:
-            new_priority = os.getenv("MODEL_PRIORITY", self.model_priority)
-        self.model_priority = new_priority
-        return self.get_model_priority()
-
-    def update_fallback_config(
-        self,
-        enabled: bool | None = None,
-        max_retries: int | None = None,
-        retry_interval: float | None = None,
-    ) -> dict:
-        """更新降级配置
-
-        Args:
-            enabled: 是否启用降级
-            max_retries: 最大重试次数
-            retry_interval: 重试间隔
-
-        Returns:
-            更新后的降级配置
-        """
-        if enabled is not None:
-            self.fallback.enabled = enabled
-        if max_retries is not None:
-            self.fallback.max_retries = max_retries
-        if retry_interval is not None:
-            self.fallback.retry_interval = retry_interval
-
-        return self.get_fallback_config()
-
 
 def _normalize_model_config(model: dict) -> dict:
     """标准化模型配置，补充默认值并统一字段名"""
+    structured_output_method = str(
+        model.get("structured_output_method", "json_schema")
+    ).strip()
+    if structured_output_method not in STRUCTURED_OUTPUT_METHODS:
+        allowed = ", ".join(sorted(STRUCTURED_OUTPUT_METHODS))
+        raise ValueError(
+            f"不支持的 structured_output_method: {structured_output_method}，"
+            f"可选值: {allowed}"
+        )
     return {
         "model_name": model.get("model", ""),
         "base_url": model.get("base_url", ""),
@@ -262,6 +326,9 @@ def _normalize_model_config(model: dict) -> dict:
         "top_p": model.get("top_p", DEFAULT_TOP_P),
         "timeout": model.get("timeout", 60),
         "thinking": model.get("thinking", False),
+        "supports_structured_output": model.get("supports_structured_output", True),
+        "extra_body": model.get("extra_body"),
+        "structured_output_method": structured_output_method,
     }
 
 

@@ -63,67 +63,33 @@
 <script setup name="Claim" lang="js">
 import { listClaimProcess } from "@/api/workflow/work/process";
 import { claimTask } from "@/api/workflow/work/task";
-
-import { listAllCategory } from "@/api/workflow/category";
+import { useTaskList } from './useTaskList';
 
 const router = useRouter();
 const { proxy } = getCurrentInstance() ;
 
-const claimList = ref([]);
-const loading = ref(true);
-const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const dateRange = ref(['','']);
-const categoryOptions = ref([]);
-const queryFormRef = ref();
-
-const queryParams = ref({
-  pageNum: 1,
-  pageSize: 10,
-  processName: ''
+const {
+  rows: claimList,
+  loading,
+  showSearch,
+  total,
+  dateRange,
+  queryFormRef,
+  categoryOptions,
+  queryParams,
+  getList,
+  handleQuery,
+  resetQuery,
+  categoryFormat
+} = useTaskList({
+  fetcher: listClaimProcess,
+  defaultQuery: { processName: '' }
 });
 
-/** 查询流程分类列表 */
-const getCategoryList = async () => {
-  const res = await listAllCategory();
-  categoryOptions.value = res.data;
-}
-/** 查询待办列表 */
-const getList = async () => {
-  loading.value = true;
-  const res = await listClaimProcess(proxy.addDateRange(queryParams.value, dateRange.value));
-  claimList.value = res.rows;
-  total.value = res.total;
-  loading.value = false;
-}
-/** 搜索按钮操作 */
-const handleQuery = () => {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-/** 重置按钮操作 */
-const resetQuery = () => {
-  queryFormRef.value.resetFields();
-  handleQuery();
-}
 /** 签收按钮操作 */
 const handleClaim = async (row) => {
   const res = await claimTask({ taskId: row.taskId })
   proxy.$modal.msgSuccess(res.msg);
   router.push({ path: '/oa/task/todo' })
 }
-
-const categoryFormat = (row) => {
-  var category = categoryOptions.value.find(function(k) {
-        return k.code === row.category;
-    });
-    return category && category.categoryName ? category.categoryName : '';
-}
-onMounted(() => {
-  getCategoryList();
-  getList();
-});
 </script>

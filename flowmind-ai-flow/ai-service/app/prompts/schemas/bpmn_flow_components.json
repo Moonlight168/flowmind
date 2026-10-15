@@ -82,6 +82,36 @@
           "type": "string",
           "required": false,
           "description": "候选用户。对应 Flowable 的 flowable:candidateUsers，多个用逗号分隔"
+        },
+        "priority": {
+          "type": ["string", "integer"],
+          "required": false,
+          "description": "任务优先级"
+        },
+        "due_date": {
+          "type": "string",
+          "required": false,
+          "description": "任务到期策略或表达式"
+        },
+        "multi_instance": {
+          "type": "object",
+          "required": false,
+          "description": "多实例配置，如 collection、element_variable、completion_condition"
+        },
+        "task_listeners": {
+          "type": "array",
+          "required": false,
+          "description": "任务监听器配置"
+        },
+        "execution_listeners": {
+          "type": "array",
+          "required": false,
+          "description": "执行监听器配置"
+        },
+        "extension_properties": {
+          "type": "object",
+          "required": false,
+          "description": "Flowable 扩展属性"
         }
       }
     },

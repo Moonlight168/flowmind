@@ -14,10 +14,10 @@ from app.config.llm_task import (
 )
 
 __all__ = [
+    "TASK_CONFIGS",
     # LLM 任务
     "Task",
     "TaskConfig",
-    "TASK_CONFIGS",
-    "get_task_config",
     "get_all_task_configs",
+    "get_task_config",
 ]

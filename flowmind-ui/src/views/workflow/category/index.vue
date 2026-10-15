@@ -76,14 +76,14 @@
       </template>
     </el-dialog>
 
-    <AiDesignDialog ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" @fill="handleAiFill" />
+    <AiChatWindow ref="aiDesignDialogRef" v-model="aiDesignVisible" designType="category" :formData="form" :get-current-baseline="getCurrentBaseline" @fill="handleAiFill" />
   </div>
 </template>
 
 <script setup name="Category" >
 import { listCategory, getCategory, delCategory, addCategory, updateCategory } from "@/api/workflow/category";
 import { watch } from 'vue';
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance();
@@ -186,6 +186,8 @@ const submitForm = () => {
     if (valid) {
       form.value.categoryId ? await updateCategory(form.value) : await addCategory(form.value);
       proxy?.$modal.msgSuccess("操作成功");
+      // 设计已落定，本轮 AI 会话结束：清前端记录与后端 checkpoint
+      aiDesignDialogRef.value?.clearMessages();
       dialog.visible = false;
       getList();
     }
@@ -209,19 +211,23 @@ const handleExport = () => {
 const handleAiDesign = () => {
   aiDesignVisible.value = true;
 }
-/** AI 填充数据 */
+/** AI 浮窗每轮发送前调用的最新基线：对话框表单当前值 */
+const getCurrentBaseline = () => {
+  return { ...form.value };
+}
+/** AI 填充数据（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (formData) => {
   if (formData) {
-    form.value.categoryName = formData.category_name || '';
+    form.value.categoryName = formData.category_name || formData.categoryName || '';
     form.value.code = formData.code || '';
     form.value.remark = formData.remark || '';
   }
 }
 
-// 监听主对话框关闭，清空 AI 聊天和后端 checkpoint
+// 监听主对话框关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => dialog.visible, (val) => {
   if (!val) {
-    aiDesignDialogRef.value?.clearMessages()
+    aiDesignVisible.value = false;
   }
 })
 

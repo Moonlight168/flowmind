@@ -57,6 +57,7 @@ export default {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: "warning",
+      zIndex: 10000,
     })
   },
   // 提交内容
