@@ -80,6 +80,11 @@ public class AuthFilter implements GlobalFilter, Ordered
         addHeader(mutate, SecurityConstants.DETAILS_USERNAME, username);
         // 内部请求来源参数清除
         removeHeader(mutate, SecurityConstants.FROM_SOURCE);
+        // 透传用户令牌（不经过 addHeader 的 urlEncode，避免转义 "Bearer " 空格）。
+        // 有意为全局透传而非仅 AI 路由：下游服务的 HeaderInterceptor 依赖
+        // Authorization 头解析登录用户（网关已移除 FROM_SOURCE 内部信任标记），
+        // 收窄会导致 system/flowable 的权限校验失效。
+        mutate.header(SecurityConstants.AUTHORIZATION_HEADER, TokenConstants.PREFIX + token);
         return chain.filter(exchange.mutate().request(mutate.build()).build());
     }
 

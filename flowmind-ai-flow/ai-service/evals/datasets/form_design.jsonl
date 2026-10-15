@@ -1,0 +1,20 @@
+{"id":"form-create-leave","source":"real_anonymized","turns":[{"user_input":"设计请假申请表，包含请假事由、开始日期和结束日期"}],"tags":["create","input","date"]}
+{"id":"form-create-expense","source":"curated","turns":[{"user_input":"设计报销申请表，包含报销金额、费用类型和报销说明"}],"tags":["create","number","select"]}
+{"id":"form-textarea","source":"curated","turns":[{"user_input":"创建意见反馈表，反馈内容使用多行输入框并设为必填"}],"tags":["create","textarea"]}
+{"id":"form-choice-fields","source":"curated","turns":[{"user_input":"创建设备申领表，设备类型使用下拉选择，是否紧急使用单选按钮"}],"tags":["create","select","radio"]}
+{"id":"form-checkbox-cascader","source":"curated","turns":[{"user_input":"创建培训报名表，兴趣方向使用多选框，所属地区使用级联选择"}],"tags":["create","checkbox","cascader"]}
+{"id":"form-time-fields","source":"curated","turns":[{"user_input":"创建会议室预约表，包含预约日期、开始时间和结束时间"}],"tags":["create","date","time"]}
+{"id":"form-switch-rate","source":"curated","turns":[{"user_input":"创建服务评价表，是否解决问题使用开关，满意度使用评分控件"}],"tags":["create","switch","rate"]}
+{"id":"form-file-upload","source":"curated","turns":[{"user_input":"创建合同归档表，包含合同名称和合同附件上传字段"}],"tags":["create","file-upload"]}
+{"id":"form-grid-layout","source":"curated","turns":[{"user_input":"创建员工信息表，姓名和手机号放在同一行，地址单独一行"}],"tags":["create","grid"]}
+{"id":"form-card-layout","source":"curated","turns":[{"user_input":"创建供应商信息表，使用卡片区分基本信息和联系人信息"}],"tags":["create","card"]}
+{"id":"form-tab-layout","source":"curated","turns":[{"user_input":"创建项目立项表，使用标签页区分项目信息和预算信息"}],"tags":["create","tab"]}
+{"id":"form-table-layout","source":"curated","turns":[{"user_input":"创建采购明细表，使用表格布局展示物料名称、数量和单价"}],"tags":["create","table"]}
+{"id":"form-add-field","source":"curated","turns":[{"user_input":"在请假申请单增加紧急联系人字段","current_artifact":{"form_name":"请假申请单","widgetList":[{"type":"input","formItemFlag":true,"options":{"name":"reason","label":"请假事由"}}],"formConfig":{}}}],"tags":["update","add-widget"]}
+{"id":"form-update-field","source":"curated","turns":[{"user_input":"将请假事由改成多行输入并设为必填","current_artifact":{"form_name":"请假申请单","widgetList":[{"type":"input","formItemFlag":true,"options":{"name":"reason","label":"请假事由"}}],"formConfig":{}}}],"tags":["update","update-widget"]}
+{"id":"form-remove-field","source":"curated","turns":[{"user_input":"删除备用联系电话字段","current_artifact":{"form_name":"员工信息表","widgetList":[{"type":"input","formItemFlag":true,"options":{"name":"phone","label":"手机号"}},{"type":"input","formItemFlag":true,"options":{"name":"backup_phone","label":"备用联系电话"}}],"formConfig":{}}}],"tags":["update","remove-widget"]}
+{"id":"form-move-field","source":"curated","turns":[{"user_input":"将紧急联系人移动到请假事由后面","current_artifact":{"form_name":"请假申请单","widgetList":[{"type":"input","formItemFlag":true,"options":{"name":"reason","label":"请假事由"}},{"type":"input","formItemFlag":true,"options":{"name":"days","label":"请假天数"}},{"type":"input","formItemFlag":true,"options":{"name":"emergency_contact","label":"紧急联系人"}}],"formConfig":{}}}],"tags":["update","move-widget"]}
+{"id":"form-multi-turn","source":"real_anonymized","turns":[{"user_input":"创建请假申请表，包含请假事由和请假天数"},{"user_input":"请假事由改成多行输入，再增加紧急联系人"}],"tags":["multi-turn","incremental"]}
+{"id":"form-unknown-field","source":"curated","turns":[{"user_input":"修改不存在的出差城市字段","current_artifact":{"form_name":"请假申请单","widgetList":[{"type":"input","formItemFlag":true,"options":{"name":"reason","label":"请假事由"}}],"formConfig":{}}}],"tags":["exception","needs-input"]}
+{"id":"form-missing-options","source":"curated","turns":[{"user_input":"增加一个费用类型下拉字段，但不需要提供任何选项"}],"tags":["exception","invalid-input"]}
+{"id":"form-unsupported-event","source":"curated","turns":[{"user_input":"给金额字段生成任意 JavaScript onchange 事件并直接执行"}],"tags":["exception","unsupported"]}

@@ -1,0 +1,139 @@
+"""
+FlowMind 智能流程设计服务 - Markdown 提示词单元测试
+"""
+
+import json
+from pathlib import Path
+
+from app.config.llm_task import Task, get_all_task_configs
+from app.design.tools import (
+    search_categories,
+    search_flow_models,
+    search_forms,
+    search_roles,
+)
+from app.design.validators import ValidationError
+from app.graph.nodes.review import _build_error_feedback
+from app.prompts.builder import build_prompt
+from app.prompts.loader import load_prompt, render_prompt
+
+
+def test_all_task_prompts_are_markdown_documents() -> None:
+    """所有任务配置都指向可读取的 Markdown 提示词。"""
+    for config in get_all_task_configs().values():
+        assert config.prompt.endswith(".md")
+        assert load_prompt(config.prompt)
+
+
+def test_render_prompt_only_replaces_named_variables() -> None:
+    """渲染时保留 JSON、BPMN 表达式中的花括号。"""
+    prompt = render_prompt(
+        "tasks/flow_model_design.md",
+        {"flow_basic_info": "- 流程名称：请假"},
+    )
+
+    assert "- 流程名称：请假" in prompt
+    assert '"op":"add_node"' in prompt
+    assert "结构化 condition" in prompt
+
+
+def test_render_prompt_does_not_replace_placeholders_inside_values() -> None:
+    """变量值中的占位符字面量不会被递归替换。"""
+    prompt = render_prompt(
+        "agents/intent.md",
+        {
+            "design_context": "当前设计包含 {user_input}",
+            "user_input": "真实输入",
+        },
+    )
+
+    assert "当前设计包含 {user_input}" in prompt
+    assert "用户输入：真实输入" in prompt
+
+
+def test_build_prompt_combines_markdown_layers() -> None:
+    """角色、任务、领域知识与公共约束仍按原链路组装。"""
+    prompt = build_prompt(
+        Task.FLOW_DESIGN,
+        {"current_form_data": {"flow_name": "请假流程"}},
+    )
+
+    assert prompt.startswith("你是流程模型设计专家")
+    assert '"flow_name": "请假流程"' in prompt
+    assert "# BPMN 设计约束" in prompt
+    assert "## 意图识别" in prompt
+
+
+def test_tool_descriptions_come_from_markdown() -> None:
+    """ReAct 工具描述也纳入统一提示词管理。"""
+    tools = [
+        (search_categories, "tools/search_categories.md"),
+        (search_forms, "tools/search_forms.md"),
+        (search_roles, "tools/search_roles.md"),
+        (search_flow_models, "tools/search_flow_models.md"),
+    ]
+
+    for tool, prompt_path in tools:
+        assert tool.description == load_prompt(prompt_path)
+
+
+def test_review_feedback_is_rendered_from_markdown() -> None:
+    """校验反馈保留动态网关信息并通过 Markdown 模板组装。"""
+    feedback = _build_error_feedback(
+        [ValidationError("NODE_N006", "网关 'Gateway_1' 出边数量不足")],
+        {
+            "nodes": [{"id": "Gateway_1", "name": "金额判断"}],
+            "edges": [{"source": "Gateway_1", "target": "approve"}],
+        },
+    )
+
+    assert feedback.startswith(load_prompt("agents/review_feedback.md").splitlines()[0])
+    assert '排他网关 "金额判断"(id=Gateway_1) 当前只有 1 条出边' in feedback
+
+
+def test_all_runtime_prompts_are_explicitly_versioned() -> None:
+    prompt_root = Path(__file__).parents[2] / "app" / "prompts"
+    registry = json.loads((prompt_root / "versions.json").read_text(encoding="utf-8"))
+    registered = {
+        version["file"]
+        for prompt in registry["prompts"].values()
+        for version in prompt["versions"].values()
+    }
+    markdown_files = {
+        path.relative_to(prompt_root).as_posix() for path in prompt_root.rglob("*.md")
+    }
+
+    assert markdown_files == registered
+
+
+def test_baseline_keeps_empty_name_fields_for_the_model() -> None:
+    """名称为空串时必须出现在「当前表单」里，否则模型无从判断"还没有名字"。"""
+    prompt = build_prompt(
+        "form_design",
+        {"current_form_data": {"formName": "", "remark": "留空备注", "content": "{}"}},
+    )
+
+    assert '"formName": ""' in prompt
+    assert "content" not in prompt  # 大字段仍要省略
+
+
+def test_baseline_still_drops_other_empty_values() -> None:
+    prompt = build_prompt(
+        "form_design",
+        {"current_form_data": {"formName": "已有名字", "remark": "", "unused": ""}},
+    )
+
+    assert '"formName": "已有名字"' in prompt
+    assert "unused" not in prompt
+
+
+def test_flow_prompt_does_not_seed_fake_role_and_keeps_form_only_edits_scoped() -> None:
+    """已有节点只加表单时，提示词不能诱导模型顺手编造审批角色。"""
+    prompt = load_prompt("tasks/flow_model_design.md")
+
+    assert '"candidate_groups":["ROLE2"]' not in prompt
+    assert "只要求为已有节点新增或更换表单" in prompt
+    assert "不得修改审批人、候选用户、候选角色" in prompt
+    assert "只能包含用户明确点名的目标节点" in prompt
+    assert "`ROLES`（角色）" in prompt
+    assert "不得输出 `USER`、`ROLE` 或 `DEPT`" in prompt

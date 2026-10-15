@@ -1,0 +1,1 @@
+- 排他网关 "{gateway_name}"(id={gateway_id}) 当前只有 {outgoing_count} 条出边，但排他网关必须有 ≥2 条出边且每条都要有 condition 字段。如果此流程不需要条件分支，请移除该网关节点并直接将前后节点相连。

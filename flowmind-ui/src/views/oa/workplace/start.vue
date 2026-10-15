@@ -15,7 +15,7 @@
       <div class="form-conf" v-if="dialog.visible">
         <v-form-render :form-json="formModel" :form-data="formData" ref="vfRenderRef"></v-form-render>
         <div class="cu-submit">
-          <el-button type="primary" @click="confirmSubmit">提交</el-button>
+          <el-button type="primary" :loading="submitting" :disabled="submitting" @click="confirmSubmit">提交</el-button>
           <el-button type="warning" @click="confirmReset">重置</el-button>
           <el-button  @click="saveDraft">保存草稿</el-button>
           <el-button type="warning" @click="confirmCancel">取消</el-button>
@@ -29,7 +29,8 @@
 import { getProcessForm, startProcess } from '@/api/workflow/work/process.js';
 import { saveDraft as saveDraftApi, getDraftByDefId, getDraft } from '@/api/workflow/work/draft.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { EditPen, Clock, Refresh } from '@element-plus/icons-vue';
+import { EditPen } from '@element-plus/icons-vue';
+import { collectDraftFormData } from './draftForm.js';
 
 
 const route = useRoute();
@@ -45,6 +46,9 @@ const formData = ref({}); // 初始化为空对象
 // 草稿相关变量
 const draftId = ref(null);
 const isFromDraft = ref(false);
+
+// 提交中：防止重复点击发出多份流程
+const submitting = ref(false);
 
 const dialog = reactive({
   visible: false,
@@ -106,15 +110,25 @@ const initData = async () => {
 }
 
 const submit = async () => {
-  // 提交时需要验证表单数据
-  const data = await vfRenderRef.value.getFormData(true);
-  if (definitionId.value) {
+  // 兜底防重：按钮已置 loading，这里再挡一次并发点击
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    // 提交时需要验证表单数据
+    const data = await vfRenderRef.value.getFormData(true);
+    if (!definitionId.value) return
     const res = await startProcess(definitionId.value, JSON.stringify(data));
     proxy.$modal.msgSuccess(res.msg);
-    // const obj = { path: "/work/own" };
-    // proxy?.$tab.closeOpenPage(obj);
     proxy.$tab.closePage();
     proxy.$router.back();
+  } catch (error) {
+    // vform 校验失败时 reject 的是字符串（表单会自己标红），无需再弹提示；
+    // 其余情况（接口失败等）必须让用户看到，否则会以为提交成功了
+    if (typeof error !== 'string') {
+      ElMessage.error('提交失败，请稍后重试');
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -125,8 +139,8 @@ const reset = () => {
 // 保存草稿
 const saveDraft = async () => {
   try {
-    // 先验证必填字段
-    const currentFormData = await vfRenderRef.value.getFormData(true);
+    // 草稿允许保留未完成内容，仅读取当前值；必填校验只在正式提交时执行。
+    const currentFormData = await collectDraftFormData(vfRenderRef.value);
     
     // 准备草稿数据
     const draftData = {
@@ -153,27 +167,15 @@ const saveDraft = async () => {
       ElMessage.info('保存草稿失败');
     }
   } catch (error) {
-    console.error('保存草稿失败:', error);
-    // 如果有必填字段未填写，显示提示信息并抛出错误
-    if (error && error.includes('表单数据校验失败')) {
-      ElMessage.warning('请填写所有必填字段后再保存草稿');
-      throw error; // 抛出错误，让调用方知道保存失败
-    }
-    // 其他错误也抛出，让调用方知道保存失败
-    throw error;
+    throw error; // 抛出错误，让调用方知道保存失败
   }
 };
 
 // 保存草稿并退出
 const saveDraftAndExit = async () => {
   try {
-    // 先保存草稿
     await saveDraft();
-    
-    // 保存成功后退出
-    setTimeout(() => {
-      proxy.$router.push('/oa/workplace');
-    }, 100);
+    proxy.$router.push('/oa/workplace');
   } catch (error) {
     // 保存草稿失败时，不执行跳转，让用户继续编写
   }

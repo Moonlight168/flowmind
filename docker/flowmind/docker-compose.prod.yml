@@ -1,12 +1,9 @@
-# FlowMind 生产环境 Docker Compose 配置
-# 一键部署：MySQL, Redis, Nacos, Java 微服务（全部8个）, AI 服务, Nginx
-# 使用方式：docker-compose -f docker-compose.prod.yml up -d --build
-# 目录：docker/flowmind/
+# FlowMind 完整生产环境：基础设施 + Java 微服务 + AI 服务 + Nginx 前端
+# 启动：docker compose -f docker-compose.prod.yml up -d --build
 
 services:
-  # ==================== 基础服务 ====================
+  # ==================== FlowMind 基础服务 ====================
 
-  # MySQL 数据库
   flowmind-mysql:
     container_name: flowmind-mysql
     image: mysql:5.7
@@ -17,7 +14,8 @@ services:
       - ../cloud/mysql/conf:/etc/mysql/conf.d
       - ../cloud/mysql/logs:/logs
       - ../cloud/mysql/data:/var/lib/mysql
-      - ../cloud/sql:/docker-entrypoint-initdb.d
+      - ../../sql/00-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ../../sql:/opt/flowmind-sql:ro
     command: >
       mysqld
       --innodb-buffer-pool-size=512M
@@ -26,7 +24,7 @@ services:
       --default-time-zone=+8:00
       --lower-case-table-names=1
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: flowmind-cloud
       TZ: Asia/Shanghai
     networks:
@@ -37,7 +35,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis 缓存
   flowmind-redis:
     container_name: flowmind-redis
     image: redis:7-alpine
@@ -49,7 +46,7 @@ services:
       - ../cloud/redis/data:/data
     command: redis-server /flowmind/redis/redis.conf
     environment:
-      - TZ=Asia/Shanghai
+      TZ: Asia/Shanghai
     networks:
       - flowmind-network
     healthcheck:
@@ -58,30 +55,30 @@ services:
       timeout: 5s
       retries: 5
 
-  # Sentinel 控制台
   flowmind-sentinel:
     container_name: flowmind-sentinel
     image: bladex/sentinel-dashboard:latest
+    profiles: ["sentinel"]
     restart: always
     environment:
-      - TZ=Asia/Shanghai
+      TZ: Asia/Shanghai
     ports:
-      - "8718:8858"
+      - "18718:8858"
     networks:
       - flowmind-network
 
-  # Nacos 注册中心/配置中心
   flowmind-nacos:
     container_name: flowmind-nacos
     image: nacos/nacos-server:v2.3.2
     restart: always
     environment:
-      - MODE=standalone
-      - NACOS_AUTH_ENABLE=false
-      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:-TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==}
-      - NACOS_AUTH_IDENTITY_KEY=serverIdentity
-      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:-TmFjb3MzeFNlY3JldEtleU11c3RCZTMyQnl0ZXNMb25nPTEyMzQ1Ng==}
-      - TZ=Asia/Shanghai
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:?NACOS_AUTH_TOKEN is required}
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:?NACOS_AUTH_IDENTITY_VALUE is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: Asia/Shanghai
     volumes:
       - ../cloud/nacos/logs:/home/nacos/logs
       - ../cloud/nacos/conf/application.properties:/home/nacos/conf/application.properties
@@ -125,7 +122,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -152,7 +149,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9002/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -179,7 +176,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9003/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -206,7 +203,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9007/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -229,7 +226,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9006/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -252,7 +249,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9004/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -275,7 +272,7 @@ services:
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9005/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -298,7 +295,7 @@ services:
     networks:
       - flowmind-network
     ports:
-      - "8090:9008"
+      - "18090:9008"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9008/actuator/health"]
       interval: 30s
@@ -325,19 +322,32 @@ services:
       - REDIS_HOST=flowmind-redis
       - REDIS_PORT=6379
       # 服务配置
+      # 注意：SERVICE_PORT 只是历史遗留，服务本身不读它（AppSettings 用 APP_PORT）。
+      # 实际端口由下面 command/Dockerfile 的 uvicorn --port 决定，Nacos 注册端口取
+      # settings.app.port，也就是 APP_PORT。
       - SERVICE_PORT=8000
+      # 后端业务 API 经网关访问（覆盖 .env 默认的 localhost:9001）
+      - BACKEND_BASE_URL=http://flowmind-gateway:9001
       # Nacos 配置（覆盖 .env 中的 localhost）
       - NACOS_SERVER_ADDR=flowmind-nacos:8848
       - NACOS_REGISTER_IP=flowmind-ai-service
-    ports:
-      - "8000:8000"
+      # Langfuse 链路监控（覆盖 .env 中的 localhost:13001）
+      # Langfuse 为独立可选栈，未启动时 SDK 仅告警降级，不阻塞业务。
+      - LANGFUSE_BASE_URL=http://flowmind-langfuse-web:3000
+      # 黄金集评测用的测试账号 Bearer Token（来源：docker/flowmind/.env，仅环境注入，勿提交真实值）
+      # 留空时评测脚本会显式报错；不影响服务正常启动。
+      - FLOWMIND_AUTH_TOKEN=${FLOWMIND_AUTH_TOKEN:-}
+    # 不发布端口：AI 服务按约定只经网关（9001 /flowmind-ai/**）访问，
+    # 避免绕过网关鉴权直连。容器网络内由服务名互访。
     depends_on:
       flowmind-redis:
+        condition: service_healthy
+      flowmind-nacos:
         condition: service_healthy
     networks:
       - flowmind-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -354,13 +364,15 @@ services:
     environment:
       - TZ=Asia/Shanghai
     ports:
-      - "80:80"
+      - "${FLOWMIND_HTTP_PORT:-18088}:80"
     volumes:
       - ../cloud/nginx/html/dist:/flowmind/flowmind-ui
       - ../cloud/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
       - ../cloud/nginx/logs:/var/log/nginx
     depends_on:
       - flowmind-gateway
+      # /webhooks/ 反代到 AI 服务，nginx 启动时需能解析该主机名
+      - flowmind-ai-service
     networks:
       - flowmind-network
     healthcheck:
@@ -369,7 +381,6 @@ services:
       timeout: 10s
       retries: 5
 
-# ==================== 网络配置 ====================
 networks:
   flowmind-network:
     driver: bridge

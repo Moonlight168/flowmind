@@ -5,7 +5,9 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # 安装系统依赖和 Poetry
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
     gcc \
     libmariadb-dev-compat \
     curl \
@@ -15,9 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 复制 poetry 相关文件
 COPY pyproject.toml poetry.lock ./
 
-# 使用清华镜像源安装依赖
-RUN poetry config repo.pypi https://pypi.tuna.tsinghua.edu.cn/simple && \
-    poetry install --only main --no-interaction --no-ansi --no-root
+# 安装依赖。安装源（清华镜像）在 pyproject.toml 的 [[tool.poetry.source]] 中声明：
+# Poetry 2.x 下 `poetry config repositories.*` 仅用于发布，对安装源无效。
+RUN poetry install --only main --no-interaction --no-ansi --no-root
 
 # 复制应用代码
 COPY app/ ./app/

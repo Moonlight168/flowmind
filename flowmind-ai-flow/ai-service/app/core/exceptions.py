@@ -11,12 +11,14 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from app.config.settings import settings
 from app.domain.dto import ResponseVO
 from app.infra.logger import get_trace_id, logger
 
 # ============== 异常基类 ==============
 
-class AIApprovalException(Exception):
+
+class AIApprovalException(Exception):  # noqa: N818 - 既有命名，改 Error 后缀会影响继承类与调用方
     """AI 智能流程设计服务业务异常基类
 
     所有业务异常都应继承此类，以便统一处理。
@@ -45,6 +47,7 @@ class AIApprovalException(Exception):
 
 
 # ============== 具体异常类型 ==============
+
 
 class FlowDesignException(AIApprovalException):
     """流程设计异常
@@ -164,6 +167,7 @@ class ConfigurationException(AIApprovalException):
 
 # ============== 错误响应格式 ==============
 
+
 def create_error_response(
     error_code: str,
     message: str,
@@ -180,6 +184,7 @@ def create_error_response(
 
 # ============== 异常处理中间件 ==============
 
+
 def register_exception_handlers(app: FastAPI) -> None:
     """注册异常处理器到 FastAPI 应用
 
@@ -189,8 +194,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(AIApprovalException)
     async def ai_approval_exception_handler(
-        request: Request,
-        exc: AIApprovalException
+        request: Request, exc: AIApprovalException
     ) -> JSONResponse:
         """处理 AIApprovalException 及其子类异常
 
@@ -208,8 +212,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(
-        request: Request,
-        exc: HTTPException
+        request: Request, exc: HTTPException
     ) -> JSONResponse:
         """处理 HTTPException
 
@@ -231,16 +234,13 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValidationError)
     async def validation_exception_handler(
-        request: Request,
-        exc: ValidationError
+        request: Request, exc: ValidationError
     ) -> JSONResponse:
         """处理 Pydantic 验证异常
 
         将验证错误转换为统一的业务异常格式。
         """
-        logger.warning(
-            f"验证异常 - 路径：{request.url.path}, 错误：{exc.errors()}"
-        )
+        logger.warning(f"验证异常 - 路径：{request.url.path}, 错误：{exc.errors()}")
 
         errors = exc.errors()
         field = errors[0]["loc"][-1] if errors else None
@@ -258,8 +258,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(
-        request: Request,
-        exc: Exception
+        request: Request, exc: Exception
     ) -> JSONResponse:
         """处理未预期的全局异常
 
@@ -277,19 +276,6 @@ def register_exception_handlers(app: FastAPI) -> None:
                 error_code="INTERNAL_SERVER_ERROR",
                 message="服务器内部错误",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                details={"type": type(exc).__name__} if settings.debug else {},
+                details={"type": type(exc).__name__} if settings.app.debug else {},
             ),
         )
-
-
-# 延迟导入 settings，避免循环依赖
-def _get_debug_mode(self=None) -> bool:
-    """获取调试模式状态"""
-    try:
-        from app.config.settings import settings
-        return settings.debug
-    except Exception:
-        return False
-
-
-settings = type('settings', (), {'debug': property(_get_debug_mode)})()

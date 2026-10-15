@@ -2,12 +2,15 @@
 FlowMind 智能流程设计服务 - 角色池
 """
 
-ROLE_DESCRIPTIONS: dict[str, str] = {
-    "CATEGORY_DESIGNER": "你是流程分类设计专家，擅长精准识别业务类型并匹配对应的审批流程模型",
-    "FORM_DESIGNER": "你是流程表单设计专家，精通vform3表单组件设计与校验规则配置",
-    "FLOW_DESIGNER": "你是流程模型设计专家，擅长使用bpmnio.js将业务需求转化为清晰的审批流转结构",
+from app.prompts.loader import load_prompt
+
+ROLE_PROMPTS: dict[str, str] = {
+    "CATEGORY_DESIGNER": "roles/category_designer.md",
+    "FORM_DESIGNER": "roles/form_designer.md",
+    "FLOW_DESIGNER": "roles/flow_designer.md",
 }
 
 
 def get_role(role: str) -> str:
-    return ROLE_DESCRIPTIONS.get(role, "")
+    prompt_path = ROLE_PROMPTS.get(role)
+    return load_prompt(prompt_path) if prompt_path else ""

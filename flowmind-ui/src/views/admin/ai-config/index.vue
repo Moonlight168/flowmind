@@ -104,6 +104,9 @@
           <el-icon><Star /></el-icon>
           默认配置
         </el-divider>
+        <div class="form-tip" style="margin-bottom: 12px">
+          模型实际配置以服务端 .env 为准；本页仅用于验证 AI 服务可用性。
+        </div>
 
         <el-form-item label="默认服务商" prop="defaultProvider">
           <el-radio-group v-model="form.defaultProvider">
@@ -173,34 +176,33 @@ const saving = ref(false)
 const testHealth = async () => {
   try {
     const res = await checkAiHealth()
-    healthStatus.value = res.status === 'ok'
+    // 响应结构为 { code, message, data: { status: "healthy", ... } }
+    healthStatus.value = res?.data?.status === 'healthy'
   } catch (error) {
     healthStatus.value = false
   }
 }
 
-// 测试模型
+// 测试模型（后端按服务端 .env 配置的默认模型链响应）
 const testModel = async (provider) => {
   const isAliyun = provider === 'aliyun'
   const testing = isAliyun ? testingAliyun : testingVolcengine
   testing.value = true
 
   try {
-    const model = isAliyun ? form.aliyunModel : form.volcengineModel
     const res = await aiFormChat({
       user_input: '你好，请用一句话介绍你自己',
-      thread_id: null,
-      selected_model: model,
-      fallback_enabled: false
+      thread_id: null
     })
 
-    if (res.message) {
-      ElMessage.success(`${isAliyun ? '阿里云' : '火山引擎'} 模型响应正常：${res.message}`)
+    const reply = res?.data?.response
+    if (reply) {
+      ElMessage.success(`AI 服务响应正常：${reply}`)
     } else {
       ElMessage.warning('模型未返回预期消息')
     }
   } catch (error) {
-    ElMessage.error(`${isAliyun ? '阿里云' : '火山引擎'} 模型测试失败：${error.message || '请稍后重试'}`)
+    ElMessage.error(`AI 服务测试失败：${error.message || '请稍后重试'}`)
   } finally {
     testing.value = false
   }
@@ -217,10 +219,10 @@ const submitForm = async () => {
         // TODO: 调用后端保存配置 API
         // await saveAiConfig(form)
 
-        // 临时处理：保存到 localStorage
+        // 临时处理：保存到浏览器本地（模型实际配置以服务端 .env 为准）
         localStorage.setItem('ai_config', JSON.stringify(form))
 
-        ElMessage.success('配置已保存')
+        ElMessage.success('配置已保存到浏览器本地（服务端模型配置请在 .env 中维护）')
       } catch (error) {
         ElMessage.error('保存失败：' + (error.message || '请稍后重试'))
       } finally {

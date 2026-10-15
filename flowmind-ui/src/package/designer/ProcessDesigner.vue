@@ -4,7 +4,7 @@
       <slot name="control-header"></slot>
       <template v-if="!$slots['control-header']">
         <el-button-group key="file-control">
-          <el-button :size="headerButtonSize" :type="headerButtonType" icon="el-icon-edit-outline" @click="onSave">保存流程</el-button>
+          <el-button :size="headerButtonSize" :type="headerButtonType" :icon="Edit" @click="onSave">保存流程</el-button>
           <slot name="custom-buttons"></slot>
           <el-button :size="headerButtonSize" :type="headerButtonType" :icon="FolderOpened" @click="$refs.refFile.click()">打开文件</el-button>
           <el-tooltip effect="light">
@@ -93,7 +93,7 @@
 </template>
 
 <script>
-import { Histogram, Cpu, Refresh, RefreshLeft, RefreshRight, ZoomOut, ZoomIn, View, Download, FolderOpened, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Histogram, Cpu, Edit, Refresh, RefreshLeft, RefreshRight, ZoomOut, ZoomIn, View, Download, FolderOpened, ScaleToOriginal } from '@element-plus/icons-vue'
 import BpmnModeler from "bpmn-js/lib/Modeler";
 import DefaultEmptyXML from "./plugins/defaultEmpty";
 // 翻译方法
@@ -128,7 +128,7 @@ export default {
   },
   setup() {
     return {
-      Histogram, Cpu, Refresh, RefreshLeft, RefreshRight, ZoomOut, ZoomIn, View, Download, FolderOpened, ScaleToOriginal
+      Histogram, Cpu, Edit, Refresh, RefreshLeft, RefreshRight, ZoomOut, ZoomIn, View, Download, FolderOpened, ScaleToOriginal
     }
   },
   emits: ['destroy', 'init-finished', 'commandStack-changed', 'update:modelValue', 'change', 'canvas-viewbox-changed', 'element-click',"save","connection-added"],
@@ -187,6 +187,7 @@ export default {
       previewType: "xml",
       recoverable: false,
       revocable: false,
+      internalModelValueUpdate: false,
       cmOptions: {
         mode: 'xml', // 语言模式
         theme: 'monokai', // 主题
@@ -288,6 +289,10 @@ export default {
   },
   watch: {
     modelValue(newVal) {
+      if (this.internalModelValueUpdate) {
+        this.internalModelValueUpdate = false;
+        return;
+      }
       if (newVal && this.bpmnModeler) {
         this.createNewDiagram(newVal);
       }
@@ -335,6 +340,7 @@ export default {
           this.revocable = this.bpmnModeler.get("commandStack").canUndo();
           let { xml } = await this.bpmnModeler.saveXML({ format: true });
           this.$emit("commandStack-changed", event);
+          this.internalModelValueUpdate = true;
           this.$emit('update:modelValue', xml);
           this.$emit("change", xml);
         } catch (e) {
@@ -359,8 +365,13 @@ export default {
         if (warnings && warnings.length) {
           warnings.forEach(warn => console.warn(warn));
         }
+        await this.$nextTick();
+        this.processReZoom();
       } catch (e) {
         console.error(`[Process Designer Warn]: ${e?.message || e}`);
+        // 导入失败时 bpmn-js 已清空画布：必须通知宿主层，
+        // 否则用户会把空图保存进模型
+        this.$emit("import-error", e?.message || e);
       }
     },
 

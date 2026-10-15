@@ -54,51 +54,29 @@
 
 <script setup name="Copy" lang="js">
 import { listCopyProcess } from "@/api/workflow/work/process"
+import { useTaskList } from './useTaskList';
+
 const router = useRouter();
-import { listAllCategory } from "@/api/workflow/category";
-const { proxy } = getCurrentInstance() ;
 
-const copyList = ref([]);
-const loading = ref(true);
-const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const categoryOptions = ref([]);
-const queryFormRef = ref();
-
-const queryParams = ref({
-  pageNum: 1,
-  pageSize: 10,
-  processName: "",
-  originatorName: "",
-  category: ''
+const {
+  rows: copyList,
+  loading,
+  showSearch,
+  total,
+  queryFormRef,
+  categoryOptions,
+  queryParams,
+  getList,
+  handleQuery,
+  resetQuery,
+  categoryFormat
+} = useTaskList({
+  fetcher: listCopyProcess,
+  defaultQuery: { processName: "", originatorName: "", category: '' },
+  hasDateRange: false,
+  categoryField: 'categoryId'
 });
 
-/** 查询流程分类列表 */
-const getCategoryList = async () => {
-  const res = await listAllCategory();
-  categoryOptions.value = res.data;
-}
-/** 查询待办列表 */
-const getList = async () => {
-  loading.value = true;
-  const res = await listCopyProcess(queryParams.value);
-  copyList.value = res.rows;
-  total.value = res.total;
-  loading.value = false;
-}
-/** 搜索按钮操作 */
-const handleQuery = () => {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-/** 重置按钮操作 */
-const resetQuery = () => {
-  queryFormRef.value.resetFields();
-  handleQuery();
-}
 /** 流程详情 */
 const handleDetails = (row) => {
    router.push({
@@ -108,15 +86,4 @@ const handleDetails = (row) => {
      }
    })
 }
-const categoryFormat = (row) => {
-  var category = categoryOptions.value.find(function(find) {
-        return find.code === row.categoryId;
-    });
-    return category && category.categoryName ? category.categoryName : '';
-}
-
-onMounted(() => {
-  getCategoryList();
-  getList();
-});
 </script>

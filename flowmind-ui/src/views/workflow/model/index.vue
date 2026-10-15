@@ -107,14 +107,14 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button type="warning" plain icon="MagicStick" @click="handleAiDesignBasic">AI 设计</el-button>
-          <el-button type="primary" @click="submitForm">确 定</el-button>
+          <el-button type="primary" :loading="formSaving" :disabled="formSaving" @click="submitForm">确 定</el-button>
           <el-button @click="cancel">取 消</el-button>
         </div>
       </template>
     </el-dialog>
 
     <!-- 基础信息 AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignBasicDialogRef"
       v-model="aiDesignBasicVisible"
       designType="flow"
@@ -123,29 +123,41 @@
       @fill="handleAiFillBasic"
     />
 
-    <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen>
-      <ProcessDesigner
-        :key="`designer-${reloadIndex}`"
-        ref="modelDesignerRef"
-        v-loading="designerLoading"
-        :designer-form="designerForm"
-        :bpmn-xml="bpmnXml"
-        @save="onSaveDesigner"
-      >
-        <template #custom-buttons>
-          <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
-        </template>
-      </ProcessDesigner>
+    <el-dialog :title="designer.title" v-model="designer.visible" append-to-body fullscreen :before-close="beforeCloseDesigner">
+      <div :class="['ai-designer-wrap', { 'ai-designer-wrap--with-panel': aiDesignVisible }]">
+        <ProcessDesigner
+          :key="`designer-${reloadIndex}`"
+          ref="modelDesignerRef"
+          v-loading="designerLoading"
+          :designer-form="designerForm.form"
+          :bpmn-xml="designerPreviewData?.bpmn_xml || bpmnXml"
+          @save="onSaveDesigner"
+          @import-error="onAiImportError"
+        >
+          <template #custom-buttons>
+            <el-button :size="'default'" :type="'primary'" icon="MagicStick" @click="handleAiDesign">AI 设计</el-button>
+          </template>
+        </ProcessDesigner>
+        <div v-if="aiDesigning" class="ai-design-mask">
+          <div class="ai-design-mask-spinner"></div>
+          <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignDialogRef"
       v-model="aiDesignVisible"
       designType="flow"
       mode="design"
       :formData="designerFlowInfo"
+      :get-current-baseline="getCurrentBaseline"
+      @preview="handleAiPreview"
+      @discard="discardAiPreview"
       @fill="handleAiFill"
+      @designing="onAiDesigning"
+      @progress="onAiProgress"
     />
 
     <el-dialog :title="history.title" v-model="history.visible" append-to-body>
@@ -189,7 +201,7 @@ import { listAllCategory } from "@/api/workflow/category";
 import ProcessDesigner from "@/components/ProcessDesigner";
 import ProcessViewer from "@/components/ProcessViewer";
 import { useAiSessionStore } from '@/store/modules/aiSession';
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
 
 const { proxy } = getCurrentInstance() ;
@@ -203,7 +215,9 @@ const multiple = ref(true);
 const total = ref(0);
 const categoryOptions = ref([]);
 const designerLoading = ref(true);
+const formSaving = ref(false);
 const bpmnXml = ref('');
+const persistedBpmnXml = ref('');
 const reloadIndex = ref(0);
 const processXml = ref("");
 
@@ -216,7 +230,10 @@ const queryFormRef = ref();
 const modelDesignerRef = ref(null)
 const aiDesignVisible = ref(false);
 const aiDesignDialogRef = ref();
+const aiDesigning = ref(false);
+const aiDesignProgress = ref('');
 const aiDesignBasicVisible = ref(false);
+const designerPreviewData = ref(null);
 const aiDesignBasicDialogRef = ref();
 const designerFlowInfo = ref({});
 
@@ -234,6 +251,7 @@ const designer = reactive({
   visible: false,
   title: ''
 });
+const skipDesignerCloseConfirm = ref(false);
 
 const history = reactive({
   visible: false,
@@ -358,6 +376,7 @@ const handleProcessView = async (row) => {
 }
 /** 设计按钮操作 */
 const handleDesigner = async (row) => {
+  skipDesignerCloseConfirm.value = false;
   reloadIndex.value++;
   designerForm.modelId = row.modelId;
   // 设置设计器表单信息
@@ -365,6 +384,7 @@ const handleDesigner = async (row) => {
   designerForm.form.processKey = row.modelKey || '';
   const res = await getBpmnXml(row.modelId);
   bpmnXml.value = res.data || '';
+  persistedBpmnXml.value = bpmnXml.value;
   designerFlowInfo.value = {
     modelId: row.modelId,
     modelName: row.modelName,
@@ -413,13 +433,21 @@ const handleHistory = (row) => {
 }
 /** 提交表单操作 */
 const submitForm = async () => {
+  if (formSaving.value) return;
   modelFormRef.value.validate(async (valid) => {
-    if (valid) {
+    if (valid && !formSaving.value) {
+      formSaving.value = true;
+      try {
       // 普通模式：直接保存模型
       form.value.modelId ? await updateModel(form.value) : await addModel(form.value);
       proxy.$modal.msgSuccess("操作成功");
+      // 基本信息已落定，本轮 AI 会话结束
+      aiDesignBasicDialogRef.value?.clearMessages();
       dialog.visible = false;
       getList();
+      } finally {
+        formSaving.value = false;
+      }
     }
   })
 }
@@ -430,7 +458,20 @@ const getCategoryList = async () => {
 }
 
 const onSaveDesigner = async (str) => {
-  bpmnXml.value = str;
+  if (designerLoading.value) return;
+  if (designerPreviewData.value) {
+    try {
+      await proxy.$modal.confirm(
+        '当前 AI 变更预览尚未应用，继续保存将保存当前版本（未包含这次 AI 变更），是否继续？',
+        '提示'
+      );
+    } catch (action) {
+      return;
+    }
+  }
+  // 有未应用预览时，设计器当前渲染的是预览 XML；确认保存仍应保存预览前的版本。
+  const saveXml = designerPreviewData.value ? bpmnXml.value : str;
+  bpmnXml.value = saveXml;
 
   // 检查是否为新模型（AI 生成的流程）
   if (!designerForm.modelId) {
@@ -448,7 +489,7 @@ const onSaveDesigner = async (str) => {
   // 已有模型，直接询问是否保存为新版本
   let dataBody = {
     modelId: designerForm.modelId,
-    bpmnXml: str
+    bpmnXml: saveXml
   }
   proxy.$modal.confirm('是否将此模型保存为新版本？').then(() => {
     confirmSave(dataBody, true)
@@ -459,12 +500,16 @@ const onSaveDesigner = async (str) => {
   })
 }
 const confirmSave = async (body, newVersion) => {
+  if (designerLoading.value) return;
   designerLoading.value = true;
-  console.log(body,"body");
   try {
     await saveModel(Object.assign(body, { newVersion: newVersion }));
     getList();
     proxy.$modal.msgSuccess("保存成功");
+    // 流程设计已落定，本轮 AI 会话结束
+    aiDesignDialogRef.value?.clearMessages();
+    skipDesignerCloseConfirm.value = true;
+    persistedBpmnXml.value = body.bpmnXml;
     designerLoading.value = false;
     designer.visible = false;
   } catch (error) {
@@ -472,6 +517,32 @@ const confirmSave = async (body, newVersion) => {
     // 保存失败时不关闭设计器，不刷新页面
   }
 }
+
+const normalizeFlowXml = (xml) => String(xml || '')
+  .replace(/<bpmndi:BPMNDiagram[\s\S]*?<\/bpmndi:BPMNDiagram>/g, '')
+  .replace(/<BPMNDiagram[\s\S]*?<\/BPMNDiagram>/g, '')
+  .replace(/>\s+</g, '><')
+  .trim();
+
+const beforeCloseDesigner = async (done) => {
+  if (skipDesignerCloseConfirm.value) {
+    skipDesignerCloseConfirm.value = false;
+    done();
+    return;
+  }
+  const closeAndClearSession = async () => {
+    await aiDesignDialogRef.value?.clearMessages?.();
+    done();
+  };
+  const current = await modelDesignerRef.value?.getCurrentXml?.();
+  if (!current || normalizeFlowXml(current) === normalizeFlowXml(persistedBpmnXml.value)) {
+    await closeAndClearSession();
+    return;
+  }
+  proxy.$modal.confirm('当前流程存在未保存的设计，确定关闭吗？', '提示')
+    .then(() => closeAndClearSession())
+    .catch(() => {});
+};
 
 const categoryFormat = (row) => {
   var category = categoryOptions.value.find(function(k) {
@@ -485,71 +556,111 @@ const handleAiDesignBasic = () => {
   aiDesignBasicVisible.value = true;
 };
 
-/** 基础信息表单 AI 填充 */
+/** 基础信息表单 AI 填充（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFillBasic = (data) => {
   if (!data) return;
-  if (data.flow_name) {
-    form.value.modelName = data.flow_name;
+  const flowName = data.flow_name || data.modelName;
+  if (flowName) {
+    form.value.modelName = flowName;
   }
-  if (data.code) {
-    form.value.category = data.code;
+  const category = data.code || data.category;
+  if (category) {
+    form.value.category = category;
   }
   if (data.description) {
     form.value.description = data.description;
   }
+  // 值有效才覆盖：后端可能返回 flow_key: null，直接赋值会清空模型标识
+  const flowKey = data.flow_key || data.modelKey;
+  if (flowKey) {
+    form.value.modelKey = flowKey;
+  }
 };
 
-/** 可视化设计 AI 设计按钮 */
-const handleAiDesign = async () => {
-  // 从设计器获取最新的 BPMN XML（包括未保存的修改）
+/** AI 浮窗每轮发送前调用的最新基线：画布 XML + 流程基本信息 */
+const getCurrentBaseline = async () => {
+  let latestXml = designerFlowInfo.value.bpmnXml;
   if (modelDesignerRef.value) {
-    const latestXml = await modelDesignerRef.value.getCurrentXml();
-    if (latestXml) {
-      bpmnXml.value = latestXml;
-    }
+    const xml = await modelDesignerRef.value.getCurrentXml();
+    if (xml) latestXml = xml;
   }
-  // 同步流程基本信息到 designerFlowInfo
-  designerFlowInfo.value = {
+  return {
     ...designerFlowInfo.value,
     modelId: designerForm.modelId,
     modelName: designerForm.form.processName || designerFlowInfo.value.modelName || '',
     modelKey: designerForm.form.processKey || designerFlowInfo.value.modelKey || '',
-    category: designerFlowInfo.value.category || '',
-    description: designerFlowInfo.value.description || '',
-    bpmnXml: bpmnXml.value,
+    bpmnXml: latestXml,
   };
+};
+
+/** 可视化设计 AI 设计按钮：同步最新画布后打开浮窗 */
+const handleAiDesign = async () => {
+  designerFlowInfo.value = await getCurrentBaseline();
+  bpmnXml.value = designerFlowInfo.value.bpmnXml;
   // 等待 Vue 更新后再打开弹窗
   await nextTick();
   aiDesignVisible.value = true;
 };
 
-/** 可视化设计 AI 填充 */
+/** 可视化设计 AI 填充（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (data) => {
   if (!data) return;
   // 填充 BPMN XML 到设计器
-  if (data.bpmn_xml && data.bpmn_xml.trim()) {
-    bpmnXml.value = data.bpmn_xml;
+  const xml = data.bpmn_xml || data.bpmnXml;
+  if (xml && xml.trim()) {
+    bpmnXml.value = xml;
   }
   // 填充流程基本信息
-  if (data.flow_name) {
-    designerForm.form.processName = data.flow_name;
+  const flowName = data.flow_name || data.flowName;
+  if (flowName) {
+    designerForm.form.processName = flowName;
   }
-  if (data.flow_key) {
-    designerForm.form.processKey = data.flow_key;
+  const flowKey = data.flow_key || data.flowKey;
+  if (flowKey) {
+    designerForm.form.processKey = flowKey;
   }
+  designerPreviewData.value = null;
 };
 
-// 监听基础信息对话框关闭，清空 AI 聊天和后端 checkpoint
+const handleAiPreview = (data) => {
+  designerPreviewData.value = data;
+};
+
+const discardAiPreview = () => {
+  designerPreviewData.value = null;
+};
+
+/** AI 预览 XML 渲染失败：丢弃预览回退到上一次有效设计，避免保存空图 */
+const onAiImportError = () => {
+  if (!designerPreviewData.value) return;
+  designerPreviewData.value = null;
+  proxy?.$modal.msgError('AI 生成的流程图形渲染失败，已回退到上一次有效的设计');
+};
+
+/** AI 生成状态：开始/结束 */
+const onAiDesigning = (val) => {
+  aiDesigning.value = val;
+  if (val) aiDesignProgress.value = '';
+};
+
+/** AI 阶段进度文案 */
+const onAiProgress = (msg) => {
+  aiDesignProgress.value = msg;
+};
+
+// 监听基础信息对话框关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => dialog.visible, (val) => {
   if (!val) {
-    aiDesignBasicDialogRef.value?.clearMessages();
+    aiDesignBasicVisible.value = false;
   }
 });
 
-// 监听设计器关闭，清空 AI 聊天和后端 checkpoint
+// 监听设计器关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => designer.visible, (val) => {
   if (!val) {
-    aiDesignDialogRef.value?.clearMessages();
+    aiDesignVisible.value = false;
+    aiDesigning.value = false;
+    aiDesignProgress.value = '';
   }
 });
 
@@ -559,10 +670,7 @@ onMounted(async () => {
 
   // 恢复 AI 会话历史（如有）
   if (aiSession.hasActiveSession) {
-    const chatHistory = await aiSession.restoreSession()
-    if (chatHistory) {
-      console.log('AI 会话已恢复，历史消息数:', chatHistory.length)
-    }
+    await aiSession.restoreSession()
   }
 });
 </script>
@@ -572,5 +680,41 @@ onMounted(async () => {
   max-height: calc(100vh) !important;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.ai-designer-wrap {
+  position: relative;
+  min-height: 60vh;
+}
+
+.ai-design-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  color: #3b82f6;
+  font-size: 14px;
+  pointer-events: auto;
+}
+
+.ai-design-mask-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: ai-design-spin 0.9s linear infinite;
+}
+
+@keyframes ai-design-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

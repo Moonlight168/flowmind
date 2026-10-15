@@ -126,8 +126,7 @@ const fetchProcesses = async () => {
       formId: item.formId,
       formName: item.formName,
       suspended: item.suspended,
-      deploymentTime: item.deploymentTime,
-      avgTime: Math.floor(Math.random() * 30) + 5
+      deploymentTime: item.deploymentTime
     }))
   } catch (error) {
     console.error('获取流程列表失败:', error)

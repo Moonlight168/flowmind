@@ -1,0 +1,343 @@
+"""FlowMind AI 增量设计操作应用器。
+
+所有操作都应用到基线深拷贝，调用方只有在校验通过后才使用返回结果。
+"""
+
+import json
+from copy import deepcopy
+from typing import Any
+
+from app.design.widget_tree import iter_child_lists
+
+
+_DATA_TYPE_ALIASES = {
+    "ROLE": "ROLES",
+    "USER": "USERS",
+    "DEPT": "DEPTS",
+}
+
+
+def apply_design_operations(
+    design_type: str,
+    baseline: dict[str, Any] | None,
+    operations: list[dict[str, Any]],
+    *,
+    mode: str = "design",
+) -> dict[str, Any]:
+    """在基线副本上应用指定类型的增量操作。"""
+    result = normalize_design_baseline(design_type, baseline)
+    automatic_edges: set[tuple[str, str]] = set()
+    for operation in operations:
+        if design_type == "flow_design" and mode == "basic":
+            _apply_update_operation(result, operation, "update_flow_metadata")
+        elif design_type == "flow_design":
+            _apply_flow_operation(result, operation, automatic_edges)
+        elif design_type == "form_design":
+            _apply_form_operation(result, operation)
+        elif design_type == "category_design":
+            _apply_update_operation(result, operation, "update_category")
+        else:
+            raise ValueError(f"不支持的设计类型: {design_type}")
+    return result
+
+
+def normalize_design_baseline(
+    design_type: str, baseline: dict[str, Any] | None
+) -> dict[str, Any]:
+    """把前端传入的数据归一化为增量操作可直接使用的结构。"""
+    result = deepcopy(baseline or {})
+    if design_type == "category_design":
+        result.setdefault("category_name", result.get("categoryName", ""))
+    elif design_type == "flow_design":
+        result.setdefault("flow_name", result.get("modelName", ""))
+        result.setdefault("code", result.get("category", ""))
+    if design_type != "form_design":
+        return result
+    content = result.get("content")
+    if isinstance(content, str) and content.strip():
+        try:
+            form_json = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError("当前表单 content 不是合法 JSON") from exc
+    elif isinstance(content, dict):
+        form_json = content
+    else:
+        form_json = {}
+    result.setdefault("widgetList", deepcopy(form_json.get("widgetList") or []))
+    result.setdefault("formConfig", deepcopy(form_json.get("formConfig") or {}))
+    result.setdefault("form_name", result.get("formName", ""))
+    return result
+
+
+def _apply_flow_operation(
+    result: dict[str, Any],
+    operation: dict[str, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> None:
+    op = operation.get("op")
+    if op == "replace_graph":
+        result["nodes"] = [
+            _normalize_flow_node(node) for node in operation.get("nodes") or []
+        ]
+        result["edges"] = deepcopy(operation.get("edges") or [])
+        automatic_edges.clear()
+        return
+    if op == "add_node":
+        automatic_edge = _add_flow_node(result, operation)
+        if automatic_edge:
+            automatic_edges.add(automatic_edge)
+        return
+    if op == "update_node":
+        node = _find_by_id(result.get("nodes", []), operation.get("node_id"))
+        if node is None:
+            raise ValueError(f"要修改的流程节点不存在: {operation.get('node_id')}")
+        node.update(_normalize_assignment_fields(operation.get("changes") or {}))
+        return
+    if op == "remove_node":
+        _remove_flow_node(result, operation.get("node_id"))
+        return
+    if op == "add_edge":
+        _add_flow_edge(
+            result.setdefault("edges", []),
+            operation.get("edge") or {},
+            automatic_edges,
+        )
+        return
+    if op in {"update_edge", "remove_edge"}:
+        _change_flow_edge(result, operation, remove=op == "remove_edge")
+        return
+    raise ValueError(f"不支持的流程操作: {op}")
+
+
+def _add_flow_edge(
+    edges: list[dict[str, Any]],
+    edge: dict[str, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> None:
+    """显式操作只补全本批次由 after_id 创建的无元数据连线。"""
+    candidate = deepcopy(edge)
+    endpoints = (candidate.get("source"), candidate.get("target"))
+    existing = _find_automatic_edge(edges, endpoints, automatic_edges)
+    if existing:
+        existing.update(candidate)
+        automatic_edges.discard(endpoints)
+        return
+    edges.append(candidate)
+
+
+def _find_automatic_edge(
+    edges: list[dict[str, Any]],
+    endpoints: tuple[Any, Any],
+    automatic_edges: set[tuple[str, str]],
+) -> dict[str, Any] | None:
+    if endpoints not in automatic_edges:
+        return None
+    source, target = endpoints
+    return next(
+        (edge for edge in edges if edge == {"source": source, "target": target}),
+        None,
+    )
+
+
+def _add_flow_node(
+    result: dict[str, Any], operation: dict[str, Any]
+) -> tuple[str, str] | None:
+    node = _normalize_flow_node(operation.get("node") or {})
+    if not node.get("id"):
+        raise ValueError("新增流程节点缺少 id")
+    nodes = result.setdefault("nodes", [])
+    if _find_by_id(nodes, node["id"]):
+        raise ValueError(f"流程节点 id 已存在: {node['id']}")
+    nodes.append(node)
+    after_id = operation.get("after_id")
+    if not after_id:
+        return None
+    if not _find_by_id(nodes, after_id):
+        raise ValueError(f"要插入的位置节点不存在: {after_id}")
+    _insert_after(result.setdefault("edges", []), after_id, node["id"])
+    return after_id, node["id"]
+
+
+def _normalize_flow_node(node: dict[str, Any]) -> dict[str, Any]:
+    return _normalize_assignment_fields(node)
+
+
+def _normalize_assignment_fields(values: dict[str, Any]) -> dict[str, Any]:
+    """统一模型输出与 BPMN 设计器的审批人类型枚举。"""
+    normalized = deepcopy(values)
+    data_type = normalized.get("data_type")
+    if isinstance(data_type, str):
+        upper = data_type.strip().upper()
+        normalized["data_type"] = _DATA_TYPE_ALIASES.get(upper, upper)
+    return normalized
+
+
+def _insert_after(edges: list[dict[str, Any]], after_id: str, node_id: str) -> None:
+    outgoing = [edge for edge in edges if edge.get("source") == after_id]
+    if len(outgoing) > 1:
+        raise ValueError(f"节点 {after_id} 存在多条出边，请明确目标连线")
+    if not outgoing:
+        edges.append({"source": after_id, "target": node_id})
+        return
+    original = outgoing[0]
+    target = original.get("target")
+    edges.remove(original)
+    continued = deepcopy(original)
+    continued["source"] = node_id
+    edges.extend(
+        [
+            {"source": after_id, "target": node_id},
+            {**continued, "target": target},
+        ]
+    )
+
+
+def _remove_flow_node(result: dict[str, Any], node_id: str | None) -> None:
+    nodes = result.setdefault("nodes", [])
+    node = _find_by_id(nodes, node_id)
+    if node is None:
+        raise ValueError(f"要删除的流程节点不存在: {node_id}")
+    nodes.remove(node)
+    edges = result.setdefault("edges", [])
+    incoming = [edge for edge in edges if edge.get("target") == node_id]
+    outgoing = [edge for edge in edges if edge.get("source") == node_id]
+    edges[:] = [
+        edge
+        for edge in edges
+        if edge.get("source") != node_id and edge.get("target") != node_id
+    ]
+    if len(incoming) == 1 and len(outgoing) == 1:
+        # 重连边继承原入边的元数据（name/condition/is_default），仅改变 target，
+        # 避免默认分支标记、条件表达式等信息随删除丢失。
+        edges.append({**deepcopy(incoming[0]), "target": outgoing[0].get("target")})
+
+
+def _change_flow_edge(
+    result: dict[str, Any], operation: dict[str, Any], *, remove: bool
+) -> None:
+    edges = result.setdefault("edges", [])
+    edge = _find_edge(edges, operation)
+    if edge is None:
+        raise ValueError("要修改的流程连线不存在")
+    if remove:
+        edges.remove(edge)
+    else:
+        edge.update(operation.get("changes") or {})
+
+
+def _find_edge(
+    edges: list[dict[str, Any]], operation: dict[str, Any]
+) -> dict[str, Any] | None:
+    edge_id = operation.get("edge_id")
+    if edge_id:
+        return next((edge for edge in edges if edge.get("id") == edge_id), None)
+    source, target = operation.get("source"), operation.get("target")
+    return next(
+        (
+            edge
+            for edge in edges
+            if edge.get("source") == source and edge.get("target") == target
+        ),
+        None,
+    )
+
+
+def _apply_form_operation(result: dict[str, Any], operation: dict[str, Any]) -> None:
+    op = operation.get("op")
+    if op == "replace_form":
+        result["widgetList"] = deepcopy(operation.get("widgetList") or [])
+        result["formConfig"] = deepcopy(operation.get("formConfig") or {})
+        if operation.get("form_name"):
+            result["form_name"] = operation["form_name"]
+        return
+    if op == "add_widget":
+        _add_form_widget(result, operation)
+        return
+    if op in {"update_widget", "remove_widget", "move_widget"}:
+        _change_form_widget(result, operation)
+        return
+    raise ValueError(f"不支持的表单操作: {op}")
+
+
+def _add_form_widget(result: dict[str, Any], operation: dict[str, Any]) -> None:
+    widgets = result.setdefault("widgetList", [])
+    widget = deepcopy(operation.get("widget") or {})
+    name = _widget_name(widget)
+    if not name:
+        raise ValueError("新增表单字段缺少 options.name")
+    if find_widget(widgets, name):
+        raise ValueError(f"表单字段已存在: {name}")
+    index = _widget_insert_index(widgets, operation.get("after_name"))
+    widgets.insert(index, widget)
+
+
+def _change_form_widget(result: dict[str, Any], operation: dict[str, Any]) -> None:
+    widgets = result.setdefault("widgetList", [])
+    name = operation.get("widget_name")
+    location = _find_widget_location(widgets, name)
+    if location is None:
+        raise ValueError(f"要修改的表单字段不存在: {name}")
+    container, widget = location
+    op = operation.get("op")
+    if op == "remove_widget":
+        container.remove(widget)
+    elif op == "move_widget":
+        after_name = operation.get("after_name")
+        destination = _find_widget_location(widgets, after_name) if after_name else None
+        if destination is not None and destination[0] is not container:
+            raise ValueError("嵌套字段只能在同一容器内移动")
+        container.remove(widget)
+        container.insert(_widget_insert_index(container, after_name), widget)
+    else:
+        changes = deepcopy(operation.get("changes") or {})
+        option_changes = changes.pop("options", None)
+        widget.update(changes)
+        if option_changes:
+            widget.setdefault("options", {}).update(option_changes)
+
+
+def _apply_update_operation(
+    result: dict[str, Any], operation: dict[str, Any], expected_op: str
+) -> None:
+    if operation.get("op") != expected_op:
+        raise ValueError(f"不支持的操作: {operation.get('op')}")
+    result.update(deepcopy(operation.get("changes") or {}))
+
+
+def _find_by_id(items: list[dict[str, Any]], item_id: str | None) -> dict | None:
+    return next((item for item in items if item.get("id") == item_id), None)
+
+
+def _widget_name(widget: dict[str, Any]) -> str:
+    return str((widget.get("options") or {}).get("name") or "")
+
+
+def find_widget(
+    widgets: list[dict[str, Any]], name: str | None
+) -> dict[str, Any] | None:
+    location = _find_widget_location(widgets, name)
+    return location[1] if location else None
+
+
+def _find_widget_location(
+    widgets: list[dict[str, Any]], name: str | None
+) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    for widget in widgets:
+        if _widget_name(widget) == name:
+            return widgets, widget
+        for children in iter_child_lists(widget):
+            location = _find_widget_location(children, name)
+            if location:
+                return location
+    return None
+
+
+def _widget_insert_index(widgets: list[dict[str, Any]], after_name: str | None) -> int:
+    if not after_name:
+        return len(widgets)
+    previous = next(
+        (widget for widget in widgets if _widget_name(widget) == after_name), None
+    )
+    if previous is None:
+        raise ValueError(f"插入位置字段不存在: {after_name}")
+    return widgets.index(previous) + 1

@@ -51,13 +51,18 @@
 
     <!-- 流程表单设计器对话框 -->
     <el-dialog
-      :title="designer.title"
       v-model="designer.visible"
       fullscreen
+      :before-close="beforeCloseDesigner"
       @opened="handleDesignerOpened"
       @closed="handleDesignerClosed"
     >
-      <div id="form-designer">
+      <template #header>
+        <div class="designer-dialog-header">
+          <span class="designer-dialog-title">{{ designer.title }}</span>
+        </div>
+      </template>
+      <div id="form-designer" class="ai-designer-wrap">
         <v-form-designer
           ref="vfDesignerRef"
           :resetFormJson="true"
@@ -65,22 +70,31 @@
           v-if="designer.visible"
           :global-dsv="{}"
         >
-          <!-- 自定义按钮插槽 -->
-          <template #customToolButtons>
-            <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
-            <el-button type="success" plain @click="dialog.visible = true">保存</el-button>
-          </template>
         </v-form-designer>
+        <!-- 与 vform3 工具栏（PC/Pad/H5）同一行，位置由脚本按该行实际几何算 -->
+        <div class="ai-designer-actions" :style="actionsStyle">
+          <el-button type="primary" plain @click="handleAiDesign">AI 设计</el-button>
+          <el-button type="success" plain :disabled="Boolean(aiPreviewData)" @click="dialog.visible = true">保存</el-button>
+        </div>
+        <div v-if="aiDesigning" class="ai-design-mask">
+          <div class="ai-design-mask-spinner"></div>
+          <div class="ai-design-mask-text">{{ aiDesignProgress || 'AI 正在生成…' }}</div>
+        </div>
       </div>
     </el-dialog>
 
     <!-- AI 设计对话框 -->
-    <AiDesignDialog
+    <AiChatWindow
       ref="aiDesignDialogRef"
       v-model="aiDesignVisible"
       designType="form"
       :formData="form"
+      :get-current-baseline="getCurrentBaseline"
+      @preview="handleAiPreview"
+      @discard="discardAiPreview"
       @fill="handleAiFill"
+      @designing="onAiDesigning"
+      @progress="onAiProgress"
     />
 
     <!-- 预览表单对话框 -->
@@ -110,9 +124,9 @@
 
 <script setup name="Form" >
 import { listForm, addForm, updateForm, getForm, delForm } from "@/api/workflow/form";
-import AiDesignDialog from "@/components/AiDesignDialog/index.vue";
+import AiChatWindow from "@/components/AiChatWindow/index.vue";
 import useUserStore from "@/store/modules/user";
-import { watch } from 'vue';
+import { watch, onUnmounted } from 'vue';
 
 const { proxy } = getCurrentInstance();
 
@@ -139,7 +153,11 @@ const designer = reactive({
   title: ''
 })
 const aiDesignVisible = ref(false);
+const aiPreviewData = ref(null);
 const aiDesignDialogRef = ref();
+const aiDesigning = ref(false);
+const aiDesignProgress = ref('');
+const skipDesignerCloseConfirm = ref(false);
 const userStore = useUserStore();
 const render = reactive({
   visible: false,
@@ -275,7 +293,10 @@ const submitForm = () => {
   nextTick(async () => {
     form.value.formId ? await updateForm(form.value) : await addForm(form.value);
     proxy?.$modal.msgSuccess("操作成功");
+    // 设计已落定，本轮 AI 会话结束：清前端记录与后端 checkpoint
+    aiDesignDialogRef.value?.clearMessages();
     dialog.visible = false;
+    skipDesignerCloseConfirm.value = true;
     designer.visible = false;
     getList();
   })
@@ -289,26 +310,32 @@ const handleDelete = async (row) => {
   proxy?.$modal.msgSuccess("删除成功");
 }
 
-/** AI 设计按钮 */
-const handleAiDesign = () => {
-  // 同步设计器的最新数据到 form.value，确保 AiDesignDialog 能获取到
+/** AI 浮窗每轮发送前调用的最新基线：表单设计器当前 JSON + 表单信息 */
+const getCurrentBaseline = () => {
   if (vfDesignerRef.value && vfDesignerRef.value.getFormJson) {
     const formJson = vfDesignerRef.value.getFormJson();
     if (formJson && Object.keys(formJson).length > 0) {
       form.value.content = JSON.stringify(formJson);
     }
   }
+  return { ...form.value };
+};
+
+/** AI 设计按钮：同步设计器最新数据后打开浮窗 */
+const handleAiDesign = () => {
+  getCurrentBaseline();
   aiDesignVisible.value = true;
 };
 
-/** AI 填充表单 */
+/** AI 填充表单（兼容后端蛇形与版本快照的驼峰字段） */
 const handleAiFill = (data) => {
   // data 是 form_data（完整 VForm3 JSON + form_name）
   if (!data) return;
 
   // 更新表单名称
-  if (data.form_name) {
-    form.value.formName = data.form_name;
+  const formName = data.form_name || data.formName;
+  if (formName) {
+    form.value.formName = formName;
   }
 
   // 提取 VForm3 需要的核心字段，存储到 form.value.content
@@ -322,23 +349,108 @@ const handleAiFill = (data) => {
   if (vfDesignerRef.value?.setFormJson) {
     vfDesignerRef.value.setFormJson(formJson);
   }
+  aiPreviewData.value = null;
+};
+
+const handleAiPreview = (data) => {
+  aiPreviewData.value = data;
+  const formJson = {
+    widgetList: data?.widgetList || [],
+    formConfig: data?.formConfig || {}
+  };
+  vfDesignerRef.value?.setFormJson?.(formJson);
+};
+
+const discardAiPreview = () => {
+  if (!aiPreviewData.value) return;
+  if (vfDesignerRef.value?.setFormJson) {
+    const baseline = form.value.content
+      ? JSON.parse(form.value.content)
+      : { widgetList: [], formConfig: {} };
+    vfDesignerRef.value.setFormJson(baseline);
+  }
+  aiPreviewData.value = null;
+};
+
+/** AI 生成状态：开始/结束 */
+const onAiDesigning = (val) => {
+  aiDesigning.value = val;
+  if (val) aiDesignProgress.value = '';
+};
+
+/** AI 阶段进度文案 */
+const onAiProgress = (msg) => {
+  aiDesignProgress.value = msg;
+};
+
+/** 把 AI 设计/保存 对齐到 vform3 工具栏那一行的最右侧。
+ *
+ *  vform3 的 `.toolbar-container` 里两个子元素都是 float，右侧那组会换行，
+ *  导致容器比肉眼所见的一行要高 —— 按它垂直居中会把按钮压到行以下（实测症状）。
+ *  所以：垂直位置与行高取 `.left-toolbar`（PC/Pad/H5 所在的那一行），
+ *  水平右边界取 `.toolbar-container` 的右边缘。 */
+const actionsStyle = ref({});
+const positionDesignerActions = () => {
+  const wrap = document.getElementById('form-designer');
+  const row = wrap?.querySelector('.left-toolbar');
+  const container = wrap?.querySelector('.toolbar-container');
+  if (!wrap || !row || !container) return;
+  const wrapRect = wrap.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  actionsStyle.value = {
+    top: `${rowRect.top - wrapRect.top}px`,
+    height: `${rowRect.height}px`,
+    right: `${Math.max(0, wrapRect.right - containerRect.right + 12)}px`
+  };
 };
 
 /** 表单设计器打开后 */
 const handleDesignerOpened = () => {
   // Dialog 完全打开后的回调，确保 DOM 已渲染
+  nextTick(positionDesignerActions);
+  window.addEventListener('resize', positionDesignerActions);
 };
 
 /** 表单设计器关闭后 */
 const handleDesignerClosed = () => {
-  // 清理状态
-  aiDesignDialogRef.value?.clearMessages();
+  window.removeEventListener('resize', positionDesignerActions);
 };
 
-// 监听设计器关闭，清空 AI 聊天和后端 checkpoint
+const beforeCloseDesigner = (done) => {
+  if (skipDesignerCloseConfirm.value) {
+    skipDesignerCloseConfirm.value = false;
+    done();
+    return;
+  }
+  const closeAndClearSession = async () => {
+    await aiDesignDialogRef.value?.clearMessages?.();
+    done();
+  };
+  const current = vfDesignerRef.value?.getFormJson?.();
+  const baseline = form.value.content
+    ? JSON.parse(form.value.content)
+    : { widgetList: [], formConfig: {} };
+  if (JSON.stringify(current || {}) === JSON.stringify(baseline || {})) {
+    closeAndClearSession();
+    return;
+  }
+  proxy?.$modal.confirm('当前表单存在未保存的设计，确定关闭吗？', '提示')
+    .then(() => closeAndClearSession())
+    .catch(() => {});
+};
+
+// 页面卸载时兜底移除监听（设计器未走关闭流程时也要清）
+onUnmounted(() => {
+  window.removeEventListener('resize', positionDesignerActions);
+});
+
+// 监听设计器关闭：只收掉 AI 浮窗，会话保留（保存时才清）
 watch(() => designer.visible, (val) => {
   if (!val) {
-    aiDesignDialogRef.value?.clearMessages();
+    aiDesignVisible.value = false;
+    aiDesigning.value = false;
+    aiDesignProgress.value = '';
   }
 });
 
@@ -401,6 +513,65 @@ getList();
       align-items: center;
       justify-content: center;
     }
+  }
+}
+
+.ai-designer-wrap {
+  position: relative;
+  min-height: 60vh;
+}
+
+.designer-dialog-header {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.designer-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+/* vform3 工具栏行内部是 float 布局，不要改它的排版（会把它自己裁掉的按钮露出来）。
+   按钮单独用绝对定位对齐到该行的右侧，top/height 由脚本按行实际位置算 */
+.ai-designer-actions {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  line-height: 1;
+}
+
+.ai-design-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  color: #3b82f6;
+  font-size: 14px;
+  pointer-events: auto;
+}
+
+.ai-design-mask-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: ai-design-spin 0.9s linear infinite;
+}
+
+@keyframes ai-design-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

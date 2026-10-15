@@ -1,0 +1,8 @@
+{"id":"category-create-purchase","source":"real_anonymized","turns":[{"user_input":"创建采购管理分类，编码 purchase_management，备注为采购流程"}],"tags":["create","normal"]}
+{"id":"category-create-hr","source":"curated","turns":[{"user_input":"新增人力资源分类，编码 hr_management"}],"tags":["create","normal"]}
+{"id":"category-update-name","source":"curated","turns":[{"user_input":"将分类名称改为行政办公","current_artifact":{"category_name":"行政","code":"administration"}}],"tags":["update","existing-artifact"]}
+{"id":"category-update-code","source":"curated","turns":[{"user_input":"将分类编码改为 contract_management","current_artifact":{"category_name":"合同管理","code":"contract"}}],"tags":["update","existing-artifact"]}
+{"id":"category-update-remark","source":"curated","turns":[{"user_input":"补充备注：用于合同审批和归档","current_artifact":{"category_name":"合同管理","code":"contract_management"}}],"tags":["update","existing-artifact"]}
+{"id":"category-multi-turn","source":"real_anonymized","turns":[{"user_input":"创建资产管理分类"},{"user_input":"编码改为 asset_management，并补充用于固定资产申请"}],"tags":["multi-turn","create","update"]}
+{"id":"category-ambiguous","source":"real_anonymized","turns":[{"user_input":"帮我建个分类"}],"tags":["exception","needs-input"]}
+{"id":"category-invalid-code","source":"curated","turns":[{"user_input":"创建分类，编码使用 采购分类"}],"tags":["exception","invalid-input"]}

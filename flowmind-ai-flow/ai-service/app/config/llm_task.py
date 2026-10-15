@@ -1,5 +1,8 @@
 """
 FlowMind 智能流程设计服务 - LLM 任务配置
+
+按任务枚举登记提示词与角色；结构化输出 schema 由 design/spec.py 与
+domain/design_models.py 统一管理，不在此处重复。
 """
 
 from dataclasses import dataclass
@@ -14,17 +17,10 @@ class Role(StrEnum):
     CATEGORY_DESIGNER = "CATEGORY_DESIGNER"
 
 
-TASK_MODULE_FLOW_DESIGN = "app.prompts.tasks.flow_model_design"
-TASK_MODULE_FORM_GENERATION = "app.prompts.tasks.form_design"
-TASK_MODULE_CATEGORY_CLASSIFY = "app.prompts.tasks.category_design"
-
-
 @dataclass(frozen=True)
 class TaskConfig:
-    module: str
-    schema: str | None
+    prompt: str
     role: "Role"
-    description: str = ""
 
 
 class Task(StrEnum):
@@ -36,28 +32,20 @@ class Task(StrEnum):
 
 TASK_CONFIGS: dict[Task, TaskConfig] = {
     Task.FLOW_DESIGN_BASIC: TaskConfig(
-        module="app.prompts.tasks.flow_model_basic",
-        schema="flow_design_basic",
+        prompt="tasks/flow_model_basic.md",
         role=Role.FLOW_DESIGNER,
-        description="流程模型基本信息设计",
     ),
     Task.FLOW_DESIGN: TaskConfig(
-        module=TASK_MODULE_FLOW_DESIGN,
-        schema="flow_design_nodes",
+        prompt="tasks/flow_model_design.md",
         role=Role.FLOW_DESIGNER,
-        description="使用bpmnio.js生成流程模型设计",
     ),
     Task.FORM_DESIGN: TaskConfig(
-        module=TASK_MODULE_FORM_GENERATION,
-        schema="form_design",
+        prompt="tasks/form_design.md",
         role=Role.FORM_DESIGNER,
-        description="使用vform3生成流程表单设计",
     ),
     Task.CATEGORY_DESIGN: TaskConfig(
-        module=TASK_MODULE_CATEGORY_CLASSIFY,
-        schema="category_design",
+        prompt="tasks/category_design.md",
         role=Role.CATEGORY_DESIGNER,
-        description="进行流程分类设计",
     ),
 }
 

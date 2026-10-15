@@ -14,6 +14,7 @@
       @element-click="elementClick"
       @init-finished="initModeler"
       @element-contextmenu="elementContextmenu"
+      @import-error="$emit('import-error', $event)"
       @save="onSaveProcess"
     >
       <template #custom-buttons>

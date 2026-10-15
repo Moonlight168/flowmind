@@ -16,10 +16,11 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
-from app.adapters.factory import ModelFactory
 from app.domain.dto import ResponseVO
 from app.infra.logger import log_api_endpoint
+from app.llm import get_model_runtime
 
 router = APIRouter(
     prefix="/health",
@@ -27,10 +28,31 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=ResponseVO[dict[str, str]])
+def _model_status() -> dict[str, Any]:
+    runtime = get_model_runtime()
+    providers = runtime.describe_providers()
+    structured_count = sum(
+        bool(provider["supports_structured_output"]) for provider in providers
+    )
+    return {
+        "status": "configured" if providers else "unconfigured",
+        "primary_provider": providers[0]["name"] if providers else None,
+        "total_count": len(providers),
+        "structured_provider_count": structured_count,
+        **runtime.describe_readiness(),
+        "providers": providers,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@router.get("", response_model=ResponseVO[dict[str, str]])
 @log_api_endpoint()
-def health_check(request: Request) -> ResponseVO[dict[str, str]]:
-    """健康检查接口"""
+async def health_check(request: Request) -> ResponseVO[dict[str, str]]:
+    """健康检查接口
+
+    注册为空路径（/health 精确匹配，无尾斜杠）：经网关 StripPrefix 后，
+    尾斜杠路由的 307 重定向会丢失网关前缀导致 404。
+    """
     return ResponseVO.success(
         {
             "status": "healthy",
@@ -42,20 +64,17 @@ def health_check(request: Request) -> ResponseVO[dict[str, str]]:
 
 @router.get("/models", response_model=ResponseVO[dict[str, Any]])
 @log_api_endpoint()
-def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
-    """模型适配器状态接口"""
-    manager = ModelFactory.get_model_manager()
-    adapters = manager.get_available_adapters_info()
-    current_adapter = manager.get_current_adapter()
+async def model_health_check(request: Request) -> ResponseVO[dict[str, Any]]:
+    """返回脱敏后的模型配置与结构化能力状态。"""
+    return ResponseVO.success(_model_status())
 
-    total_count = len(adapters)
 
-    return ResponseVO.success(
-        {
-            "status": "healthy" if total_count > 0 else "unhealthy",
-            "current_adapter": current_adapter,
-            "total_count": total_count,
-            "adapters": adapters,
-            "timestamp": datetime.now().isoformat(),
-        }
-    )
+@router.get("/ready", response_model=None)
+@log_api_endpoint()
+async def readiness_check(request: Request) -> ResponseVO[dict[str, Any]] | JSONResponse:
+    """没有可用结构化模型时阻止实例接收流量。"""
+    status = _model_status()
+    if status["structured_fallback_ready"]:
+        return ResponseVO.success(status)
+    body = ResponseVO.error(503, "无可用结构化模型").model_dump()
+    return JSONResponse(status_code=503, content=body)

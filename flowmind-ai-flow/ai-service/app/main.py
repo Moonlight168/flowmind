@@ -10,12 +10,13 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.adapters.factory import ModelFactory
-from app.api import chat, design, health, model_config
+from app.api import chat, design, health, webhook
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.infra.logger import generate_request_id, logger, set_request_id, setup_logging
-from app.infra.nacos_registry import deregister_from_nacos, register_to_nacos
+from app.infra.nacos import deregister_from_nacos, register_to_nacos
+from app.infra.observability import shutdown_observability
+from app.llm import initialize_model_runtime
 
 setup_logging()
 
@@ -24,26 +25,35 @@ setup_logging()
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化
-    ModelFactory.initialize()
+    runtime = initialize_model_runtime()
+    readiness = runtime.describe_readiness()
+    if not readiness["structured_fallback_ready"]:
+        reasons = ",".join(readiness["not_ready_reasons"])
+        logger.error(f"结构化模型降级未就绪: {reasons}")
 
     # 注册到 Nacos（失败时会抛出异常）
-    if not register_to_nacos(max_retries=5, retry_interval=5):
+    if not register_to_nacos():
         logger.error("Nacos 注册失败，服务启动中止")
         raise RuntimeError("Nacos 注册失败，请检查 Nacos 服务是否正常运行")
 
-    yield
-
-    # 关闭时释放资源
-    deregister_from_nacos()
+    try:
+        yield
+    finally:
+        # 关闭时释放资源，并确保批量观测数据完整上报
+        try:
+            deregister_from_nacos()
+        finally:
+            shutdown_observability()
 
 
 app = FastAPI(
     title="FlowMind 智能流程设计服务",
     description="基于规则约束和大模型辅助的智能流程设计服务",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    # 生产环境关闭 API 文档（暴露模型拓扑等内部信息），debug 模式保留便于联调
+    docs_url="/docs" if settings.app.debug else None,
+    redoc_url="/redoc" if settings.app.debug else None,
+    openapi_url="/openapi.json" if settings.app.debug else None,
     lifespan=lifespan,
 )
 
@@ -79,11 +89,13 @@ async def log_context_middleware(request: Request, call_next):
 
     return response
 
+
 # 路由注册（网关层已通过 StripPrefix 去掉 /flowmind-ai，此处直接注册业务路径）
 app.include_router(chat.router, prefix="", tags=["对话"])
 app.include_router(design.router, prefix="", tags=["设计"])
 app.include_router(health.router, tags=["health"])
-app.include_router(model_config.router, tags=["模型配置"])
+# 实验 webhook 供 Langfuse 容器网络内直接调用，不经过网关鉴权
+app.include_router(webhook.router, prefix="")
 
 
 @app.get("/")
@@ -104,5 +116,5 @@ if __name__ == "__main__":
         host=settings.app.host,
         port=settings.app.port,
         reload=settings.app.debug,
-        workers=1,
+        workers=1 if settings.app.debug else settings.app.workers,
     )

@@ -1,0 +1,171 @@
+"""
+FlowMind 智能流程设计服务 - 设计 Agent
+
+ReAct 主路径：create_react_agent 边推理边调检索工具取真实数据，
+最终用结构化输出（response_format）约束字段。
+失败时按配置执行语义重试，耗尽返回 error（不甩锅用户）。
+"""
+
+from typing import Any
+
+from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.prebuilt import create_react_agent
+from pydantic import ValidationError
+
+from app.config import Task
+from app.config.settings import settings
+from app.design.spec import DESIGN_SPEC
+from app.design.tools import search_categories
+from app.domain.design_models import BasicDesign
+from app.infra.logger import logger
+from app.infra.observability import langchain_config
+from app.llm import ModelExhaustedError, get_model_runtime
+from app.prompts.builder import build_prompt
+from app.prompts.loader import load_prompt
+
+
+def run_react_agent(
+    design_type: str,
+    messages: list[dict],
+    current_form_data: dict[str, Any] | None = None,
+    task_name: str | None = None,
+    mode: str = "design",
+    allow_full_replace: bool = False,
+) -> dict[str, Any]:
+    """运行设计 Agent：ReAct 检索 + 结构化输出，失败重试后返回 error。
+
+    Args:
+        design_type: 设计类型 (category_design/flow_design/form_design)
+        messages: 已构建好的消息列表（包含对话历史）
+        current_form_data: 当前表单数据状态（增量修改的基线）
+        task_name: 任务名称
+        mode: 设计模式 ("design" | "basic")
+
+    Returns:
+        LLM 输出的业务 JSON（或 {"intent":"error", ...}）
+    """
+    runtime = get_model_runtime()
+
+    task_map = {
+        "flow_design": Task.FLOW_DESIGN_BASIC if mode == "basic" else Task.FLOW_DESIGN,
+        "form_design": Task.FORM_DESIGN,
+        "category_design": Task.CATEGORY_DESIGN,
+    }
+    task = task_map.get(design_type)
+    if not task:
+        raise ValueError(f"不支持的设计类型: {design_type}")
+
+    prompt_text = build_prompt(
+        task, variables={"current_form_data": current_form_data or {}}
+    )
+    if design_type == "flow_design" and mode == "design":
+        baseline = current_form_data or {}
+        if allow_full_replace or (not baseline.get("nodes") and not baseline.get("edges")):
+            prompt_text += (
+                "\n\n## 当前输出模式\n"
+                "必须使用唯一一个 `replace_graph` 操作输出完整 nodes 和 edges；"
+                "不得使用 `after_id`，不得引用历史节点 ID。"
+            )
+    full_messages = [{"role": "system", "content": prompt_text}, *messages]
+
+    # 选 schema + 工具集：basic 模式用 BasicDesign + 仅分类工具
+    if mode == "basic":
+        schema = BasicDesign
+        tools = [search_categories]
+    else:
+        spec = DESIGN_SPEC.get(design_type)
+        if not spec:
+            raise ValueError(f"不支持的设计类型: {design_type}")
+        schema = spec["schema"]
+        tools = spec["tools"]
+
+    last_error: Exception | None = None
+    max_retry = settings.validation.structured_max_retry_count
+    for attempt in range(1, max_retry + 1):
+        # 语义重试：把上次解析/校验失败原因反馈给模型，避免同样的输出重试三次
+        attempt_messages = full_messages
+        if attempt > 1 and last_error is not None:
+            attempt_messages = [
+                *full_messages,
+                {"role": "user", "content": _retry_feedback(last_error)},
+            ]
+        try:
+            result = runtime.execute(
+                task_name,
+                lambda llm, msgs=attempt_messages: _invoke_agent(
+                    llm, tools, schema, msgs
+                ),
+                structured=True,
+            )
+            obj = result.get("structured_response")
+            if obj is not None:
+                logger.info("[LLM] ReAct 结构化输出成功")
+                return (
+                    obj.model_dump(exclude_none=True)
+                    if hasattr(obj, "model_dump")
+                    else obj
+                )
+            last_error = ValueError("结构化输出返回 None")
+            logger.warning(f"[LLM] 结构化输出返回 None（第 {attempt}/{max_retry} 次）")
+        except (
+            ValidationError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+        ) as e:
+            last_error = e
+            logger.warning(f"[LLM] 结构化输出失败（第 {attempt}/{max_retry} 次）: {e}")
+        except ModelExhaustedError as e:
+            last_error = e
+            logger.warning(f"[LLM] 可用 Provider 已耗尽: {e}")
+            break
+
+    logger.error(f"[LLM] 结构化输出重试耗尽: {last_error}")
+    return {"intent": "error", "message": "AI 服务暂时异常，请稍后重试"}
+
+
+def _retry_feedback(error: Exception) -> str:
+    detail = str(error)
+    if len(detail) > 500:
+        detail = detail[:500] + "…"
+    return (
+        f"你上一次的输出没有通过结构解析/校验：{detail}。"
+        "请严格按要求的 JSON 结构重新输出完整结果，不要输出解释。"
+    )
+
+
+def _invoke_agent(llm: Any, tools: list[Any], schema: Any, messages: list[dict]):
+    """先完成工具检索，再用不含工具调用元数据的上下文生成结构化结果。"""
+    versioned_tools = [
+        tool.model_copy(update={"description": load_prompt(f"tools/{tool.name}.md")})
+        for tool in tools
+    ]
+    config = langchain_config()
+    agent = create_react_agent(llm, versioned_tools)
+    result = agent.invoke({"messages": messages}, config=config)
+    structured_response = llm.with_structured_output(schema).invoke(
+        [*messages, {"role": "user", "content": _structured_handoff(result)}],
+        config=config,
+    )
+    return {**result, "structured_response": structured_response}
+
+
+def _structured_handoff(result: dict[str, Any]) -> str:
+    """保留检索事实和 Agent 结论，但不回放可能污染收尾模型的 tool_calls。"""
+    evidence: list[str] = []
+    for message in result.get("messages", []):
+        content = str(getattr(message, "content", "") or "").strip()
+        if not content:
+            continue
+        if isinstance(message, ToolMessage):
+            evidence.append(f"工具 {message.name} 返回：\n{content}")
+        elif isinstance(message, AIMessage):
+            evidence.append(f"Agent 分析：\n{content}")
+
+    details = "\n\n".join(evidence) or "无额外检索结果，请依据原始需求生成。"
+    return (
+        "工具检索阶段已经结束，禁止继续请求任何检索工具。"
+        "请依据原始需求和以下检索事实，通过当前要求的结构化格式返回最终结果：\n\n"
+        f"{details}"
+    )

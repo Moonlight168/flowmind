@@ -64,5 +64,5 @@ echo ============================================
 echo Build completed!
 echo ============================================
 echo.
-echo Next: cd docker\flowmind ^&^& docker-compose -f docker-compose.prod.yml up -d --build
+echo Next: cd docker\flowmind ^&^& docker compose -f docker-compose.prod.yml up -d --build
 echo.
