@@ -4,9 +4,8 @@ FlowMind 智能流程设计服务 - 节点基类
 本模块提供节点装饰器，用于统一错误处理和日志记录。
 日志采用三级级别（DEBUG/INFO/ERROR），通过LOG_LEVEL环境变量配置。
 
-节点边界按约定使用 `except Exception` 兜底（仓库规范"禁止 except Exception"
-的例外）：节点异常统一转换为工作流可路由的兜底状态，白名单外的异常类型
-若在此处漏过，会在上游流式边界静默截断且无日志。
+节点边界捕获可预期的业务、网络和输入异常，并转换为工作流可路由的兜底状态；
+未知异常继续抛出，避免掩盖程序错误。
 """
 
 import time
@@ -16,6 +15,7 @@ from functools import wraps
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphInterrupt
 
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS, ErrorCode
 from app.graph.state import AppState
 from app.infra.logger import (
     get_request_id,
@@ -36,7 +36,7 @@ def design_error_fallback(state: AppState) -> AppState:
         "intent": "error",
         "form_data": None,
         "message": DESIGN_ERROR_MESSAGE,
-        "error_type": "internal",
+        "error_type": ErrorCode.INTERNAL.value,
         "retryable": True,
     }
     return state
@@ -91,7 +91,7 @@ def node_handler(
                 return result
             except GraphInterrupt:
                 raise
-            except Exception as e:
+            except EXPECTED_RUNTIME_ERRORS as e:
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 logger.error(
                     f"[{name}] 执行失败: {e!s}, 耗时{elapsed_ms}ms [{get_request_id()}] [{session_id}]"

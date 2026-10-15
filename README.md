@@ -176,24 +176,16 @@ docker compose -f docker-compose.langfuse.yml up -d
 
 ### 开发环境（Docker，支持热更新）
 
-默认 Compose 只启动 AI 功能所需的开发链路：MySQL、Redis、Nacos、Gateway、Auth、System、Flowable、Vite 前端和 AI 服务。File、Gen、Job、Monitor 改为可选服务。
+默认 Compose 只启动 AI 功能所需的开发链路：MySQL、Redis、Nacos、Gateway、Auth、System、Flowable、Vite 前端、AI 服务和内网 Webhook 代理。
 
 ```bash
 cd docker\flowmind
 docker compose up -d --remove-orphans
 ```
 
-需要全部可选服务时：
-
-```bash
-docker compose --profile optional up -d
-```
-
-也可以只启动某一个，例如 `docker compose up -d flowmind-file`。
-
 也可以在仓库根目录运行 `bin\start.bat`。开发入口仍为 http://localhost:18088。
 
-`--remove-orphans` 会清理之前由生产 Compose 创建的 Nginx 容器。日志中的 `/docker-entrypoint.sh: Configuration complete` 表示 Nginx 配置成功；若随后出现 `port is already allocated`，说明旧 Nginx 与开发 Vite 同时绑定了 18088。
+`--remove-orphans` 会清理之前由生产 Compose 创建的容器。开发和生产都由 Nginx 占用宿主机 18088，但使用各自的 Compose 配置；日志中的 `/docker-entrypoint.sh: Configuration complete` 表示 Nginx 配置成功。
 
 前端源码挂载到 Node 22 容器，由 Vite 自动热更新；AI 的 `app/` 挂载到容器，由 Uvicorn `--reload` 自动重载。Java 服务未引入 DevTools，修改后仍需重新打包并重启对应容器。File、Gen、Job、Monitor、Langfuse 与 Sentinel 不会默认启动。
 
@@ -211,28 +203,27 @@ poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 服务端口
 
-开发 Docker 的前端从宿主机 18088 映射到 Vite 容器 88；直接在宿主机运行 Vite 时才使用 88。
+开发 Docker 的浏览器入口从宿主机 18088 进入 Nginx，再转发到 Vite 容器 88；直接在宿主机运行 Vite 时才使用 88。
 
 | 服务                 | 端口                     | 访问地址                            |
 | -------------------- | ------------------------ | ----------------------------------- |
-| 前端（开发 Docker）  | 18088（容器内 88）       | http://localhost:18088              |
+| 前端（开发 Docker）  | 18088（Nginx → 容器 88） | http://localhost:18088              |
 | 前端（宿主机 Vite）  | 88                       | http://localhost:88                 |
 | 前端（生产 Nginx）   | 18088                    | http://localhost:18088              |
 | API 网关（Gateway）  | 9001                     | http://localhost:9001               |
 | Auth 认证            | 9002                     | —                                   |
 | System 系统          | 9003                     | —                                   |
 | Flowable 流程        | 9007                     | —                                   |
-| AI 服务              | 8000（开发环境另发布 127.0.0.1:80） | http://localhost:8000               |
+| AI 服务              | 8000（开发容器不发布宿主机端口） | http://localhost:8000               |
 | Nacos（Docker 映射） | 18848 / 19090（容器内 8848/8080） | http://localhost:19090/nacos        |
 | MySQL（Docker 映射） | 13306（容器内 3306）    | localhost:13306                     |
 | Redis（Docker 映射） | 16379（容器内 6379）    | localhost:16379                     |
 | Langfuse             | 13001（容器内 3000）    | http://localhost:13001              |
 
-> 可选模块端口：Gen 9004、Job 9005、File 9006。完整开发环境使用 `docker-compose.yml`，独立 Langfuse 使用 `docker-compose.langfuse.yml`，完整生产环境使用 `docker-compose.prod.yml`。
+> Gen 9004、Job 9005、File 9006 仅属于生产 Compose 的可选微服务；开发 Compose 不声明这些服务。独立 Langfuse 使用 `docker-compose.langfuse.yml`。
 >
-> 开发环境的 AI 服务直接监听 80 并发布到 `127.0.0.1:80`，供 Langfuse 的 Remote Experiment webhook
-> 经 `http://host.docker.internal/webhooks/experiment` 回调，不必再为一个反代端口去起 Nginx；
-> 生产环境不发布该端口，仍只经网关访问。
+> 开发环境浏览器统一通过 Nginx 入口访问 Vite 和 Gateway；Langfuse Remote Experiment 使用标准 HTTP 80 端口访问 Docker 内网服务
+> `http://flowmind-webhook/webhooks/experiment`。`flowmind-webhook` 不映射宿主机端口，Webhook 不对外暴露。
 
 ## 项目仓库
 

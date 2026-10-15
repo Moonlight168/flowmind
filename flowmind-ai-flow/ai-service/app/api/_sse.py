@@ -8,9 +8,8 @@ Starlette 迭代同步生成器时每个 chunk 都在线程池的不同 context 
 本模块把同步生成器放进单一工作线程跑完，再通过队列把事件逐条送回异步生成器，
 保证 contextvar 的 set/reset 始终发生在同一个上下文，同时保留实时推送。
 
-本模块是流式链路的收口边界：按约定允许 `except Exception` 兜底转交
-（仓库规范"禁止 except Exception"的例外），否则白名单外的异常类型会造成
-流静默截断且服务端无日志。
+本模块是流式链路的收口边界：只转交可预期的运行时异常，未知异常继续抛出，
+避免吞掉编程错误并保证服务端日志可定位。
 """
 
 import asyncio
@@ -20,6 +19,8 @@ from contextvars import copy_context
 from queue import Full, Queue
 from threading import Event, Thread
 from typing import Any
+
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS
 
 _SENTINEL = object()
 _QUEUE_PUT_TIMEOUT_SECONDS = 0.1
@@ -40,7 +41,7 @@ def _consume_source(source: Iterator[Any], queue: Queue, stopped: Event) -> None
         for item in source:
             if not _put_unless_stopped(queue, item, stopped):
                 break
-    except Exception as exc:
+    except EXPECTED_RUNTIME_ERRORS as exc:
         # 跨线程转交后会在请求协程中原样抛出，不在此处吞掉异常。
         # 兜底捕获全部异常类型：白名单外的异常（如 XMLSyntaxError）会导致
         # 流静默截断，服务端无任何日志。
@@ -50,7 +51,7 @@ def _consume_source(source: Iterator[Any], queue: Queue, stopped: Event) -> None
         try:
             if callable(close):
                 close()
-        except Exception as exc:
+        except EXPECTED_RUNTIME_ERRORS as exc:
             _put_unless_stopped(queue, exc, stopped)
         finally:
             _put_unless_stopped(queue, _SENTINEL, stopped)

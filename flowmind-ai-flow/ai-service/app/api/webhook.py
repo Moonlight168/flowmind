@@ -129,7 +129,15 @@ def _run_experiment_task(experiment: ExperimentRequest) -> None:
     """后台执行实验；失败仅记录日志，不再回传（202 已发出）。"""
     from app.evaluation import runner
 
-    dataset_name = experiment.dataset_name or "flow"
+    # Langfuse 的 payload 可能只包含 datasetId。当前评测运行器按数据集名称
+    # 加载本地映射，不能把无法解析的 ID 静默降级为 flow，否则会误跑数据集。
+    dataset_name = experiment.dataset_name
+    if not dataset_name:
+        logger.error(
+            "[实验 webhook] 缺少可解析的 dataset name，拒绝执行 "
+            f"dataset_id={experiment.dataset_id}"
+        )
+        return
     try:
         runner.run_dataset_experiment(
             dataset_name,

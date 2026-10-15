@@ -3,9 +3,8 @@ FlowMind 智能流程设计服务 - 设计 API
 
 本模块提供分类设计、流程设计、表单设计等统一的设计接口。
 
-三个流式端点按约定使用 `except Exception` 兜底（仓库规范"禁止 except Exception"
-的例外）：流式边界必须保证任何异常都转为 error 事件并记日志，否则白名单外的
-异常（如 XML 解析错误）会穿透到桥接层造成流静默截断。
+三个流式端点只捕获可预期的业务、网络和输入异常并转换为 error 事件；未知异常
+继续抛出，避免掩盖程序错误。
 """
 
 import json
@@ -18,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from app.api._sse import to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS, ErrorCode
 from app.domain.dto import ResponseVO
 from app.domain.dto.design_request import DesignRequestDTO, RollbackRequestDTO
 from app.graph.design_graph import (
@@ -35,7 +35,7 @@ def _safe_stream_error(trace_id: str) -> str:
     event = {
         "type": "error",
         "status": "error",
-        "error_type": "internal",
+        "error_type": ErrorCode.INTERNAL.value,
         "retryable": True,
         "message": "AI 服务暂时异常，请稍后重试",
         "trace_id": trace_id,
@@ -93,7 +93,7 @@ def _run_design_stream(
                 allow_full_replace=payload.allow_full_replace,
             ):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except Exception as exc:
+        except EXPECTED_RUNTIME_ERRORS as exc:
             # 兜底捕获全部异常：白名单外的异常类型（如 XML 解析错误）
             # 会穿透到桥接层导致流静默截断，这里统一转为 error 事件并记日志。
             logger.error(f"设计流式处理异常: {exc}", exc_info=True)

@@ -371,8 +371,6 @@ services:
       - ../cloud/nginx/logs:/var/log/nginx
     depends_on:
       - flowmind-gateway
-      # /webhooks/ 反代到 AI 服务，nginx 启动时需能解析该主机名
-      - flowmind-ai-service
     networks:
       - flowmind-network
     healthcheck:
@@ -380,6 +378,18 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  flowmind-webhook:
+    container_name: flowmind-webhook
+    image: nginx:1.27-alpine
+    restart: always
+    volumes:
+      - ../cloud/nginx/conf/webhook.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      flowmind-ai-service:
+        condition: service_started
+    networks:
+      - flowmind-network
 
 networks:
   flowmind-network:
