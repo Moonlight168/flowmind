@@ -14,7 +14,7 @@ import redis
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from app.api._sse import to_async_stream
+from app.api._sse import stream_error_event, to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
 from app.core.exceptions import EXPECTED_RUNTIME_ERRORS
@@ -104,7 +104,9 @@ def chat_stream(
             yield f"data: {json.dumps(error, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
-        to_async_stream(event_stream()),
+        to_async_stream(
+            event_stream(), on_error=lambda exc: stream_error_event(exc, trace_id)
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

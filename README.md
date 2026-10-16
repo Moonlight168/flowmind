@@ -24,7 +24,7 @@ FlowMind 是一款**智能流程审批系统**，集成 AI 能力实现智能意
 
 ## 系统架构
 
-![FlowMind 系统架构](./assets/diagrams/flowmind-architecture-current.svg)
+![FlowMind 系统架构](./assets/diagrams/flowmind-architecture-current.png)
 
 > FlowMind 由 Vue 3 前端、Java 微服务和 FastAPI AI 服务协同组成，统一接入流程引擎与基础设施，支持从设计、部署到审批执行的完整链路。
 

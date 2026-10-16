@@ -52,6 +52,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <update id="restoreByDefinitionId">
-        update wf_draft set del_flag = '0' where definition_id = #{definitionId}
+        update wf_draft set del_flag = '0' where definition_id = #{definitionId} and user_id = #{userId}
+    </update>
+    <update id="deleteUserDraft">
+        update wf_draft set del_flag = '2' where definition_id = #{definitionId} and user_id = #{userId}
     </update>
 </mapper>

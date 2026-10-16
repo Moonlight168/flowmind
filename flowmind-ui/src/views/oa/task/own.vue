@@ -43,23 +43,23 @@
 
       <el-table v-loading="loading" :data="ownProcessList" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" align="center" />
-        <el-table-column label="流程编号" align="center" prop="procInsId" :show-overflow-tooltip="true" />
-        <el-table-column label="流程名称" align="center" prop="procDefName" :show-overflow-tooltip="true" />
-        <el-table-column label="流程类别" align="center" prop="category" :formatter="categoryFormat" />
-        <el-table-column label="流程版本" align="center" width="80px">
+        <el-table-column min-width="180" label="流程编号" align="center" prop="procInsId" :show-overflow-tooltip="true" />
+        <el-table-column min-width="200" label="流程名称" align="center" prop="procDefName" :show-overflow-tooltip="true" />
+        <el-table-column show-overflow-tooltip min-width="120" label="流程类别" align="center" prop="category" :formatter="categoryFormat" />
+        <el-table-column label="流程版本" align="center" width="100">
           <template #default="scope">
             <el-tag>v{{ scope.row.procDefVersion }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="当前节点" align="center" prop="taskName" />
-        <el-table-column label="提交时间" align="center" prop="createTime" width="180" />
+        <el-table-column show-overflow-tooltip min-width="160" label="当前节点" align="center" prop="taskName" />
+        <el-table-column show-overflow-tooltip label="提交时间" align="center" prop="createTime" width="180" />
         <el-table-column label="流程状态" align="center" width="100">
           <template #default="scope">
             <dict-tag :options="wf_process_status" :value="scope.row.processStatus" />
           </template>
         </el-table-column>
-        <el-table-column label="耗时" align="center" prop="duration" width="180" />
-        <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width">
+        <el-table-column show-overflow-tooltip label="耗时" align="center" prop="duration" width="180" />
+        <el-table-column fixed="right" label="操作" width="180" align="center" class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="详情" placement="top">
               <el-button link type="primary" icon="View" @click="handleDetails(scope.row)" v-hasPermi="['workflow:process:query']"></el-button>
@@ -131,7 +131,7 @@ const handleStop = async (row) => {
 }
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
-  const procInsIds = row.procInsId || ids.value;
+  const procInsIds = row?.procInsId || ids.value;
   await proxy.$modal.confirm('是否确认删除流程定义编号为"' + procInsIds + '"的数据项?');
   await delProcess(procInsIds);
   getList();

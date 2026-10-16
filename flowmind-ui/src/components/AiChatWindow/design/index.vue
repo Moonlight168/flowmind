@@ -51,7 +51,7 @@
         link
         type="info"
         :title="`放弃本次${designLabel}`"
-        :disabled="loading"
+        :disabled="loading || applying"
         @click="confirmClearChat"
       >
         <el-icon><Delete /></el-icon>
@@ -124,7 +124,7 @@
       </dl>
       <div class="change-preview__actions">
         <el-button @click="discardPreview">放弃</el-button>
-        <el-button type="primary" @click="applyPreview">应用变更</el-button>
+        <el-button type="primary" :loading="applying" :disabled="loading || applying" @click="applyPreview">应用变更</el-button>
       </div>
       </template>
     </div>
@@ -155,7 +155,7 @@
         :icon="Promotion"
         @click="handleSend"
         :loading="loading"
-        :disabled="!inputText.trim() || loading"
+        :disabled="!inputText.trim() || loading || applying"
         aria-label="发送消息"
         title="发送"
       />
@@ -165,13 +165,15 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import useUserStore from '@/store/modules/user'
 import { designStream, clearDesignState, rollbackDesignState } from '@/api/workflow/design'
 import { ChatDotRound, Delete, Back, Right, Promotion } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { activeAiWindow } from '@/utils/aiWindow'
-import { addForm, listForm } from '@/api/workflow/form'
+import { addForm } from '@/api/workflow/form'
+import { createGeneratedForm, createPreviewApplication } from './previewApplication'
 import { addCategory, listCategory } from '@/api/workflow/category'
 
 const props = defineProps({
@@ -276,6 +278,12 @@ const lastBackendCount = ref(null)
 const loading = ref(false)
 const progressText = ref('')
 const pendingPreview = ref(null)
+const applying = ref(false)
+const previewApplication = createPreviewApplication(value => {
+  applying.value = value
+  emit('designing', loading.value || value)
+})
+const ensureGeneratedForm = createGeneratedForm(addForm)
 const pendingChoices = ref([])
 const previewBaseline = ref(null)
 const messagesContainer = ref(null)
@@ -309,14 +317,18 @@ const rawFlowKey = computed(() => {
 // 会话代号：清空对话 = 开一段全新会话，后端 thread、聊天记录与版本栈一起换新。
 // 代号必须持久化，否则关掉标签页重开又回到刚清掉的那段会话。
 const generation = ref(0)
+const userStore = useUserStore()
+const ownerId = computed(() => String(userStore.id || ''))
 const generationKey = computed(() => {
-  return `ai_design_gen_${props.designType}_${props.mode}_${rawFlowKey.value}`
+  return `ai_design_gen_user:${ownerId.value}_${props.designType}_${props.mode}_${rawFlowKey.value}`
 })
 
 // 会话标识 = 业务标识 + 代号。代号 0 不加后缀，升级前已有的会话不会因为加后缀而丢失。
 const flowKey = computed(() => {
   return generation.value > 0 ? `${rawFlowKey.value}#${generation.value}` : rawFlowKey.value
 })
+
+watch(flowKey, () => { discardPreview() }, { flush: 'sync' })
 
 /** 读回当前对象的会话代号（没清空过就是 0）。
  *  存的是纯数字字符串，pruneStore 判定不了 savedAt 就会保留它 —— 这是有意的：
@@ -329,7 +341,7 @@ function readGeneration() {
 // 存储命名空间：必须区分 mode，否则基本信息（basic）与流程模型（design）窗口
 // 会共用同一份会话消息与版本历史，互相污染
 const storageKey = computed(() => {
-  return `ai_design_${props.designType}_${props.mode}_${flowKey.value}`
+  return `ai_design_user:${ownerId.value}_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
 // 版本历史：每次"应用变更"存一个版本；导航（回退/前进/下拉）只移动当前指针，不删除版本
@@ -339,7 +351,7 @@ const versionCount = ref(0)
 // 当前所在版本索引；null 表示还没有任何版本
 const currentVersionIndex = ref(null)
 const versionKey = computed(() => {
-  return `ai_design_versions_${props.designType}_${props.mode}_${flowKey.value}`
+  return `ai_design_versions_user:${ownerId.value}_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
 // 会话与版本要活过「关闭标签页」—— sessionStorage 会被浏览器随标签页清掉，只能用 localStorage。
@@ -348,6 +360,7 @@ const STORE_PREFIX = 'ai_design_'
 const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 function storeWrite(key, value) {
+  if (!ownerId.value) return
   try {
     localStorage.setItem(key, value)
   } catch (e) {
@@ -480,10 +493,12 @@ function toVersionData(baseline) {
  *  新建对象同样建 v0，内容就是空白初始状态——规则统一，不区分新建还是编辑。
  *  必须在任何变更预览渲染之前调用，否则读到的将是预览后的内容。 */
 async function ensureBaselineVersion() {
+  const key = versionKey.value
   if (versionCount.value > 0) return
   if (typeof props.getCurrentBaseline === 'function') {
     try {
       const fresh = await props.getCurrentBaseline()
+      if (key !== versionKey.value) return
       if (fresh && Object.keys(fresh).length > 0) {
         currentFormData.value = { ...currentFormData.value, ...fresh }
       }
@@ -491,6 +506,7 @@ async function ensureBaselineVersion() {
       console.error('获取设计基线失败:', e)
     }
   }
+  if (key !== versionKey.value) return
   saveVersion(toVersionData(currentFormData.value))
 }
 
@@ -542,6 +558,8 @@ function saveSession() {
 }
 
 async function restoreSession() {
+  messages.value = []
+  if (!ownerId.value) return
   // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
   currentFormData.value = cloneData(props.formData)
   syncVersionCount()
@@ -566,6 +584,21 @@ onMounted(() => {
   pruneStore()
   restoreSession()
 })
+
+watch(ownerId, () => {
+  cancelCurrentRequest()
+  discardPreview()
+  inputText.value = ''
+  displayLimit.value = null
+  lastBackendCount.value = null
+  currentFormData.value = {}
+  currentVersionIndex.value = null
+  versionCount.value = 0
+  generation.value = readGeneration()
+  messages.value = []
+  // 等宿主重新打开并提供新账号的数据，不能把旧画布保存为新账号的基线。
+  emit('update:modelValue', false)
+}, { flush: 'sync' })
 
 // 全局助手打开时关闭设计窗口
 watch(activeAiWindow, (kind) => {
@@ -609,7 +642,8 @@ async function refreshBaseline() {
 }
 
 async function handleSend() {
-  if (!inputText.value.trim() || loading.value) return
+  if (!inputText.value.trim() || loading.value || applying.value) return
+  discardPreview()
 
   const userInput = inputText.value.trim()
   inputText.value = ''
@@ -715,7 +749,10 @@ function scrollToBottom() {
   })
 }
 
-onBeforeUnmount(cancelCurrentRequest)
+onBeforeUnmount(() => {
+  cancelCurrentRequest()
+  previewApplication.cancel()
+})
 
 /** 依赖实体提示行：区分「将创建」与「使用已有」，更新场景不再被说成新建 */
 const pendingNotices = computed(() => {
@@ -725,9 +762,7 @@ const pendingNotices = computed(() => {
   for (const form of pending.forms || []) {
     const fieldCount = form.widgetList?.length || 0
     notices.push(
-      form.exists
-        ? `将使用已有表单「${form.form_name}」`
-        : `将创建表单「${form.form_name}」（${fieldCount} 个字段），并绑定到 ${form.node_ids.length} 个节点`
+      `将创建表单「${form.form_name}」（${fieldCount} 个字段），并绑定到 ${form.node_ids.length} 个节点`
     )
   }
   if (pending.category_checked) {
@@ -800,38 +835,11 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value || {}))
 }
 
-/** 按名称查表单（后端只读接口），查不到返回 null */
-async function findFormByName(formName) {
-  const res = await listForm({ formName })
-  const rows = res?.rows || res?.data || []
-  return rows.find((item) => item.formName === formName) || null
-}
-
 /** 按名称查分类，查不到返回 null */
 async function findCategoryByName(categoryName) {
   const res = await listCategory({ categoryName })
   const rows = res?.rows || res?.data || []
   return rows.find((item) => item.categoryName === categoryName) || null
-}
-
-/** 按完整草案创建表单；同名表单存在时直接复用。 */
-async function ensureGeneratedForm(draft) {
-  const existing = await findFormByName(draft.form_name)
-  if (existing?.formId) return existing
-  const response = await addForm({
-    formName: draft.form_name,
-    content: JSON.stringify({
-      widgetList: draft.widgetList || [],
-      formConfig: draft.formConfig || {}
-    }),
-    remark: 'AI 流程设计生成，已在应用变更前由用户确认'
-  })
-  if (response?.code !== 200) {
-    throw new Error(response?.msg || `表单「${draft.form_name}」创建失败`)
-  }
-  const created = await findFormByName(draft.form_name)
-  if (!created?.formId) throw new Error(`表单「${draft.form_name}」创建后未能查到`)
-  return created
 }
 
 function bindFormKeyInBpmnXml(xml, nodeIds, formKey) {
@@ -867,25 +875,11 @@ async function ensureCategory(categoryName, code) {
   return { categoryName, code }
 }
 
-/** 预览里「依赖实体」那两行要说的是接下来**会发生什么**。
- *  ensureGeneratedForm / ensureCategory 都是先查后建，同名实体已存在时不会创建 ——
- *  文案必须说「使用已有」，否则更新场景会被读成新建。查询标记没回来前不显示，
- *  免得先闪一句「将创建」再改口。
- *  必须写回 pendingPreview 上的对象（响应式代理），直接改 SSE 事件对象不会触发刷新。 */
+/** 分类可按名称复用；表单草案始终保留模型明确的新建意图。 */
 async function markPendingEntities() {
   const preview = pendingPreview.value
   const pending = preview?.pending_entities
   if (!pending) return
-  for (const form of pending.forms || []) {
-    try {
-      const existing = await findFormByName(form.form_name)
-      if (pendingPreview.value !== preview) return
-      form.exists = Boolean(existing)
-    } catch (e) {
-      console.warn('查询节点表单失败:', e)
-      form.exists = false
-    }
-  }
   if (pending.category_name) {
     let existing = null
     try {
@@ -901,10 +895,12 @@ async function markPendingEntities() {
 
 /** 应用变更前先把缺失的依赖实体建出来，并把引用写回 form_data。
  *  后端对业务库只读，实体创建统一在这里（用户点「应用变更」）完成。 */
-async function materializePendingEntities(formData, pending) {
+async function materializePendingEntities(formData, pending, isCurrent) {
   const result = cloneData(formData)
   for (const draft of pending?.forms || []) {
+    if (!isCurrent()) return null
     const form = await ensureGeneratedForm(draft)
+    if (!isCurrent()) return null
     const realKey = `key_${form.formId}`
     const targets = new Set((draft.node_ids || []).map(String))
     for (const node of result.nodes || []) {
@@ -913,6 +909,7 @@ async function materializePendingEntities(formData, pending) {
     result.bpmn_xml = bindFormKeyInBpmnXml(result.bpmn_xml, draft.node_ids, realKey)
   }
   if (pending?.category_name) {
+    if (!isCurrent()) return null
     const category = await ensureCategory(pending.category_name, result.code)
     if (category?.code) result.code = category.code
   }
@@ -947,50 +944,53 @@ function normalizeBpmnXml(xml) {
 }
 
 async function applyPreview() {
-  if (!pendingPreview.value) return
-  // 从旧版本继续生成：应用将丢弃当前版本之后的版本，先确认
-  const versions = getVersions()
-  if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
-    const dropped = versions.length - 1 - currentVersionIndex.value
-    try {
-      await ElMessageBox.confirm(
-        `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
-        '提示',
-        { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消', zIndex: 10000 }
-      )
-    } catch {
-      return
-    }
+  const preview = pendingPreview.value
+  if (!preview || applying.value || loading.value) return
+  const backendCount = lastBackendCount.value
+  const threadId = flowKey.value
+  try {
+    await previewApplication.run(async isCurrent => {
+      // 从旧版本继续生成：应用将丢弃后续版本，先确认。
+      const versions = getVersions()
+      if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
+        const dropped = versions.length - 1 - currentVersionIndex.value
+        try {
+          await ElMessageBox.confirm(
+            `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
+            '提示',
+            { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消', zIndex: 10000 }
+          )
+        } catch {
+          if (isCurrent()) previewApplication.cancel()
+          return
+        }
+      }
+      if (!isCurrent() || pendingPreview.value !== preview) return
+      return materializePendingEntities(preview.form_data, preview.pending_entities, isCurrent)
+    }, formData => {
+      if (!formData || pendingPreview.value !== preview) return
+      currentFormData.value = cloneData(formData)
+      emit('fill', formData)
+      saveVersion(formData)
+      if (backendCount != null) {
+        rollbackDesignState(props.designType, {
+          message_count: backendCount,
+          thread_id: threadId,
+          mode: props.mode
+        }).catch((e) => console.warn('回退会话历史失败:', e))
+      }
+      pendingPreview.value = null
+      previewBaseline.value = null
+      previewCollapsed.value = false
+    })
+  } catch (e) {
+    console.error('创建依赖实体失败:', e)
+    ElMessage.error('创建表单/分类失败，请稍后重试')
   }
-  // 缺失的表单/分类在这里创建（后端只读），失败则中止本次应用、保留预览让用户重试
-  let formData = pendingPreview.value.form_data
-  const pending = pendingPreview.value.pending_entities
-  if (pending) {
-    try {
-      formData = await materializePendingEntities(formData, pending)
-    } catch (e) {
-      console.error('创建依赖实体失败:', e)
-      ElMessage.error('创建表单/分类失败，请稍后重试')
-      return
-    }
-  }
-  currentFormData.value = cloneData(formData)
-  emit('fill', formData)
-  saveVersion(formData)
-  // 版本覆盖：裁剪后端 checkpoint 到本轮的分支长度（丢弃回退掉的旧分支）
-  if (lastBackendCount.value != null) {
-    rollbackDesignState(props.designType, {
-      message_count: lastBackendCount.value,
-      thread_id: flowKey.value,
-      mode: props.mode
-    }).catch((e) => console.warn('回退会话历史失败:', e))
-  }
-  pendingPreview.value = null
-  previewBaseline.value = null
-  previewCollapsed.value = false
 }
 
 function discardPreview() {
+  previewApplication.cancel()
   if (!pendingPreview.value) return
   if (previewBaseline.value) currentFormData.value = cloneData(previewBaseline.value)
   pendingPreview.value = null

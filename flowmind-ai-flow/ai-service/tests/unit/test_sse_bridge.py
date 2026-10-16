@@ -1,12 +1,43 @@
 """SSE 同步生成器桥接测试。"""
 
 import asyncio
+import json
 from threading import Event
 
 import pytest
 
-from app.api._sse import to_async_stream
+from app.api._sse import stream_error_event, to_async_stream
 from app.core.auth_context import get_auth_token, set_auth_token
+
+
+@pytest.mark.asyncio
+async def test_unexpected_worker_error_reaches_consumer() -> None:
+    def source():
+        yield "progress"
+        raise AttributeError("unexpected failure")
+
+    stream = to_async_stream(source())
+    assert await anext(stream) == "progress"
+    with pytest.raises(AttributeError, match="unexpected failure"):
+        await anext(stream)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_error_becomes_safe_terminal_event() -> None:
+    def source():
+        yield "progress"
+        raise AttributeError("private internal details")
+
+    events = [
+        event
+        async for event in to_async_stream(
+            source(), on_error=lambda exc: stream_error_event(exc, "test-trace")
+        )
+    ]
+    error = json.loads(events[-1].removeprefix("data: "))
+    assert error["type"] == "error"
+    assert error["trace_id"] == "test-trace"
+    assert "private internal details" not in events[-1]
 
 
 @pytest.mark.asyncio

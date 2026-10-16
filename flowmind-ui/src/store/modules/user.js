@@ -5,6 +5,7 @@ import { login, logout, getInfo } from '@/api/login'
 import { getToken, setToken, removeToken } from '@/utils/auth'
 import { isEmpty } from "@/utils/validate"
 import defAva from '@/assets/images/profile.jpg'
+import useAiSessionStore from './aiSession'
 
 const useUserStore = defineStore(
   'user',
@@ -49,6 +50,7 @@ const useUserStore = defineStore(
               this.roles = ['ROLE_DEFAULT']
             }
             this.id = user.userId
+            useAiSessionStore().setOwner(user.userId)
             this.name = user.userName
             this.nickName = user.nickName
             this.avatar = avatar
@@ -75,6 +77,8 @@ const useUserStore = defineStore(
         return new Promise((resolve, reject) => {
           logout(this.token).then(() => {
             this.token = ''
+            this.id = ''
+            useAiSessionStore().setOwner(null)
             this.roles = []
             this.permissions = []
             removeToken()
@@ -82,6 +86,8 @@ const useUserStore = defineStore(
           }).catch(error => {
             // logout 失败时也要清除本地状态，确保用户能退出
             this.token = ''
+            this.id = ''
+            useAiSessionStore().setOwner(null)
             this.roles = []
             this.permissions = []
             removeToken()

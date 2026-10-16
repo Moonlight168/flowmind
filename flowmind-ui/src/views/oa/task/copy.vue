@@ -28,17 +28,17 @@
 
       <el-table v-loading="loading" :data="copyList">
         <el-table-column type="selection" width="55" align="center" />
-        <el-table-column label="抄送编号" align="center" prop="copyId" />
-        <el-table-column label="标题" align="center" prop="title" :show-overflow-tooltip="true" />
-        <el-table-column label="流程名称" align="center" prop="processName" :show-overflow-tooltip="true" />
-        <el-table-column label="流程分类" align="center" prop="categoryId" :formatter="categoryFormat" />
-        <el-table-column label="发起人" align="center" prop="originatorName" />
-        <el-table-column label="创建时间" align="center" prop="createTime">
+        <el-table-column show-overflow-tooltip min-width="160" label="抄送编号" align="center" prop="copyId" />
+        <el-table-column min-width="220" label="标题" align="center" prop="title" :show-overflow-tooltip="true" />
+        <el-table-column min-width="200" label="流程名称" align="center" prop="processName" :show-overflow-tooltip="true" />
+        <el-table-column show-overflow-tooltip min-width="120" label="流程分类" align="center" prop="categoryId" :formatter="categoryFormat" />
+        <el-table-column show-overflow-tooltip min-width="120" label="发起人" align="center" prop="originatorName" />
+        <el-table-column show-overflow-tooltip min-width="180" label="创建时间" align="center" prop="createTime">
           <template #default="scope">
             <span>{{ parseTime(scope.row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width">
+        <el-table-column fixed="right" label="操作" width="180" align="center" class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="详情" placement="top">
               <el-button link type="primary" icon="View" @click="handleDetails(scope.row)" v-hasPermi="['workflow:process:query']"></el-button>

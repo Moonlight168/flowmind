@@ -17,13 +17,15 @@ import com.ruoyi.flowable.workflow.domain.vo.WfFormVo;
 import com.ruoyi.flowable.workflow.domain.vo.WfTaskVo;
 import com.ruoyi.flowable.workflow.service.IWfDeployFormService;
 import com.ruoyi.flowable.workflow.service.IWfInstanceService;
+import com.ruoyi.flowable.workflow.service.IWfProcessService;
+import com.ruoyi.flowable.workflow.service.IWfTaskService;
+import com.ruoyi.flowable.workflow.service.ProcessAccessService;
 import com.ruoyi.system.api.RemoteUserService;
 import com.ruoyi.system.api.domain.SysDept;
 import com.ruoyi.system.api.domain.SysRole;
 import com.ruoyi.system.api.domain.SysUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.task.Comment;
 import org.flowable.identitylink.api.history.HistoricIdentityLink;
@@ -49,6 +51,12 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
     private final RemoteUserService userService;
     @Autowired
     private RemoteUserService remoteUserService;
+    @Autowired
+    private ProcessAccessService processAccess;
+    @Autowired
+    private IWfProcessService processService;
+    @Autowired
+    private IWfTaskService wfTaskService;
 
     /**
      * 结束流程实例
@@ -57,8 +65,7 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
      */
     @Override
     public void stopProcessInstance(WfTaskBo vo) {
-        String taskId = vo.getTaskId();
-
+        wfTaskService.stopProcess(vo);
     }
 
     /**
@@ -69,7 +76,11 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
      */
     @Override
     public void updateState(Integer state, String instanceId) {
-
+        HistoricProcessInstance process = getHistoricProcessInstanceById(instanceId);
+        processAccess.requireOwner(process.getStartUserId());
+        if (state == null || (state != 1 && state != 2)) {
+            throw new ServiceException("无效的流程状态");
+        }
         // 激活
         if (state == 1) {
             runtimeService.activateProcessInstanceById(instanceId);
@@ -89,17 +100,8 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(String instanceId, String deleteReason) {
-
-        // 查询历史数据
-        HistoricProcessInstance historicProcessInstance = getHistoricProcessInstanceById(instanceId);
-        if (historicProcessInstance.getEndTime() != null) {
-            historyService.deleteHistoricProcessInstance(historicProcessInstance.getId());
-            return;
-        }
-        // 删除流程实例
-        runtimeService.deleteProcessInstance(instanceId, deleteReason);
-        // 删除历史流程实例
-        historyService.deleteHistoricProcessInstance(instanceId);
+        // 旧入口复用归属校验和运行中实例保护。
+        processService.deleteProcessByIds(new String[]{instanceId});
     }
 
     /**
@@ -110,12 +112,7 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
      */
     @Override
     public HistoricProcessInstance getHistoricProcessInstanceById(String processInstanceId) {
-        HistoricProcessInstance historicProcessInstance =
-                historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).singleResult();
-        if (Objects.isNull(historicProcessInstance)) {
-            throw new FlowableObjectNotFoundException("流程实例不存在: " + processInstanceId);
-        }
-        return historicProcessInstance;
+        return processAccess.requireRead(processInstanceId);
     }
 
 
@@ -127,6 +124,12 @@ public class WfInstanceServiceImpl extends FlowServiceFactory implements IWfInst
      */
     @Override
     public Map<String, Object> queryDetailProcess(String procInsId, String deployId) {
+        if (StringUtils.isNotBlank(procInsId)) {
+            HistoricProcessInstance process = processAccess.requireRead(procInsId);
+            if (StringUtils.isNotBlank(deployId) && !Objects.equals(process.getDeploymentId(), deployId)) {
+                throw new ServiceException("流程部署与实例不匹配");
+            }
+        }
         Map<String, Object> map = new HashMap<>();
         if (StringUtils.isNotBlank(procInsId)) {
             List<HistoricTaskInstance> taskInstanceList = historyService.createHistoricTaskInstanceQuery()

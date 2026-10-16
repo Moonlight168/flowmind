@@ -107,7 +107,7 @@ public class WfDraftController extends BaseController {
     @Log(title = "流程草稿", businessType = BusinessType.DELETE)
     @DeleteMapping("/definition/{definitionId}")
     public AjaxResult removeByDefinitionId(@NotNull(message = "流程id不能为空") @PathVariable String definitionId) {
-        return toAjax(draftService.deleteByDefinitionId(definitionId)>0);
+        return toAjax(draftService.deleteCurrentUserDraft(definitionId)>0);
     }
 
     /**

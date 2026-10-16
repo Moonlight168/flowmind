@@ -91,7 +91,9 @@ public class WfFormServiceImpl implements IWfFormService {
         wfForm.setUpdateBy(username);
         wfForm.setUpdateTime(now);
 
-        return baseMapper.insert(wfForm);
+        int inserted = baseMapper.insert(wfForm);
+        bo.setFormId(wfForm.getFormId());
+        return inserted;
     }
 
     /**
