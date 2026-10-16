@@ -20,6 +20,8 @@ import com.ruoyi.flowable.utils.ModelUtils;
 import com.ruoyi.flowable.utils.TaskUtils;
 import com.ruoyi.flowable.workflow.domain.bo.WfTaskBo;
 import com.ruoyi.flowable.workflow.service.IWfCopyService;
+import com.ruoyi.flowable.workflow.service.ProcessAccessService;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.ruoyi.flowable.workflow.service.IWfTaskService;
 import com.ruoyi.system.api.RemoteUserService;
 import com.ruoyi.system.api.domain.SysUser;
@@ -62,6 +64,9 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     private final RemoteUserService sysUserService;
 
     private final IWfCopyService copyService;
+
+    @Autowired
+    private ProcessAccessService processAccess;
 
     /**
      * 完成任务
@@ -451,14 +456,19 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
      * @return
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void stopProcess(WfTaskBo bo) {
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+            .processInstanceId(bo.getProcInsId()).singleResult();
+        if (processInstance == null) {
+            throw new ServiceException("流程不存在或已结束");
+        }
+        processAccess.requireOwner(processInstance.getStartUserId());
         List<Task> taskList = taskService.createTaskQuery().processInstanceId(bo.getProcInsId()).list();
         if (CollectionUtils.isEmpty(taskList)) {
             throw new RuntimeException("流程未启动或已执行完成，取消申请失败");
         }
 
-        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
-            .processInstanceId(bo.getProcInsId()).singleResult();
         BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
         if (Objects.nonNull(bpmnModel)) {
             Process process = bpmnModel.getMainProcess();
@@ -503,11 +513,14 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
         // 获取待撤回任务实例
         HistoricTaskInstance currTaskIns = historyService.createHistoricTaskInstanceQuery()
             .taskId(taskId)
+            .processInstanceId(procInsId)
             .taskAssignee(TaskUtils.getUserId())
+            .finished()
             .singleResult();
         if (ObjectUtil.isNull(currTaskIns)) {
             throw new RuntimeException("当前任务不存在，无法执行撤回操作");
         }
+        processAccess.requireTaskInInstance(currTaskIns.getProcessInstanceId(), procInsId);
         // 获取 bpmn 模型
         BpmnModel bpmnModel = repositoryService.getBpmnModel(currTaskIns.getProcessDefinitionId());
         UserTask currUserTask = ModelUtils.getUserTaskByKey(bpmnModel, currTaskIns.getTaskDefinitionKey());
@@ -566,6 +579,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
      */
     @Override
     public InputStream diagram(String processId) {
+        processAccess.requireRead(processId);
         String processDefinitionId;
         // 获取当前的流程实例
         ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(processId).singleResult();
@@ -615,6 +629,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
      */
     @Override
     public Map<String, Object> getProcessVariables(String taskId) {
+        processAccess.requireTaskRead(taskId);
         HistoricTaskInstance historicTaskInstance = historyService.createHistoricTaskInstanceQuery()
             .includeProcessVariables()
             .finished()

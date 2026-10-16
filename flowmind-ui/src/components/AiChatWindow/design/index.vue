@@ -51,7 +51,7 @@
         link
         type="info"
         :title="`放弃本次${designLabel}`"
-        :disabled="loading"
+        :disabled="loading || applying"
         @click="confirmClearChat"
       >
         <el-icon><Delete /></el-icon>
@@ -124,7 +124,7 @@
       </dl>
       <div class="change-preview__actions">
         <el-button @click="discardPreview">放弃</el-button>
-        <el-button type="primary" @click="applyPreview">应用变更</el-button>
+        <el-button type="primary" :loading="applying" :disabled="loading || applying" @click="applyPreview">应用变更</el-button>
       </div>
       </template>
     </div>
@@ -155,7 +155,7 @@
         :icon="Promotion"
         @click="handleSend"
         :loading="loading"
-        :disabled="!inputText.trim() || loading"
+        :disabled="!inputText.trim() || loading || applying"
         aria-label="发送消息"
         title="发送"
       />
@@ -171,7 +171,8 @@ import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
 import MessageItem from '../assistant/MessageItem.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { activeAiWindow } from '@/utils/aiWindow'
-import { addForm, listForm } from '@/api/workflow/form'
+import { addForm } from '@/api/workflow/form'
+import { createGeneratedForm, createPreviewApplication } from './previewApplication'
 import { addCategory, listCategory } from '@/api/workflow/category'
 
 const props = defineProps({
@@ -276,6 +277,12 @@ const lastBackendCount = ref(null)
 const loading = ref(false)
 const progressText = ref('')
 const pendingPreview = ref(null)
+const applying = ref(false)
+const previewApplication = createPreviewApplication(value => {
+  applying.value = value
+  emit('designing', loading.value || value)
+})
+const ensureGeneratedForm = createGeneratedForm(addForm)
 const pendingChoices = ref([])
 const previewBaseline = ref(null)
 const messagesContainer = ref(null)
@@ -317,6 +324,8 @@ const generationKey = computed(() => {
 const flowKey = computed(() => {
   return generation.value > 0 ? `${rawFlowKey.value}#${generation.value}` : rawFlowKey.value
 })
+
+watch(flowKey, () => { discardPreview() }, { flush: 'sync' })
 
 /** 读回当前对象的会话代号（没清空过就是 0）。
  *  存的是纯数字字符串，pruneStore 判定不了 savedAt 就会保留它 —— 这是有意的：
@@ -609,7 +618,8 @@ async function refreshBaseline() {
 }
 
 async function handleSend() {
-  if (!inputText.value.trim() || loading.value) return
+  if (!inputText.value.trim() || loading.value || applying.value) return
+  discardPreview()
 
   const userInput = inputText.value.trim()
   inputText.value = ''
@@ -715,7 +725,10 @@ function scrollToBottom() {
   })
 }
 
-onBeforeUnmount(cancelCurrentRequest)
+onBeforeUnmount(() => {
+  cancelCurrentRequest()
+  previewApplication.cancel()
+})
 
 /** 依赖实体提示行：区分「将创建」与「使用已有」，更新场景不再被说成新建 */
 const pendingNotices = computed(() => {
@@ -725,9 +738,7 @@ const pendingNotices = computed(() => {
   for (const form of pending.forms || []) {
     const fieldCount = form.widgetList?.length || 0
     notices.push(
-      form.exists
-        ? `将使用已有表单「${form.form_name}」`
-        : `将创建表单「${form.form_name}」（${fieldCount} 个字段），并绑定到 ${form.node_ids.length} 个节点`
+      `将创建表单「${form.form_name}」（${fieldCount} 个字段），并绑定到 ${form.node_ids.length} 个节点`
     )
   }
   if (pending.category_checked) {
@@ -800,38 +811,11 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value || {}))
 }
 
-/** 按名称查表单（后端只读接口），查不到返回 null */
-async function findFormByName(formName) {
-  const res = await listForm({ formName })
-  const rows = res?.rows || res?.data || []
-  return rows.find((item) => item.formName === formName) || null
-}
-
 /** 按名称查分类，查不到返回 null */
 async function findCategoryByName(categoryName) {
   const res = await listCategory({ categoryName })
   const rows = res?.rows || res?.data || []
   return rows.find((item) => item.categoryName === categoryName) || null
-}
-
-/** 按完整草案创建表单；同名表单存在时直接复用。 */
-async function ensureGeneratedForm(draft) {
-  const existing = await findFormByName(draft.form_name)
-  if (existing?.formId) return existing
-  const response = await addForm({
-    formName: draft.form_name,
-    content: JSON.stringify({
-      widgetList: draft.widgetList || [],
-      formConfig: draft.formConfig || {}
-    }),
-    remark: 'AI 流程设计生成，已在应用变更前由用户确认'
-  })
-  if (response?.code !== 200) {
-    throw new Error(response?.msg || `表单「${draft.form_name}」创建失败`)
-  }
-  const created = await findFormByName(draft.form_name)
-  if (!created?.formId) throw new Error(`表单「${draft.form_name}」创建后未能查到`)
-  return created
 }
 
 function bindFormKeyInBpmnXml(xml, nodeIds, formKey) {
@@ -867,25 +851,11 @@ async function ensureCategory(categoryName, code) {
   return { categoryName, code }
 }
 
-/** 预览里「依赖实体」那两行要说的是接下来**会发生什么**。
- *  ensureGeneratedForm / ensureCategory 都是先查后建，同名实体已存在时不会创建 ——
- *  文案必须说「使用已有」，否则更新场景会被读成新建。查询标记没回来前不显示，
- *  免得先闪一句「将创建」再改口。
- *  必须写回 pendingPreview 上的对象（响应式代理），直接改 SSE 事件对象不会触发刷新。 */
+/** 分类可按名称复用；表单草案始终保留模型明确的新建意图。 */
 async function markPendingEntities() {
   const preview = pendingPreview.value
   const pending = preview?.pending_entities
   if (!pending) return
-  for (const form of pending.forms || []) {
-    try {
-      const existing = await findFormByName(form.form_name)
-      if (pendingPreview.value !== preview) return
-      form.exists = Boolean(existing)
-    } catch (e) {
-      console.warn('查询节点表单失败:', e)
-      form.exists = false
-    }
-  }
   if (pending.category_name) {
     let existing = null
     try {
@@ -901,10 +871,12 @@ async function markPendingEntities() {
 
 /** 应用变更前先把缺失的依赖实体建出来，并把引用写回 form_data。
  *  后端对业务库只读，实体创建统一在这里（用户点「应用变更」）完成。 */
-async function materializePendingEntities(formData, pending) {
+async function materializePendingEntities(formData, pending, isCurrent) {
   const result = cloneData(formData)
   for (const draft of pending?.forms || []) {
+    if (!isCurrent()) return null
     const form = await ensureGeneratedForm(draft)
+    if (!isCurrent()) return null
     const realKey = `key_${form.formId}`
     const targets = new Set((draft.node_ids || []).map(String))
     for (const node of result.nodes || []) {
@@ -913,6 +885,7 @@ async function materializePendingEntities(formData, pending) {
     result.bpmn_xml = bindFormKeyInBpmnXml(result.bpmn_xml, draft.node_ids, realKey)
   }
   if (pending?.category_name) {
+    if (!isCurrent()) return null
     const category = await ensureCategory(pending.category_name, result.code)
     if (category?.code) result.code = category.code
   }
@@ -947,50 +920,53 @@ function normalizeBpmnXml(xml) {
 }
 
 async function applyPreview() {
-  if (!pendingPreview.value) return
-  // 从旧版本继续生成：应用将丢弃当前版本之后的版本，先确认
-  const versions = getVersions()
-  if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
-    const dropped = versions.length - 1 - currentVersionIndex.value
-    try {
-      await ElMessageBox.confirm(
-        `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
-        '提示',
-        { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消', zIndex: 10000 }
-      )
-    } catch {
-      return
-    }
+  const preview = pendingPreview.value
+  if (!preview || applying.value || loading.value) return
+  const backendCount = lastBackendCount.value
+  const threadId = flowKey.value
+  try {
+    await previewApplication.run(async isCurrent => {
+      // 从旧版本继续生成：应用将丢弃后续版本，先确认。
+      const versions = getVersions()
+      if (currentVersionIndex.value != null && currentVersionIndex.value < versions.length - 1) {
+        const dropped = versions.length - 1 - currentVersionIndex.value
+        try {
+          await ElMessageBox.confirm(
+            `将从 V${currentVersionIndex.value} 继续，后续 ${dropped} 个版本将被丢弃，继续吗？`,
+            '提示',
+            { type: 'warning', confirmButtonText: '继续', cancelButtonText: '取消', zIndex: 10000 }
+          )
+        } catch {
+          if (isCurrent()) previewApplication.cancel()
+          return
+        }
+      }
+      if (!isCurrent() || pendingPreview.value !== preview) return
+      return materializePendingEntities(preview.form_data, preview.pending_entities, isCurrent)
+    }, formData => {
+      if (!formData || pendingPreview.value !== preview) return
+      currentFormData.value = cloneData(formData)
+      emit('fill', formData)
+      saveVersion(formData)
+      if (backendCount != null) {
+        rollbackDesignState(props.designType, {
+          message_count: backendCount,
+          thread_id: threadId,
+          mode: props.mode
+        }).catch((e) => console.warn('回退会话历史失败:', e))
+      }
+      pendingPreview.value = null
+      previewBaseline.value = null
+      previewCollapsed.value = false
+    })
+  } catch (e) {
+    console.error('创建依赖实体失败:', e)
+    ElMessage.error('创建表单/分类失败，请稍后重试')
   }
-  // 缺失的表单/分类在这里创建（后端只读），失败则中止本次应用、保留预览让用户重试
-  let formData = pendingPreview.value.form_data
-  const pending = pendingPreview.value.pending_entities
-  if (pending) {
-    try {
-      formData = await materializePendingEntities(formData, pending)
-    } catch (e) {
-      console.error('创建依赖实体失败:', e)
-      ElMessage.error('创建表单/分类失败，请稍后重试')
-      return
-    }
-  }
-  currentFormData.value = cloneData(formData)
-  emit('fill', formData)
-  saveVersion(formData)
-  // 版本覆盖：裁剪后端 checkpoint 到本轮的分支长度（丢弃回退掉的旧分支）
-  if (lastBackendCount.value != null) {
-    rollbackDesignState(props.designType, {
-      message_count: lastBackendCount.value,
-      thread_id: flowKey.value,
-      mode: props.mode
-    }).catch((e) => console.warn('回退会话历史失败:', e))
-  }
-  pendingPreview.value = null
-  previewBaseline.value = null
-  previewCollapsed.value = false
 }
 
 function discardPreview() {
+  previewApplication.cancel()
   if (!pendingPreview.value) return
   if (previewBaseline.value) currentFormData.value = cloneData(previewBaseline.value)
   pendingPreview.value = null

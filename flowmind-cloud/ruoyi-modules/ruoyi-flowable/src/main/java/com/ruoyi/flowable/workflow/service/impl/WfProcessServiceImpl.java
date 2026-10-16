@@ -35,6 +35,7 @@ import com.ruoyi.flowable.workflow.service.IWfProcessService;
 import com.ruoyi.flowable.workflow.service.IWfTaskService;
 import com.ruoyi.flowable.workflow.service.IWfCopyService;
 import com.ruoyi.flowable.workflow.service.IWfDraftService;
+import com.ruoyi.flowable.workflow.service.ProcessAccessService;
 import com.ruoyi.system.api.RemoteUserService;
 import com.ruoyi.system.api.domain.SysDept;
 import com.ruoyi.system.api.domain.SysRole;
@@ -82,6 +83,8 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
     private final IWfDraftService wfDraftService;
     @Autowired
     private RemoteUserService remoteUserService;
+    @Autowired
+    private ProcessAccessService processAccess;
     /**
      * 流程定义列表
      *
@@ -614,6 +617,13 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
      */
     @Override
     public FormConf selectFormContent(String definitionId, String deployId, String procInsId) {
+        if (StringUtils.isNotBlank(procInsId)) {
+            HistoricProcessInstance process = processAccess.requireRead(procInsId);
+            if (!Objects.equals(process.getProcessDefinitionId(), definitionId)
+                || !Objects.equals(process.getDeploymentId(), deployId)) {
+                throw new ServiceException("流程定义与实例不匹配");
+            }
+        }
         BpmnModel bpmnModel = repositoryService.getBpmnModel(definitionId);
         if (ObjectUtil.isNull(bpmnModel)) {
             throw new RuntimeException("获取流程设计失败！");
@@ -697,9 +707,17 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
     @Transactional(rollbackFor = Exception.class)
     public void deleteProcessByIds(String[] instanceIds) {
         List<String> ids = Arrays.asList(instanceIds);
+        for (String id : ids) {
+            HistoricProcessInstance process = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(id).singleResult();
+            if (process == null) {
+                throw new ServiceException("流程不存在或无权访问");
+            }
+            processAccess.requireOwner(process.getStartUserId());
+        }
         // 校验流程是否结束
         long activeInsCount = runtimeService.createProcessInstanceQuery()
-            .processInstanceIds(new HashSet<>(ids)).active().count();
+            .processInstanceIds(new HashSet<>(ids)).count();
         if (activeInsCount > 0) {
             throw new ServiceException("不允许删除进行中的流程实例");
         }
@@ -730,6 +748,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
      */
     @Override
     public WfDetailVo queryProcessDetail(String procInsId, String taskId) {
+        processAccess.requireRead(procInsId);
         WfDetailVo detailVo = new WfDetailVo();
         // 获取流程实例
         HistoricProcessInstance historicProcIns = historyService.createHistoricProcessInstanceQuery()
@@ -739,6 +758,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
         if (StringUtils.isNotBlank(taskId)) {
             HistoricTaskInstance taskIns = historyService.createHistoricTaskInstanceQuery()
                 .taskId(taskId)
+                .processInstanceId(procInsId)
                 .includeIdentityLinks()
                 .includeProcessVariables()
                 .includeTaskLocalVariables()
@@ -746,6 +766,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
             if (taskIns == null) {
                 throw new ServiceException("没有可办理的任务！");
             }
+            processAccess.requireTaskInInstance(taskIns.getProcessInstanceId(), procInsId);
             detailVo.setTaskFormData(currTaskFormData(historicProcIns.getDeploymentId(), taskIns));
         }
         // 获取Bpmn模型信息
