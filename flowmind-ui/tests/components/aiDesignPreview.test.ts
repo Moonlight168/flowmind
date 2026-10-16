@@ -4,6 +4,13 @@ import DesignWindow from '@/components/AiChatWindow/design/index.vue'
 import { designStream, rollbackDesignState } from '@/api/workflow/design'
 import { addForm } from '@/api/workflow/form'
 import { activeAiWindow } from '@/utils/aiWindow'
+import useUserStore from '@/store/modules/user'
+
+vi.mock('@/store/modules/user', async () => {
+  const { reactive } = await import('vue')
+  const user = reactive({ id: '42' })
+  return { default: () => user }
+})
 
 vi.mock('@/api/workflow/design', () => ({
   designStream: vi.fn(), clearDesignState: vi.fn().mockResolvedValue({}),
@@ -21,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
   activeAiWindow.value = null
+  useUserStore().id = '42'
 })
 
 async function openPreview() {
@@ -47,6 +55,24 @@ async function openPreview() {
 }
 
 describe('AI 设计窗口应用预览', () => {
+  it('切换账号隔离记录、版本和未完成的应用', async () => {
+    const { wrapper, resolve } = await openPreview()
+    const oldKeys = Object.keys(localStorage).filter(key => key.startsWith('ai_design_'))
+    expect(oldKeys.length).toBeGreaterThan(0)
+    expect(oldKeys.every(key => key.includes('user:42_'))).toBe(true)
+    await wrapper.findAll('.change-preview__actions button')[1].trigger('click')
+    useUserStore().id = '43'
+    await flushPromises()
+    expect(wrapper.find('.change-preview').exists()).toBe(false)
+    resolve({ code: 200, data: { formId: 99 } })
+    await flushPromises()
+    expect(wrapper.emitted('fill')).toBeUndefined()
+    await wrapper.setProps({ modelValue: false })
+    const sessions = Object.keys(localStorage).filter(key => key.startsWith('ai_design_user:43_'))
+    expect(sessions).toHaveLength(1)
+    expect(JSON.parse(localStorage.getItem(sessions[0])!).messages.some((m: any) => m.role === 'user')).toBe(false)
+    wrapper.unmount()
+  })
   it('重复点击仅创建一次并绑定创建接口返回的表单 ID', async () => {
     const { wrapper, resolve } = await openPreview()
     const button = wrapper.findAll('.change-preview__actions button')[1]

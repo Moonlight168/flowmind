@@ -9,6 +9,8 @@ import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.engine.IdentityService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.RuntimeService;
+import org.flowable.task.api.DelegationState;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
@@ -20,6 +22,55 @@ import static org.mockito.Mockito.*;
 
 /** 审批归属与候选人回归，不连接实际流程引擎。 */
 class WfTaskAuthorizationTest {
+    @Test
+    void nextAssigneeDoesNotModifyExistingParallelTask() {
+        verifyNextAssignment(false);
+    }
+
+    @Test
+    void resolvingDelegationDoesNotReassignExistingTasks() {
+        verifyNextAssignment(true);
+    }
+
+    private void verifyNextAssignment(boolean delegated) {
+        TaskService tasks = mock(TaskService.class);
+        TaskQuery query = mock(TaskQuery.class, RETURNS_SELF);
+        Task current = mock(Task.class);
+        Task parallel = mock(Task.class);
+        Task next = mock(Task.class);
+        when(current.getId()).thenReturn("current");
+        when(current.getAssignee()).thenReturn("42");
+        when(current.getProcessInstanceId()).thenReturn("instance");
+        when(current.getDelegationState()).thenReturn(delegated ? DelegationState.PENDING : null);
+        when(parallel.getId()).thenReturn("parallel");
+        when(next.getId()).thenReturn("next");
+        when(tasks.createTaskQuery()).thenReturn(query);
+        when(query.singleResult()).thenReturn(current);
+        when(query.list()).thenReturn(List.of(current, parallel),
+            delegated ? List.of(current, parallel) : List.of(parallel, next));
+        IWfCopyService copy = mock(IWfCopyService.class);
+        when(copy.makeCopy(any())).thenReturn(true);
+        var service = new WfTaskServiceImpl(mock(RemoteUserService.class), copy);
+        RepositoryService repository = mock(RepositoryService.class);
+        RuntimeService runtime = mock(RuntimeService.class);
+        when(repository.getBpmnModel(any())).thenReturn(new BpmnModel());
+        ReflectionTestUtils.setField(service, "taskService", tasks);
+        ReflectionTestUtils.setField(service, "repositoryService", repository);
+        ReflectionTestUtils.setField(service, "runtimeService", runtime);
+        ReflectionTestUtils.setField(service, "identityService", mock(IdentityService.class));
+        WfTaskBo bo = new WfTaskBo();
+        bo.setTaskId("current");
+        bo.setNextUserIds("99");
+        try (var user = mockStatic(TaskUtils.class)) {
+            user.when(TaskUtils::getUserId).thenReturn("42");
+            service.complete(bo);
+        }
+        if (delegated) verify(tasks, never()).setAssignee(anyString(), anyString());
+        else verify(tasks).setAssignee("next", "99");
+        verify(tasks, never()).setAssignee(eq("parallel"), anyString());
+        verifyNoInteractions(runtime);
+    }
+
     @Test
     void cannotCompleteAnotherUsersTask() {
         verifyCompletion("other", false, false);

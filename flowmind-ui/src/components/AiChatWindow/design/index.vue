@@ -165,6 +165,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import useUserStore from '@/store/modules/user'
 import { designStream, clearDesignState, rollbackDesignState } from '@/api/workflow/design'
 import { ChatDotRound, Delete, Back, Right, Promotion } from '@element-plus/icons-vue'
 import AiFloatingWindow from '@/components/AiFloatingWindow/index.vue'
@@ -316,8 +317,10 @@ const rawFlowKey = computed(() => {
 // 会话代号：清空对话 = 开一段全新会话，后端 thread、聊天记录与版本栈一起换新。
 // 代号必须持久化，否则关掉标签页重开又回到刚清掉的那段会话。
 const generation = ref(0)
+const userStore = useUserStore()
+const ownerId = computed(() => String(userStore.id || ''))
 const generationKey = computed(() => {
-  return `ai_design_gen_${props.designType}_${props.mode}_${rawFlowKey.value}`
+  return `ai_design_gen_user:${ownerId.value}_${props.designType}_${props.mode}_${rawFlowKey.value}`
 })
 
 // 会话标识 = 业务标识 + 代号。代号 0 不加后缀，升级前已有的会话不会因为加后缀而丢失。
@@ -338,7 +341,7 @@ function readGeneration() {
 // 存储命名空间：必须区分 mode，否则基本信息（basic）与流程模型（design）窗口
 // 会共用同一份会话消息与版本历史，互相污染
 const storageKey = computed(() => {
-  return `ai_design_${props.designType}_${props.mode}_${flowKey.value}`
+  return `ai_design_user:${ownerId.value}_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
 // 版本历史：每次"应用变更"存一个版本；导航（回退/前进/下拉）只移动当前指针，不删除版本
@@ -348,7 +351,7 @@ const versionCount = ref(0)
 // 当前所在版本索引；null 表示还没有任何版本
 const currentVersionIndex = ref(null)
 const versionKey = computed(() => {
-  return `ai_design_versions_${props.designType}_${props.mode}_${flowKey.value}`
+  return `ai_design_versions_user:${ownerId.value}_${props.designType}_${props.mode}_${flowKey.value}`
 })
 
 // 会话与版本要活过「关闭标签页」—— sessionStorage 会被浏览器随标签页清掉，只能用 localStorage。
@@ -357,6 +360,7 @@ const STORE_PREFIX = 'ai_design_'
 const STORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 function storeWrite(key, value) {
+  if (!ownerId.value) return
   try {
     localStorage.setItem(key, value)
   } catch (e) {
@@ -489,10 +493,12 @@ function toVersionData(baseline) {
  *  新建对象同样建 v0，内容就是空白初始状态——规则统一，不区分新建还是编辑。
  *  必须在任何变更预览渲染之前调用，否则读到的将是预览后的内容。 */
 async function ensureBaselineVersion() {
+  const key = versionKey.value
   if (versionCount.value > 0) return
   if (typeof props.getCurrentBaseline === 'function') {
     try {
       const fresh = await props.getCurrentBaseline()
+      if (key !== versionKey.value) return
       if (fresh && Object.keys(fresh).length > 0) {
         currentFormData.value = { ...currentFormData.value, ...fresh }
       }
@@ -500,6 +506,7 @@ async function ensureBaselineVersion() {
       console.error('获取设计基线失败:', e)
     }
   }
+  if (key !== versionKey.value) return
   saveVersion(toVersionData(currentFormData.value))
 }
 
@@ -551,6 +558,8 @@ function saveSession() {
 }
 
 async function restoreSession() {
+  messages.value = []
+  if (!ownerId.value) return
   // 消息从草稿恢复；设计基线始终以外部传入的 props.formData 为准
   currentFormData.value = cloneData(props.formData)
   syncVersionCount()
@@ -575,6 +584,21 @@ onMounted(() => {
   pruneStore()
   restoreSession()
 })
+
+watch(ownerId, () => {
+  cancelCurrentRequest()
+  discardPreview()
+  inputText.value = ''
+  displayLimit.value = null
+  lastBackendCount.value = null
+  currentFormData.value = {}
+  currentVersionIndex.value = null
+  versionCount.value = 0
+  generation.value = readGeneration()
+  messages.value = []
+  // 等宿主重新打开并提供新账号的数据，不能把旧画布保存为新账号的基线。
+  emit('update:modelValue', false)
+}, { flush: 'sync' })
 
 // 全局助手打开时关闭设计窗口
 watch(activeAiWindow, (kind) => {

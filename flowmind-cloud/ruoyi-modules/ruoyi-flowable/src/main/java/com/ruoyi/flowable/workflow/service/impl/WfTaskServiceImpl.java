@@ -86,6 +86,11 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
             taskService.claim(task.getId(), userId);
         }
         taskBo.setProcInsId(task.getProcessInstanceId());
+        // 只允许指定本次完成产生的下一任务，不能改派已有的并行分支。
+        Set<String> existingTaskIds = StringUtils.isNotBlank(taskBo.getNextUserIds())
+            ? taskService.createTaskQuery().processInstanceId(task.getProcessInstanceId()).list()
+                .stream().map(Task::getId).collect(Collectors.toSet())
+            : Collections.emptySet();
         // 获取 bpmn 模型
         BpmnModel bpmnModel = repositoryService.getBpmnModel(task.getProcessDefinitionId());
         identityService.setAuthenticatedUserId(TaskUtils.getUserId());
@@ -104,7 +109,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
         }
         taskBo.setTaskName(task.getName());
         if (StringUtils.isNotBlank(taskBo.getNextUserIds())) {
-            this.assignNextUsers(bpmnModel, taskBo.getProcInsId(), taskBo.getNextUserIds());
+            this.assignNextUsers(bpmnModel, taskBo.getProcInsId(), taskBo.getNextUserIds(), existingTaskIds);
         }
         if (!copyService.makeCopy(taskBo)) {
             throw new RuntimeException("抄送任务失败");
@@ -674,11 +679,12 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
      * @param processInsId 流程实例id
      * @param userIds 用户ids
      */
-    private void assignNextUsers(BpmnModel bpmnModel, String processInsId, String userIds) {
-        // 获取所有节点信息
+    private void assignNextUsers(BpmnModel bpmnModel, String processInsId, String userIds, Set<String> existingTaskIds) {
+        // 排除完成前已经存在的任务，包括其他分支及尚未推进的委派任务。
         List<Task> list = taskService.createTaskQuery()
             .processInstanceId(processInsId)
-            .list();
+            .list().stream().filter(task -> !existingTaskIds.contains(task.getId()))
+            .collect(Collectors.toCollection(ArrayList::new));
         if (list.size() == 0) {
             return;
         }
