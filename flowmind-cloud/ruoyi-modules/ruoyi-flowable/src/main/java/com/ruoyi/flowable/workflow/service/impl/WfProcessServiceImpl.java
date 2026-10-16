@@ -659,7 +659,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
             
             // 启动流程前删除对应的草稿
             if (processDefinition != null) {
-                wfDraftService.deleteByDefinitionId(processDefinition.getId());
+                wfDraftService.deleteCurrentUserDraft(processDefinition.getId());
             }
             
             startProcess(processDefinition, variables);
@@ -683,7 +683,7 @@ public class WfProcessServiceImpl extends FlowServiceFactory implements IWfProce
             
             // 启动流程前删除对应的草稿
             if (processDefinition != null) {
-                wfDraftService.deleteByDefinitionId(processDefinition.getId());
+                wfDraftService.deleteCurrentUserDraft(processDefinition.getId());
             }
             
             startProcess(processDefinition, variables);

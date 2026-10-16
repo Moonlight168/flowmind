@@ -75,6 +75,12 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
         if (Objects.isNull(task)) {
             throw new ServiceException("任务不存在");
         }
+        String userId = requireTaskAccess(task, true);
+        if (StringUtils.isBlank(task.getAssignee())) {
+            // claim 检查并发认领，禁止覆盖其他人的审批归属。
+            taskService.claim(task.getId(), userId);
+        }
+        taskBo.setProcInsId(task.getProcessInstanceId());
         // 获取 bpmn 模型
         BpmnModel bpmnModel = repositoryService.getBpmnModel(task.getProcessDefinitionId());
         identityService.setAuthenticatedUserId(TaskUtils.getUserId());
@@ -83,9 +89,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
             taskService.resolveTask(taskBo.getTaskId());
         } else {
             taskService.addComment(taskBo.getTaskId(), taskBo.getProcInsId(), FlowComment.NORMAL.getType(), taskBo.getComment());
-            taskService.setAssignee(taskBo.getTaskId(), TaskUtils.getUserId());
             if (ObjectUtil.isNotEmpty(taskBo.getVariables())) {
-                // 获取模型信息
                 String localScopeValue = ModelUtils.getUserTaskAttributeValue(bpmnModel, task.getTaskDefinitionKey(), ProcessConstants.PROCESS_FORM_LOCAL_SCOPE);
                 boolean localScope = Convert.toBool(localScopeValue, false);
                 taskService.complete(taskBo.getTaskId(), taskBo.getVariables(), localScope);
@@ -93,16 +97,42 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
                 taskService.complete(taskBo.getTaskId());
             }
         }
-        // 设置任务节点名称
         taskBo.setTaskName(task.getName());
-        // 处理下一级审批人
         if (StringUtils.isNotBlank(taskBo.getNextUserIds())) {
             this.assignNextUsers(bpmnModel, taskBo.getProcInsId(), taskBo.getNextUserIds());
         }
-        // 处理抄送用户
         if (!copyService.makeCopy(taskBo)) {
             throw new RuntimeException("抄送任务失败");
         }
+    }
+
+    /** 复用归属校验，防止通过认领、转办接口绕过审批权限。 */
+    private String requireTaskAccess(Task task, boolean allowCandidate) {
+        if (task == null) {
+            throw new ServiceException("任务不存在");
+        }
+        String userId = TaskUtils.getUserId();
+        if (StringUtils.isBlank(userId)) {
+            throw new ServiceException("登录状态已失效");
+        }
+        if (StringUtils.isNotBlank(task.getAssignee())) {
+            if (!userId.equals(task.getAssignee())) {
+                throw new ServiceException("无权审批此任务");
+            }
+        } else {
+            if (!allowCandidate) {
+                throw new ServiceException("请先认领任务");
+            }
+            List<String> groups = TaskUtils.getCandidateGroup();
+            boolean candidate = taskService.getIdentityLinksForTask(task.getId()).stream()
+                .anyMatch(link -> "candidate".equals(link.getType())
+                    && (userId.equals(link.getUserId())
+                        || (link.getGroupId() != null && groups.contains(link.getGroupId()))));
+            if (!candidate) {
+                throw new ServiceException("无权审批此任务");
+            }
+        }
+        return userId;
     }
 
     /**
@@ -115,6 +145,8 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     public void taskReject(WfTaskBo taskBo) {
         // 当前任务 task
         Task task = taskService.createTaskQuery().taskId(taskBo.getTaskId()).singleResult();
+        requireTaskAccess(task, true);
+        taskBo.setProcInsId(task.getProcessInstanceId());
         if (ObjectUtil.isNull(task)) {
             throw new RuntimeException("获取任务信息异常！");
         }
@@ -164,6 +196,8 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     public void taskReturn(WfTaskBo bo) {
         // 当前任务 task
         Task task = taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult();
+        requireTaskAccess(task, true);
+        bo.setProcInsId(task.getProcessInstanceId());
         if (ObjectUtil.isNull(task)) {
             throw new RuntimeException("获取任务信息异常！");
         }
@@ -272,6 +306,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
      */
     @Override
     public void deleteTask(WfTaskBo bo) {
+        requireTaskAccess(taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult(), false);
         // todo 待确认删除任务是物理删除任务 还是逻辑删除，让这个任务直接通过？
         identityService.setAuthenticatedUserId(TaskUtils.getUserId());
         taskService.deleteTask(bo.getTaskId(), bo.getComment());
@@ -289,7 +324,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
         if (Objects.isNull(task)) {
             throw new ServiceException("任务不存在");
         }
-        taskService.claim(taskBo.getTaskId(), TaskUtils.getUserId());
+        taskService.claim(taskBo.getTaskId(), requireTaskAccess(task, true));
     }
 
     /**
@@ -300,6 +335,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void unClaim(WfTaskBo bo) {
+        requireTaskAccess(taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult(), false);
         taskService.unclaim(bo.getTaskId());
     }
 
@@ -313,6 +349,8 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     public void delegateTask(WfTaskBo bo) {
         // 当前任务 task
         Task task = taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult();
+        requireTaskAccess(task, false);
+        bo.setProcInsId(task.getProcessInstanceId());
         if (ObjectUtil.isEmpty(task)) {
             throw new ServiceException("获取任务失败！");
         }
@@ -364,6 +402,8 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     public void transferTask(WfTaskBo bo) {
         // 当前任务 task
         Task task = taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult();
+        requireTaskAccess(task, false);
+        bo.setProcInsId(task.getProcessInstanceId());
         if (ObjectUtil.isEmpty(task)) {
             throw new ServiceException("获取任务失败！");
         }
