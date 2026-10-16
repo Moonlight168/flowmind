@@ -7,6 +7,7 @@
 import { getCurrentInstance, onMounted, ref } from 'vue'
 
 import { listAllCategory } from '@/api/workflow/category'
+import useOaCounts from '@/store/modules/oaCounts'
 
 export function useTaskList({
   fetcher,
@@ -17,6 +18,7 @@ export function useTaskList({
   categoryField = 'category'
 }) {
   const { proxy } = getCurrentInstance()
+  const counts = useOaCounts()
 
   const rows = ref([])
   const loading = ref(true)
@@ -36,6 +38,7 @@ export function useTaskList({
       const res = await fetcher(params)
       rows.value = res.rows
       total.value = res.total
+      counts.refresh()
     } finally {
       loading.value = false
     }

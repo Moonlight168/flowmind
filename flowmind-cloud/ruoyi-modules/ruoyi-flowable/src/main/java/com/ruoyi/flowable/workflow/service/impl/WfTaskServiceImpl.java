@@ -81,6 +81,10 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
             throw new ServiceException("任务不存在");
         }
         String userId = requireTaskAccess(task, true);
+        if (taskBo.getVariables() != null && taskBo.getVariables().keySet().stream()
+            .anyMatch(ProcessConstants.RESERVED_VARIABLES::contains)) {
+            throw new ServiceException("审批表单不能修改系统流程变量");
+        }
         if (StringUtils.isBlank(task.getAssignee())) {
             // claim 检查并发认领，禁止覆盖其他人的审批归属。
             taskService.claim(task.getId(), userId);
@@ -280,6 +284,7 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
     public List<FlowElement> findReturnTaskList(WfTaskBo bo) {
         // 当前任务 task
         Task task = taskService.createTaskQuery().taskId(bo.getTaskId()).singleResult();
+        requireTaskAccess(task, true);
         // 获取流程定义信息
         ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery().processDefinitionId(task.getProcessDefinitionId()).singleResult();
         // 获取流程模型信息
@@ -688,38 +693,38 @@ public class WfTaskServiceImpl extends FlowServiceFactory implements IWfTaskServ
         if (list.size() == 0) {
             return;
         }
-        Queue<String> assignIds = CollUtil.newLinkedList(userIds.split(","));
-        if (list.size() == assignIds.size()) {
-            for (Task task : list) {
-                taskService.setAssignee(task.getId(), assignIds.poll());
-            }
+        List<String> assignIds = Arrays.stream(userIds.split(",", -1)).map(String::trim).distinct().collect(Collectors.toList());
+        if (assignIds.stream().anyMatch(id -> !id.matches("[1-9][0-9]*"))) {
+            throw new ServiceException("下一审批人编号无效");
+        }
+        Task first = list.get(0);
+        if (list.stream().anyMatch(task -> !Objects.equals(first.getTaskDefinitionKey(), task.getTaskDefinitionKey()))) {
+            throw new ServiceException("存在多个下一审批节点，请在流程模型中分别配置审批人");
+        }
+        UserTask node = ModelUtils.getUserTaskByKey(bpmnModel, first.getTaskDefinitionKey());
+        MultiInstanceLoopCharacteristics loop = node == null ? null : node.getLoopCharacteristics();
+        if (loop == null) {
+            if (list.size() != 1 || assignIds.size() != 1) throw new ServiceException("普通审批节点只能指定一位审批人");
+            taskService.setAssignee(first.getId(), assignIds.get(0));
             return;
         }
-        // 优先处理非多实例任务
-        Iterator<Task> iterator = list.iterator();
-        while (iterator.hasNext()) {
-            Task task = iterator.next();
-            if (!ModelUtils.isMultiInstance(bpmnModel, task.getTaskDefinitionKey())) {
-                if (!assignIds.isEmpty()) {
-                    taskService.setAssignee(task.getId(), assignIds.poll());
-                }
-                iterator.remove();
-            }
+        String elementVariable = loop.getElementVariable();
+        if (loop.isSequential() || StringUtils.isBlank(elementVariable)
+            || !Objects.equals(node.getAssignee(), "${" + elementVariable + "}")) {
+            throw new ServiceException("此多实例配置不支持临时改派，请在流程模型中配置审批人集合");
         }
-        // 若存在多实例任务，则进行动态加减签
-        if (CollUtil.isNotEmpty(list)) {
-            if (assignIds.isEmpty()) {
-                // 动态减签
-                for (Task task : list) {
-                    runtimeService.deleteMultiInstanceExecution(task.getExecutionId(), true);
-                }
-            } else {
-                // 动态加签
-                for (String assignId : assignIds) {
-                    Map<String, Object> assignVariables = Collections.singletonMap(BpmnXMLConstants.ATTRIBUTE_TASK_USER_ASSIGNEE, assignId);
-                    runtimeService.addMultiInstanceExecution(list.get(0).getTaskDefinitionKey(), list.get(0).getProcessInstanceId(), assignVariables);
-                }
-            }
+        // 保留至少一个执行实例；减签不计为审批完成，避免触发完成条件跳过审批。
+        int retained = Math.min(list.size(), assignIds.size());
+        for (int i = 0; i < retained; i++) {
+            runtimeService.setVariableLocal(list.get(i).getExecutionId(), elementVariable, assignIds.get(i));
+            taskService.setAssignee(list.get(i).getId(), assignIds.get(i));
+        }
+        for (int i = list.size(); i < assignIds.size(); i++) {
+            runtimeService.addMultiInstanceExecution(first.getTaskDefinitionKey(), processInsId,
+                Collections.singletonMap(elementVariable, assignIds.get(i)));
+        }
+        for (int i = assignIds.size(); i < list.size(); i++) {
+            runtimeService.deleteMultiInstanceExecution(list.get(i).getExecutionId(), false);
         }
     }
 }

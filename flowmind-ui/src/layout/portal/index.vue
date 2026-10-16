@@ -23,9 +23,7 @@
             class="flex flex-col items-center justify-center py-2.5 rounded-lg transition-all duration-200 group text-gray-600 hover:bg-gray-100 relative"
             active-class="bg-green-50 !text-green-600 font-medium"
         >
-          <div v-if="todoCount > 0" class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center border border-white">
-            {{ todoCount > 99 ? '99+' : todoCount }}
-          </div>
+          <OaCountBadge :count="counts.pending" label="待处理（含待签收）" class="approval-badge" />
           <svg-icon icon-class="skill" class="mb-0.5 group-hover:scale-105 transition-transform" style="width: 20px; height: 20px;" />
           <span class="text-[11px]">审批</span>
         </router-link>
@@ -61,7 +59,7 @@
       </div>
     </div>
 
-    <div class="flex-1 flex flex-col h-full overflow-hidden">
+    <div class="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
 
       <header class="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-6 flex-shrink-0">
         <h2 class="text-base font-semibold text-gray-800">{{ route.meta.title || '工作区' }}</h2>
@@ -81,19 +79,20 @@
 </template>
 
 <script setup>
-import {computed, ref, onMounted} from 'vue'
+import {computed, watch, onMounted, onBeforeUnmount} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import useUserStore from '@/store/modules/user'
 import usePermissionStore from '@/store/modules/permission'
 import {isHttp} from '@/utils/validate'
 import {Monitor, User, SwitchButton} from '@element-plus/icons-vue'
-import {getTaskCounts} from '@/api/workflow/work/process'
+import useOaCounts from '@/store/modules/oaCounts'
+import OaCountBadge from '@/components/OaCountBadge/index.vue'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const todoCount = ref(0) // 待办任务数量
+const counts = useOaCounts()
 const userAvatar = computed(() => userStore.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png')
 
 // 判断是否为管理员
@@ -103,15 +102,8 @@ const isAdmin = computed(() => {
 })
 
 // 获取待办任务数量
-const getTodoCount = async () => {
-  try {
-    const res = await getTaskCounts()
-    todoCount.value = res.data?.todoCount || 0
-  } catch (error) {
-    console.error('获取待办任务数量失败:', error)
-    todoCount.value = 0
-  }
-}
+const getTodoCount = () => counts.refresh()
+watch(() => [route.fullPath, userStore.id], getTodoCount, { immediate: true })
 
 // 导航到管理后台
 const goToAdmin = async () => {
@@ -151,19 +143,18 @@ const handleLogout = async () => {
 
 // 组件挂载时获取待办任务数量
 onMounted(() => {
-  // 确保用户信息已加载
-  if (!userStore.name) {
-    userStore.getInfo().then(() => {
-      getTodoCount()
-    })
-  } else {
-    getTodoCount()
-  }
+  window.addEventListener('focus', getTodoCount)
+  // 登录身份加载后由 watch 统一刷新，避免挂载时重复请求。
+  if (!userStore.id) userStore.getInfo().catch(error => console.warn('加载用户信息失败', error))
 })
+onBeforeUnmount(() => window.removeEventListener('focus', getTodoCount))
 </script>
 
 <style scoped>
-/* 如果你在 Tailwind 配置中没有设置飞书绿色，
-可以考虑在 <style> 标签中定义一个 CSS 变量，但使用 Tailwind 类名更推荐。
-*/
+.approval-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  box-shadow: 0 0 0 2px #fff;
+}
 </style>

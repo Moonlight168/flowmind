@@ -44,6 +44,7 @@ class WfTaskAuthorizationTest {
         when(current.getDelegationState()).thenReturn(delegated ? DelegationState.PENDING : null);
         when(parallel.getId()).thenReturn("parallel");
         when(next.getId()).thenReturn("next");
+        when(next.getTaskDefinitionKey()).thenReturn("approve");
         when(tasks.createTaskQuery()).thenReturn(query);
         when(query.singleResult()).thenReturn(current);
         when(query.list()).thenReturn(List.of(current, parallel),
@@ -53,7 +54,13 @@ class WfTaskAuthorizationTest {
         var service = new WfTaskServiceImpl(mock(RemoteUserService.class), copy);
         RepositoryService repository = mock(RepositoryService.class);
         RuntimeService runtime = mock(RuntimeService.class);
-        when(repository.getBpmnModel(any())).thenReturn(new BpmnModel());
+        BpmnModel model = new BpmnModel();
+        org.flowable.bpmn.model.Process process = new org.flowable.bpmn.model.Process();
+        org.flowable.bpmn.model.UserTask node = new org.flowable.bpmn.model.UserTask();
+        node.setId("approve");
+        process.addFlowElement(node);
+        model.addProcess(process);
+        when(repository.getBpmnModel(any())).thenReturn(model);
         ReflectionTestUtils.setField(service, "taskService", tasks);
         ReflectionTestUtils.setField(service, "repositoryService", repository);
         ReflectionTestUtils.setField(service, "runtimeService", runtime);
