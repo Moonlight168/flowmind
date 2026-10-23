@@ -35,18 +35,18 @@
 
       <el-table v-loading="loading" :data="todoList">
         <el-table-column type="selection" width="55" align="center" />
-        <el-table-column label="任务编号" align="center" prop="taskId" :show-overflow-tooltip="true" />
-        <el-table-column label="流程名称" align="center" prop="procDefName" />
-        <el-table-column label="任务节点" align="center" prop="taskName" />
-        <el-table-column label="流程分类" align="center" prop="category" :formatter="categoryFormat" />
-        <el-table-column label="流程版本" align="center">
+        <el-table-column min-width="180" label="任务编号" align="center" prop="taskId" :show-overflow-tooltip="true" />
+        <el-table-column show-overflow-tooltip min-width="200" label="流程名称" align="center" prop="procDefName" />
+        <el-table-column show-overflow-tooltip min-width="160" label="任务节点" align="center" prop="taskName" />
+        <el-table-column show-overflow-tooltip min-width="120" label="流程分类" align="center" prop="category" :formatter="categoryFormat" />
+        <el-table-column min-width="100" label="流程版本" align="center">
           <template #default="scope">
             <el-tag>v{{scope.row.procDefVersion}}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="流程发起人" align="center" prop="startUserName" />
-        <el-table-column label="接收时间" align="center" prop="createTime" width="180" />
-        <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width">
+        <el-table-column show-overflow-tooltip min-width="120" label="流程发起人" align="center" prop="startUserName" />
+        <el-table-column show-overflow-tooltip label="接收时间" align="center" prop="createTime" width="180" />
+        <el-table-column fixed="right" label="操作" width="180" align="center" class-name="small-padding fixed-width">
           <template #default="scope">
             <el-tooltip content="办理" placement="top">
               <el-button link type="primary" icon="EditPen" @click="handleProcess(scope.row)" v-hasPermi="['workflow:process:approval']"></el-button>

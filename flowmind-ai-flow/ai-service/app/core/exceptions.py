@@ -16,6 +16,7 @@ from pydantic import ValidationError
 from redis.exceptions import RedisError
 
 from app.config.settings import settings
+from app.core.error_constants import CONFIGURATION_ERRORS as CONFIGURATION_ERRORS
 from app.domain.dto import ResponseVO
 from app.infra.logger import get_trace_id, logger
 
@@ -37,7 +38,6 @@ class ErrorCode(StrEnum):
 
 
 PERSISTENCE_ERRORS = (RedisError, OSError, TypeError, ValueError)
-CONFIGURATION_ERRORS = (NameError, TypeError, ValueError)
 INFRASTRUCTURE_ERRORS = (OSError, RuntimeError, TypeError, ValueError)
 
 # ============== 异常基类 ==============

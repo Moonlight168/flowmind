@@ -353,11 +353,11 @@ const getProcessDetails = async (procInsId, taskId) => {
   })
 }
 const onSelectCopyUsers = () => {
-  userMultipleSelection.value = copyUser.value;
+  userMultipleSelection.value = [...copyUser.value];
   onSelectUsers('添加抄送人', 'copy')
 }
 const onSelectNextUsers = () => {
-  userMultipleSelection.value = nextUser;
+  userMultipleSelection.value = [...nextUser.value];
   onSelectUsers('指定审批人', 'next')
 }
 const onSelectUsers = (title, type) => {
@@ -419,22 +419,20 @@ const goBack = () => {
 }
 // 关闭标签
 const handleClose = (type, tag) => {
-  let userObj = userMultipleSelection.value.find(item => item.userId === tag.id);
-  userMultipleSelection.value.splice(userMultipleSelection.value.indexOf(userObj), 1);
   if (type === 'copy') {
-    copyUser.value = userMultipleSelection.value;
+    copyUser.value = copyUser.value.filter(item => String(item.userId) !== String(tag.userId));
     // 设置抄送人ID
     if (copyUser.value && copyUser.value.length > 0) {
-      const val = copyUser.value.map(item => item.id);
+      const val = copyUser.value.map(item => item.userId);
       taskForm.copyUserIds = val instanceof Array ? val.join(',') : val;
     } else {
       taskForm.copyUserIds = '';
     }
   } else if (type === 'next') {
-    nextUser.value = userMultipleSelection.value;
+    nextUser.value = nextUser.value.filter(item => String(item.userId) !== String(tag.userId));
     // 设置抄送人ID
     if (nextUser.value && nextUser.value.length > 0) {
-      const val = nextUser.value.map(item => item.id);
+      const val = nextUser.value.map(item => item.userId);
       taskForm.nextUserIds = val instanceof Array ? val.join(',') : val;
     } else {
       taskForm.nextUserIds = '';
@@ -471,11 +469,11 @@ const submitUserData = () => {
     let userIds = userMultipleSelection.value.map(k => k.userId);
     if (type === 'copy') {
       // 设置抄送人ID信息
-      copyUser.value = userMultipleSelection.value;
+      copyUser.value = [...userMultipleSelection.value];
       taskForm.copyUserIds = userIds instanceof Array ? userIds.join(',') : userIds;
     } else if (type === 'next') {
       // 设置下一级审批人ID信息
-      nextUser.value = userMultipleSelection.value;
+      nextUser.value = [...userMultipleSelection.value];
       taskForm.nextUserIds = userIds instanceof Array ? userIds.join(',') : userIds;
     }
     userSelectDialog.visible = false;

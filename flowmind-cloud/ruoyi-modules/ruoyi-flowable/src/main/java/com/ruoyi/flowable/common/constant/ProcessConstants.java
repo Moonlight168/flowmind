@@ -7,6 +7,10 @@ package com.ruoyi.flowable.common.constant;
  * @date 2021/4/17 22:46
  */
 public class ProcessConstants {
+    /** 系统身份、状态和引擎控制字段，禁止通过审批表单改写。 */
+    public static final java.util.Set<String> RESERVED_VARIABLES = java.util.Set.of(
+        "initiator", "processStatus", "_FLOWABLE_SKIP_EXPRESSION_ENABLED",
+        "nrOfInstances", "nrOfActiveInstances", "nrOfCompletedInstances", "loopCounter");
 
     public static final String SUFFIX = ".bpmn";
 

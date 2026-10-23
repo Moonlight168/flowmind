@@ -9,10 +9,11 @@ import { defineStore } from 'pinia';
 import { getAiFormState } from '@/api/workflow/ai';
 
 // localStorage key
-const STORAGE_KEY = 'aiSession';
+const storageKey = (ownerId) => `aiSession:${ownerId}`;
 
 // 默认状态
 const getDefaultState = () => ({
+  ownerId: '',
   threadId: null,
   currentPhase: 'chatting',
   targetPageType: null,
@@ -50,6 +51,10 @@ const useAiSessionStore = defineStore('aiSession', {
   },
 
   actions: {
+    setOwner(userId) {
+      const ownerId = userId == null ? '' : String(userId);
+      if (ownerId !== this.ownerId) this.$state = { ...getDefaultState(), ownerId };
+    },
     /**
      * 初始化会话
      * @param {Object} params - 会话参数
@@ -141,14 +146,16 @@ const useAiSessionStore = defineStore('aiSession', {
      * 重置会话
      */
     resetSession() {
-      this.$state = getDefaultState();
-      localStorage.removeItem(STORAGE_KEY);
+      const ownerId = this.ownerId;
+      this.$state = { ...getDefaultState(), ownerId };
+      if (ownerId) localStorage.removeItem(storageKey(ownerId));
     },
 
     /**
      * 持久化状态到 localStorage
      */
     persistState() {
+      if (!this.ownerId) return;
       const stateToSave = {
         threadId: this.threadId,
         currentPhase: this.currentPhase,
@@ -156,7 +163,7 @@ const useAiSessionStore = defineStore('aiSession', {
         category: this.category,
         generatedData: this.generatedData
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      localStorage.setItem(storageKey(this.ownerId), JSON.stringify(stateToSave));
     },
 
     /**
@@ -164,8 +171,10 @@ const useAiSessionStore = defineStore('aiSession', {
      * @returns {Promise<Array|null>} 恢复的聊天历史消息数组，如果无会话则返回 null
      */
     async restoreSession() {
+      const ownerId = this.ownerId;
+      if (!ownerId) return null;
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
+        const saved = localStorage.getItem(storageKey(ownerId));
         if (!saved) {
           return null;
         }
@@ -184,6 +193,7 @@ const useAiSessionStore = defineStore('aiSession', {
 
         // 从后端获取完整聊天历史（兼容 res.data 与直出对象）
         const response = await getAiFormState(parsed.threadId);
+        if (this.ownerId !== ownerId || this.threadId !== parsed.threadId) return null;
         const state = response?.data || response;
         if (state && Array.isArray(state.messages)) {
           // 转换消息格式：{ role: 'user' | 'assistant', content: string, time: string }

@@ -20,6 +20,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 流程表单Controller
@@ -68,7 +69,10 @@ public class WfFormController extends BaseController {
      */
     @PostMapping
     public AjaxResult add(@RequestBody WfFormBo bo) {
-        return toAjax(formService.insertForm(bo));
+        if (formService.insertForm(bo) <= 0) {
+            return AjaxResult.error("创建表单失败");
+        }
+        return AjaxResult.success(Map.of("formId", bo.getFormId()));
     }
 
     /**

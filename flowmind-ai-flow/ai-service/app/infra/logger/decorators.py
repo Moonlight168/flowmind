@@ -11,7 +11,7 @@ from functools import wraps
 
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
-from app.core.exceptions import CONFIGURATION_ERRORS
+from app.core.error_constants import CONFIGURATION_ERRORS
 
 from .logger_config import generate_request_id, generate_trace_id, logger
 

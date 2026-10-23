@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from app.api._sse import to_async_stream
+from app.api._sse import stream_error_event, to_async_stream
 from app.api.deps import require_auth
 from app.core.auth import TokenUser
 from app.core.exceptions import EXPECTED_RUNTIME_ERRORS, ErrorCode
@@ -76,9 +76,7 @@ def _run_design_stream(
     """三个设计端点的共享执行体：会话命名 → SSE 进度/错误事件流。"""
     trace_id = generate_trace_id()
     set_trace_id(trace_id)
-    thread_id = _design_thread_id(
-        design_type, current_user, mode, payload.thread_id
-    )
+    thread_id = _design_thread_id(design_type, current_user, mode, payload.thread_id)
 
     def event_stream():
         try:
@@ -99,7 +97,11 @@ def _run_design_stream(
             logger.error(f"设计流式处理异常: {exc}", exc_info=True)
             yield _safe_stream_error(trace_id)
 
-    return _sse_response(to_async_stream(event_stream()))
+    return _sse_response(
+        to_async_stream(
+            event_stream(), on_error=lambda exc: stream_error_event(exc, trace_id)
+        )
+    )
 
 
 @router.post("/category")
@@ -117,9 +119,7 @@ def design_flow(
     current_user: TokenUser = Depends(require_auth),
 ) -> StreamingResponse:
     """流程设计接口（SSE：进度事件 + done 事件）"""
-    return _run_design_stream(
-        "flow_design", payload, current_user, mode=payload.mode
-    )
+    return _run_design_stream("flow_design", payload, current_user, mode=payload.mode)
 
 
 @router.post("/form")

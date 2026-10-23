@@ -73,4 +73,7 @@ public interface IWfDraftService {
      * @return 结果
      */
     int deleteByDefinitionId(String dartId);
+
+    /** 仅清理当前登录用户的申请草稿；流程定义管理仍使用全量清理。 */
+    int deleteCurrentUserDraft(String definitionId);
 }

@@ -61,5 +61,7 @@ public interface WfDraftMapper extends BaseMapperPlus<WfDraftMapper, WfDraft, Wf
      * @param definitionId 流程定义ID
      * @return 删除数量
      */
-    int restoreByDefinitionId(String definitionId);
+    int restoreByDefinitionId(@Param("definitionId") String definitionId, @Param("userId") Long userId);
+
+    int deleteUserDraft(@Param("definitionId") String definitionId, @Param("userId") Long userId);
 }

@@ -198,6 +198,8 @@ const MIN_HEIGHT = 400
 
 // 切换窗口可见性
 async function toggleVisible() {
+  const ownerId = aiSession.ownerId
+  if (!ownerId) return
   if (isVisible.value) {
     isVisible.value = false
     if (activeAiWindow.value === 'assistant') activeAiWindow.value = null
@@ -205,14 +207,11 @@ async function toggleVisible() {
     return
   }
   // 打开：先恢复会话再显示窗口，避免先渲染顶部再跳到底部
-  if (aiSession.hasActiveSession) {
-    const chatHistory = await aiSession.restoreSession()
-    if (chatHistory && chatHistory.length > 0) {
-      messages.value = chatHistory.map((msg) => createMessage(msg))
-    } else {
-      showWelcome()
-    }
-  } else if (messages.value.length === 0) {
+  const chatHistory = await aiSession.restoreSession()
+  if (aiSession.ownerId !== ownerId) return
+  if (chatHistory && chatHistory.length > 0) {
+    messages.value = chatHistory.map((msg) => createMessage(msg))
+  } else {
     showWelcome()
   }
   isVisible.value = true
@@ -240,6 +239,7 @@ function cancelCurrentRequest() {
 }
 
 function showWelcome() {
+  messages.value = []
   messages.value.push(createMessage({
     role: 'assistant',
     content: '您好！我是 FlowMind AI 助手，有什么可以帮您的吗？'
@@ -270,21 +270,25 @@ function handleNewChat() {
 
 // 加载聊天历史列表
 async function handleLoadHistoryList() {
+  const ownerId = aiSession.ownerId
   if (isLoadingHistory.value) return
   isLoadingHistory.value = true
   try {
     const res = await getChatHistoryList()
+    if (aiSession.ownerId !== ownerId) return
     historyList.value = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])
   } catch (error) {
+    if (aiSession.ownerId !== ownerId) return
     console.error('加载聊天历史列表失败:', error)
     historyList.value = []
   } finally {
-    isLoadingHistory.value = false
+    if (aiSession.ownerId === ownerId) isLoadingHistory.value = false
   }
 }
 
 // 选择历史记录
 async function handleSelectHistory(session) {
+  const ownerId = aiSession.ownerId
   if (session.thread_id === aiSession.threadId) {
     return
   }
@@ -297,6 +301,7 @@ async function handleSelectHistory(session) {
 
   try {
     const res = await getAiFormState(session.thread_id)
+    if (aiSession.ownerId !== ownerId || aiSession.threadId !== session.thread_id) return
     const state = res?.data || res || {}
     const messagesData = Array.isArray(state.messages) ? state.messages : []
     messages.value = messagesData.map((msg, index) => createMessage({
@@ -519,6 +524,18 @@ onMounted(async () => {
 onUnmounted(() => {
   cancelCurrentRequest()
 })
+
+watch(() => aiSession.ownerId, () => {
+  cancelCurrentRequest()
+  messages.value = []
+  historyList.value = []
+  selectedThreadIds.value = []
+  inputMessage.value = ''
+  showHistoryList.value = false
+  isLoadingHistory.value = false
+  isVisible.value = false
+  if (activeAiWindow.value === 'assistant') activeAiWindow.value = null
+}, { flush: 'sync' })
 
 // 设计窗口打开时关闭全局助手
 watch(activeAiWindow, (kind) => {

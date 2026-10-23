@@ -20,11 +20,13 @@ import com.ruoyi.flowable.workflow.service.IWfDraftService;
 import lombok.RequiredArgsConstructor;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 流程草稿Service业务层处理
@@ -46,7 +48,11 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
      */
     @Override
     public WfDraftVo queryById(Long draftId) {
-        return draftMapper.selectVoById(draftId);
+        WfDraftVo draft = draftMapper.selectVoById(draftId);
+        if (draft == null || !Objects.equals(draft.getUserId(), currentUserId())) {
+            throw new ServiceException("草稿不存在或无权访问");
+        }
+        return draft;
     }
 
     /**
@@ -95,7 +101,11 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
      */
     @Override
     public Boolean deleteWithValidByIds(Collection<Long> ids) {
-        return draftMapper.deleteBatchIds(ids) > 0;
+        if (ids == null || ids.isEmpty()) {
+            return false;
+        }
+        return draftMapper.delete(Wrappers.<WfDraft>lambdaQuery()
+            .in(WfDraft::getDraftId, ids).eq(WfDraft::getUserId, currentUserId())) > 0;
     }
 
     /**
@@ -105,7 +115,20 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
      * @return 结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public Boolean saveOrUpdateDraft(WfDraftBo bo) {
+        Long userId = currentUserId();
+        bo.setUserId(userId);
+        if (StringUtils.isBlank(bo.getDefinitionId())) {
+            throw new ServiceException("流程定义不能为空");
+        }
+        if (bo.getDraftId() != null) {
+            WfDraft supplied = draftMapper.selectByDraftId(bo.getDraftId());
+            if (supplied == null || !Objects.equals(supplied.getUserId(), userId)
+                || !Objects.equals(supplied.getDefinitionId(), bo.getDefinitionId())) {
+                throw new ServiceException("草稿不存在或无权访问");
+            }
+        }
         // 根据流程定义ID获取流程名称
         if (StringUtils.isNotBlank(bo.getDefinitionId()) && StringUtils.isBlank(bo.getProcessName())) {
             ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
@@ -119,12 +142,10 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
         //由于是逻辑删除，应该先搜索现有草稿是否存在，避免唯一索引冲突
         //根据用户id跟流程id,查询是否已存在草稿(因为是保存，所以如果逻辑删除的话直接恢复delflag字段为0即可)
         WfDraftVo existingDraft = draftMapper.selectByUserIdAndDefIdWithDelFlag(bo.getUserId(), bo.getDefinitionId());
-        if (ObjectUtil.isNotNull(existingDraft)) {
-            // 如果存在，插入草稿id
-            bo.setDraftId(existingDraft.getDraftId());
-        }
+        bo.setDraftId(existingDraft == null ? null : existingDraft.getDraftId());
 
         WfDraft draft = BeanUtil.toBean(bo, WfDraft.class);
+        draft.setDelFlag("0");
 
         // 判断是新增还是修改
         if (ObjectUtil.isNotNull(draft.getDraftId())) {
@@ -132,13 +153,16 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
             restoreByDefinitionId(bo.getDefinitionId());
             draft.setUpdateBy(SecurityUtils.getUsername());
             draft.setUpdateTime(DateUtils.getNowDate());
-            return draftMapper.updateById(draft) > 0;
+            return draftMapper.update(draft, Wrappers.<WfDraft>lambdaQuery()
+                .eq(WfDraft::getDraftId, draft.getDraftId()).eq(WfDraft::getUserId, userId)) > 0;
         } else {
             // 新增
             draft.setCreateBy(SecurityUtils.getUsername());
             draft.setCreateTime(DateUtils.getNowDate());
             draft.setDelFlag("0");
-            return draftMapper.insert(draft) > 0;
+            boolean saved = draftMapper.insert(draft) > 0;
+            bo.setDraftId(draft.getDraftId());
+            return saved;
         }
     }
 
@@ -166,7 +190,23 @@ public class WfDraftServiceImpl extends FlowServiceFactory implements IWfDraftSe
         if (StrUtil.isBlank(definitionId)) {
             return 0;
         }
-        return draftMapper.restoreByDefinitionId(definitionId);
+        return draftMapper.restoreByDefinitionId(definitionId, currentUserId());
+    }
+
+    @Override
+    public int deleteCurrentUserDraft(String definitionId) {
+        if (StrUtil.isBlank(definitionId)) {
+            return 0;
+        }
+        return draftMapper.deleteUserDraft(definitionId, currentUserId());
+    }
+
+    private Long currentUserId() {
+        Long userId = SecurityUtils.getUserId();
+        if (userId == null || userId <= 0) {
+            throw new ServiceException("登录状态已失效");
+        }
+        return userId;
     }
 
 

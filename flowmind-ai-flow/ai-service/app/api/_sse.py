@@ -8,22 +8,39 @@ Starlette 迭代同步生成器时每个 chunk 都在线程池的不同 context 
 本模块把同步生成器放进单一工作线程跑完，再通过队列把事件逐条送回异步生成器，
 保证 contextvar 的 set/reset 始终发生在同一个上下文，同时保留实时推送。
 
-本模块是流式链路的收口边界：只转交可预期的运行时异常，未知异常继续抛出，
-避免吞掉编程错误并保证服务端日志可定位。
+本模块是流式链路的收口边界：已知异常经队列传递，未知异常由 Future 保留。
+调用方可将异常转换为安全的终止事件；未提供转换器时原样抛出。
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+import json
+from collections.abc import AsyncIterator, Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from contextvars import copy_context
 from queue import Full, Queue
-from threading import Event, Thread
+from threading import Event
 from typing import Any
 
-from app.core.exceptions import EXPECTED_RUNTIME_ERRORS
+from app.core.exceptions import EXPECTED_RUNTIME_ERRORS, ErrorCode
+from app.infra.logger import logger
 
 _SENTINEL = object()
 _QUEUE_PUT_TIMEOUT_SECONDS = 0.1
+
+
+def stream_error_event(exc: Exception, trace_id: str) -> str:
+    """流式响应已开始，记录原始异常并返回不含内部细节的错误事件。"""
+    logger.error("SSE 工作线程失败", exc_info=(type(exc), exc, exc.__traceback__))
+    event = {
+        "type": "error",
+        "status": "error",
+        "error_type": ErrorCode.INTERNAL.value,
+        "retryable": True,
+        "message": "AI 服务暂时异常，请稍后重试",
+        "trace_id": trace_id,
+    }
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
 def _put_unless_stopped(queue: Queue, item: Any, stopped: Event) -> bool:
@@ -42,9 +59,7 @@ def _consume_source(source: Iterator[Any], queue: Queue, stopped: Event) -> None
             if not _put_unless_stopped(queue, item, stopped):
                 break
     except EXPECTED_RUNTIME_ERRORS as exc:
-        # 跨线程转交后会在请求协程中原样抛出，不在此处吞掉异常。
-        # 兜底捕获全部异常类型：白名单外的异常（如 XMLSyntaxError）会导致
-        # 流静默截断，服务端无任何日志。
+        # 已知异常经队列转交；白名单外的异常由执行器 Future 保存。
         _put_unless_stopped(queue, exc, stopped)
     finally:
         close = getattr(source, "close", None)
@@ -57,25 +72,33 @@ def _consume_source(source: Iterator[Any], queue: Queue, stopped: Event) -> None
             _put_unless_stopped(queue, _SENTINEL, stopped)
 
 
-def to_async_stream(source: Iterator[Any], maxsize: int = 64) -> AsyncIterator[Any]:
+def to_async_stream(
+    source: Iterator[Any],
+    maxsize: int = 64,
+    on_error: Callable[[Exception], str] | None = None,
+) -> AsyncIterator[Any]:
     """把同步生成器事件桥接为异步生成器（单工作线程执行 source）。"""
     request_context = copy_context()
 
     async def generator() -> AsyncIterator[Any]:
         queue: Queue = Queue(maxsize=maxsize)
         stopped = Event()
-        worker = Thread(
-            target=request_context.run,
-            args=(_consume_source, source, queue, stopped),
-            daemon=True,
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sse")
+        worker = executor.submit(
+            request_context.run, _consume_source, source, queue, stopped
         )
-        worker.start()
         try:
             while True:
                 item = await asyncio.to_thread(queue.get)
                 if item is _SENTINEL:
-                    break
+                    # Future 保留白名单外的异常，不能把线程失败当成正常 EOF。
+                    item = await asyncio.to_thread(worker.exception)
+                    if item is None:
+                        break
                 if isinstance(item, BaseException):
+                    if on_error is not None and isinstance(item, Exception):
+                        yield on_error(item)
+                        break
                     raise item
                 yield item
         finally:
@@ -84,6 +107,6 @@ def to_async_stream(source: Iterator[Any], maxsize: int = 64) -> AsyncIterator[A
             # （put_nowait 抛 Full 说明队列已满，get 未处于阻塞态，不存在泄漏路径。）
             with suppress(Full):
                 queue.put_nowait(_SENTINEL)
-            await asyncio.to_thread(worker.join, 1)
+            executor.shutdown(wait=False, cancel_futures=True)
 
     return generator()
